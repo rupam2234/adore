@@ -3,8 +3,11 @@ import {
   Footer,
   ProductDetail,
   ProductCard,
+  ProductReviews,
 } from "@/components";
 import { getProductBySlug, getRelatedProducts } from "@/utils";
+import { getApprovedReviews, getReviewSummary } from "@/utils/reviews";
+import { EMPTY_SUMMARY } from "@/utils/review-format";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
@@ -55,12 +58,57 @@ export default async function ProductPage({ params }: PageProps) {
   if (!product) notFound();
 
   const related = await getRelatedProducts(slug, 4);
+  let reviewSummary = EMPTY_SUMMARY;
+  let initialReviews: Awaited<
+    ReturnType<typeof getApprovedReviews>
+  >["reviews"] = [];
+  let reviewTotal = 0;
+  try {
+    const [summary, firstPage] = await Promise.all([
+      getReviewSummary(product.id),
+      getApprovedReviews(product.id, { page: 1, limit: 5, sort: "recent" }),
+    ]);
+    reviewSummary = summary;
+    initialReviews = firstPage.reviews;
+    reviewTotal = firstPage.total;
+  } catch {
+    // Reviews table may not exist yet (migration not run) — page still renders.
+  }
+
+  const reviewJsonLd =
+    reviewSummary.count > 0
+      ? {
+          "@context": "https://schema.org",
+          "@type": "Product",
+          name: product.name,
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: reviewSummary.average,
+            reviewCount: reviewSummary.count,
+          },
+        }
+      : null;
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
       <SiteHeader />
       <main className="w-full px-6 py-8 sm:px-12 sm:py-12">
-        <ProductDetail product={product} />
+        <ProductDetail product={product} reviewSummary={reviewSummary} />
+        <div className="mt-12 max-w-3xl">
+          <ProductReviews
+            slug={product.slug}
+            initialSummary={reviewSummary}
+            initialReviews={initialReviews}
+            initialTotal={reviewTotal}
+            sizes={product.sizes.map((s) => s.size)}
+          />
+        </div>
+        {reviewJsonLd && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(reviewJsonLd) }}
+          />
+        )}
       </main>
 
       {related.length > 0 && (

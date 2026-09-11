@@ -10,6 +10,8 @@ import {
   type WheelEvent,
 } from "react";
 import { formatPrice, type ProductCardData } from "@/utils/product-format";
+import type { ReviewSummary } from "@/utils/review-format";
+import { Stars } from "./stars";
 
 /**
  * Product detail view (product page).
@@ -22,8 +24,11 @@ import { formatPrice, type ProductCardData } from "@/utils/product-format";
  */
 export default function ProductDetail({
   product,
+  reviewSummary,
 }: {
   product: ProductCardData;
+  /** SSR review summary so stars render instantly; omit to hide. */
+  reviewSummary?: ReviewSummary;
 }) {
   const images = product.images;
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -206,7 +211,27 @@ export default function ProductDetail({
       {/* Info — sticky on desktop */}
       <div className="flex flex-col gap-4 lg:sticky lg:top-15 lg:self-start">
         <div>
-          <h1 className="font-serif text-3xl">{product.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="font-serif text-3xl">{product.name}</h1>
+            {reviewSummary && reviewSummary.count > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById("reviews")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                aria-label={`Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`}
+                title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? "" : "s"} — jump to reviews`}
+                className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
+              >
+                <Stars value={reviewSummary.average} />
+                <span className="text-xs text-[#2B2620]/50 underline-offset-4 group-hover:underline">
+                  {reviewSummary.average.toFixed(1)} ({reviewSummary.count})
+                </span>
+              </button>
+            )}
+          </div>
           {product.shortDescription && (
             <p className="mt-2 text-sm text-[#2B2620]/60">
               {product.shortDescription}

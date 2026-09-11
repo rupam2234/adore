@@ -2,4 +2,8 @@ export { default as SiteHeader } from "./theme/header";
 export { default as Footer } from "./theme/footer";
 export { default as ProductCard } from "./shop/product-card";
 export { default as ProductDetail } from "./shop/product-detail";
+export { default as ProductReviews } from "./shop/product-reviews";
+export { Stars, StarInput } from "./shop/stars";
+export { ReviewForm } from "./shop/review-form";
+export { ReviewListItem } from "./shop/review-list";
 
