@@ -63,11 +63,11 @@ export async function GET() {
 
             (
               SELECT JSON_AGG(
-                JSON_BUILD_OBJECT('size', s.size, 'stock', s.stock)
+                JSON_BUILD_OBJECT('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
                 ORDER BY s.size
               )
               FROM (
-                SELECT v.size, SUM(v.stock_quantity) AS stock
+                SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
                 FROM product_variants v
                 WHERE v.product_id = p.id AND v.is_active = true
                 GROUP BY v.size
@@ -102,7 +102,19 @@ export async function GET() {
       ...product,
       details: product.details ?? [],
       colors: product.colors ?? [],
-      sizes: product.sizes ?? [],
+      sizes: (product.sizes ?? []).map(
+        (s: {
+          size: string;
+          stock: number;
+          price?: string;
+          compare_at_price?: string | null;
+        }) => ({
+          size: s.size,
+          stock: Number(s.stock ?? 0),
+          price: String(s.price ?? product.price),
+          compareAtPrice: (s.compare_at_price ?? null) as string | null,
+        }),
+      ),
       total_stock: Number(product.total_stock ?? 0),
       images: product.images.map((image: Images) => ({
         ...image,

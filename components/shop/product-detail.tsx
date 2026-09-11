@@ -28,6 +28,17 @@ export default function ProductDetail({
   const images = product.images;
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const selectedVariant = selectedSize
+    ? (product.sizes.find((s) => s.size === selectedSize) ?? null)
+    : null;
+  const displayPrice = selectedVariant?.price ?? product.price;
+  const displayCompareAtPrice =
+    selectedVariant?.compareAtPrice ?? product.compareAtPrice;
+  const sizePrices = product.sizes
+    .map((s) => s.price)
+    .filter((p): p is string => typeof p === "string");
+  const uniqueSizePrices = [...new Set(sizePrices.map((p) => Number(p)))];
+  const hasVaryingPrices = uniqueSizePrices.length > 1;
   const [openSection, setOpenSection] = useState<"details" | null>(null);
   const [qty, setQty] = useState(1);
 
@@ -204,18 +215,23 @@ export default function ProductDetail({
         </div>
 
         <p className="text-sm text-[#2B2620]/60">
-          {product.compareAtPrice &&
-          Number(product.compareAtPrice) > Number(product.price) ? (
+          {displayCompareAtPrice &&
+          Number(displayCompareAtPrice) > Number(displayPrice) ? (
             <>
               <span className="mr-2 text-[#2B2620]/40 line-through">
-                {formatPrice(product.compareAtPrice, product.currency)}
+                {formatPrice(displayCompareAtPrice, product.currency)}
               </span>
               <span className="text-[#A45A4B]">
-                {formatPrice(product.price, product.currency)}
+                {formatPrice(displayPrice, product.currency)}
               </span>
             </>
           ) : (
-            formatPrice(product.price, product.currency)
+            formatPrice(displayPrice, product.currency)
+          )}
+          {!selectedVariant && hasVaryingPrices && (
+            <span className="ml-2 text-xs text-[#2B2620]/40">
+              · varies by size
+            </span>
           )}
         </p>
 
@@ -323,6 +339,11 @@ export default function ProductDetail({
                   type="button"
                   onClick={() => setSelectedSize(s.size)}
                   disabled={s.stock <= 0}
+                  title={
+                    s.price
+                      ? `${s.size} — ${formatPrice(s.price, product.currency)}`
+                      : s.size
+                  }
                   className={`cursor-pointer border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                     selectedSize === s.size
                       ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"

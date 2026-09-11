@@ -17,7 +17,7 @@ type ProductRow = {
   compare_at_price: string | null;
   currency: string;
   colors: Array<{ name: string; hex: string | null }> | null;
-  sizes: Array<{ size: string; stock: number }> | null;
+  sizes: Array<{ size: string; stock: number; price: string; compare_at_price: string | null }> | null;
   total_stock: number | null;
   images: Array<{
     id: string;
@@ -38,6 +38,21 @@ type QueryOptions = {
 
 /** Map a raw SQL row (products + variant + image aggregates) to ProductCardData. */
 function mapProductRow(row: ProductRow): ProductCardData {
+  // DB aggregates sizes as snake_case { size, stock, price, compare_at_price };
+  // normalize here so client components can read size.price / size.compareAtPrice.
+  const sizes = (row.sizes ?? []).map((s) => {
+    const raw = s as unknown as Record<string, unknown>;
+    const price = (raw.price ?? raw.min_price ?? row.price) as string;
+    const compareAtPrice = (raw.compareAtPrice ??
+      raw.compare_at_price ??
+      null) as string | null;
+    return {
+      size: String(raw.size),
+      stock: Number(raw.stock ?? 0),
+      price: String(price),
+      compareAtPrice,
+    };
+  });
   return {
     id: row.id,
     slug: row.slug,
@@ -52,7 +67,7 @@ function mapProductRow(row: ProductRow): ProductCardData {
     compareAtPrice: row.compare_at_price,
     currency: row.currency,
     colors: row.colors ?? [],
-    sizes: row.sizes ?? [],
+    sizes,
     totalStock: Number(row.total_stock ?? 0),
     images: (row.images ?? []).map((img) => ({
       id: img.id,
@@ -102,11 +117,11 @@ export async function getProductsForSection(
       ) AS colors,
       (
         SELECT json_agg(
-          json_build_object('size', s.size, 'stock', s.stock)
+          json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
           ORDER BY s.size
         )
         FROM (
-          SELECT v.size, SUM(v.stock_quantity) AS stock
+          SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
           FROM product_variants v
           WHERE v.product_id = p.id AND v.is_active
           GROUP BY v.size
@@ -185,11 +200,11 @@ export async function getProductBySlug(
       ) AS colors,
       (
         SELECT json_agg(
-          json_build_object('size', s.size, 'stock', s.stock)
+          json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
           ORDER BY s.size
         )
         FROM (
-          SELECT v.size, SUM(v.stock_quantity) AS stock
+          SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
           FROM product_variants v
           WHERE v.product_id = p.id AND v.is_active
           GROUP BY v.size
@@ -267,11 +282,11 @@ export async function getRelatedProducts(
       ) AS colors,
       (
         SELECT json_agg(
-          json_build_object('size', s.size, 'stock', s.stock)
+          json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
           ORDER BY s.size
         )
         FROM (
-          SELECT v.size, SUM(v.stock_quantity) AS stock
+          SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
           FROM product_variants v
           WHERE v.product_id = p.id AND v.is_active
           GROUP BY v.size
@@ -351,11 +366,11 @@ export async function getRelatedProducts(
       ) AS colors,
       (
         SELECT json_agg(
-          json_build_object('size', s.size, 'stock', s.stock)
+          json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
           ORDER BY s.size
         )
         FROM (
-          SELECT v.size, SUM(v.stock_quantity) AS stock
+          SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
           FROM product_variants v
           WHERE v.product_id = p.id AND v.is_active
           GROUP BY v.size

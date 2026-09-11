@@ -15,6 +15,10 @@ export type ProductColor = {
 export type ProductSizeStock = {
   size: string;
   stock: number;
+  /** Cheapest active variant price for this size (price varies by size). */
+  price: string;
+  /** Compare-at price of the cheapest active variant for this size. */
+  compareAtPrice: string | null;
 };
 
 export type ProductCardData = {

@@ -109,6 +109,12 @@ function QuickViewModal({
 }) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const selectedVariant = selectedSize
+    ? (product.sizes.find((s) => s.size === selectedSize) ?? null)
+    : null;
+  const displayPrice = selectedVariant?.price ?? product.price;
+  const displayCompareAtPrice =
+    selectedVariant?.compareAtPrice ?? product.compareAtPrice;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const images = product.images;
   const [activeIndex, setActiveIndex] = useState(0);
@@ -215,18 +221,18 @@ function QuickViewModal({
             </button>
           </div>
           <p className="text-sm text-[#2B2620]/60">
-            {product.compareAtPrice &&
-             Number(product.compareAtPrice) > Number(product.price) ? (
+            {displayCompareAtPrice &&
+             Number(displayCompareAtPrice) > Number(displayPrice) ? (
               <>
                 <span className="mr-2 text-[#2B2620]/40 line-through">
-                  {formatPrice(product.compareAtPrice, product.currency)}
+                  {formatPrice(displayCompareAtPrice, product.currency)}
                 </span>
                 <span className="text-[#A45A4B]">
-                  {formatPrice(product.price, product.currency)}
+                  {formatPrice(displayPrice, product.currency)}
                 </span>
               </>
             ) : (
-              formatPrice(product.price, product.currency)
+              formatPrice(displayPrice, product.currency)
             )}
           </p>
           {product.shortDescription && (

@@ -19,7 +19,7 @@ export default function Header() {
     <header className="sticky top-0 z-50 flex w-full items-center justify-between border-b border-[#2B2620]/10 bg-[#FAF8F3]/90 px-6 py-5 backdrop-blur-md sm:px-12">
       <Link
         href="/"
-        className="font-semibold text-3xl tracking-tight text-primary/80 transition-colors hover:text-[#5C6B4B]"
+        className="font-semibold text-3xl tracking-tight text-primary/80 transition-colors"
       >
         {HEADER_DATA.title}
       </Link>
