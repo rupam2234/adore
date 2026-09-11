@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 type HeaderData = {
   title: string;
   navItems: { title: string; url: string }[];
@@ -14,10 +16,13 @@ const HEADER_DATA: HeaderData = {
 
 export default function Header() {
   return (
-    <header className="flex w-full items-center justify-between border-b border-[#2B2620]/10 px-6 py-5 sm:px-12">
-      <span className="font-semibold text-3xl tracking-tight text-primary/80">
+    <header className="sticky top-0 z-50 flex w-full items-center justify-between border-b border-[#2B2620]/10 bg-[#FAF8F3]/90 px-6 py-5 backdrop-blur-md sm:px-12">
+      <Link
+        href="/"
+        className="font-semibold text-3xl tracking-tight text-primary/80 transition-colors hover:text-[#5C6B4B]"
+      >
         {HEADER_DATA.title}
-      </span>
+      </Link>
       <nav className="hidden gap-8 text-sm sm:flex">
         {HEADER_DATA?.navItems.map((item) => {
           return (

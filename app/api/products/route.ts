@@ -1,0 +1,121 @@
+import { getPublicUrl, pool } from "@/utils";
+import { NextResponse } from "next/server";
+
+type Images = {
+  public_id: string
+  alt_text: string,
+  sort_order: number
+}
+
+export async function GET() {
+  try {
+    const products = await pool.query(` SELECT
+            p.id,
+            p.name,
+            p.slug,
+            p.short_description,
+            p.details,
+            p.story,
+            p.material,
+            p.fit,
+            p.care_instructions,
+            p.is_featured,
+
+            (
+              SELECT MIN(v.price)
+              FROM product_variants v
+              WHERE v.product_id = p.id
+                AND v.is_active = true
+            ) AS price,
+
+            (
+              SELECT MIN(v.compare_at_price)
+              FROM product_variants v
+              WHERE v.product_id = p.id
+                AND v.is_active = true
+            ) AS compare_at_price,
+
+            (
+              SELECT MIN(v.currency)
+              FROM product_variants v
+              WHERE v.product_id = p.id
+                AND v.is_active = true
+            ) AS currency,
+
+            (
+              SELECT COALESCE(SUM(v.stock_quantity), 0)
+              FROM product_variants v
+              WHERE v.product_id = p.id
+                AND v.is_active = true
+            ) AS total_stock,
+
+            (
+              SELECT JSON_AGG(
+                JSON_BUILD_OBJECT('name', c.name, 'hex', c.hex)
+                ORDER BY c.name
+              )
+              FROM (
+                SELECT DISTINCT ON (v.color) v.color AS name, v.color_hex AS hex
+                FROM product_variants v
+                WHERE v.product_id = p.id AND v.is_active = true
+              ) c
+            ) AS colors,
+
+            (
+              SELECT JSON_AGG(
+                JSON_BUILD_OBJECT('size', s.size, 'stock', s.stock)
+                ORDER BY s.size
+              )
+              FROM (
+                SELECT v.size, SUM(v.stock_quantity) AS stock
+                FROM product_variants v
+                WHERE v.product_id = p.id AND v.is_active = true
+                GROUP BY v.size
+              ) s
+            ) AS sizes,
+
+            COALESCE(
+              (
+                SELECT JSON_AGG(
+                  JSON_BUILD_OBJECT(
+                    'public_id', pi.public_id,
+                    'alt_text', pi.alt_text,
+                    'sort_order', pi.sort_order
+                  )
+                  ORDER BY pi.sort_order
+                )
+                FROM product_images pi
+                WHERE pi.product_id = p.id
+              ),
+              '[]'
+            ) AS images
+
+          FROM products p
+
+          WHERE p.status = 'ACTIVE'
+
+          ORDER BY p.created_at DESC
+
+          LIMIT 8;`)
+
+    const productsWithUrls = products?.map((product) => ({
+      ...product,
+      details: product.details ?? [],
+      colors: product.colors ?? [],
+      sizes: product.sizes ?? [],
+      total_stock: Number(product.total_stock ?? 0),
+      images: product.images.map((image: Images) => ({
+        ...image,
+        url: getPublicUrl(image.public_id),
+      })),
+    }));
+
+
+    return NextResponse.json({ products: productsWithUrls }, { status: 200 })
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to fetch products" },
+      { status: 500 }
+    );
+  }
+}

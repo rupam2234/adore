@@ -1,0 +1,87 @@
+import {
+  SiteHeader,
+  Footer,
+  ProductDetail,
+  ProductCard,
+} from "@/components";
+import { getProductBySlug, getRelatedProducts } from "@/utils";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+
+// Re-fetch the product at most every 5 minutes (ISR)
+export const revalidate = 300;
+
+type PageProps = {
+  params: Promise<{ slug: string }>;
+};
+
+/** Unique metadata per product page (SEO + social sharing). */
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
+  if (!product) return {};
+
+  const description =
+    product.shortDescription ??
+    product.details[0] ??
+    `${product.name} — Adore`;
+
+  return {
+    title: `${product.name} | Adore`,
+    description,
+    alternates: { canonical: `/products/${product.slug}` },
+    openGraph: {
+      title: `${product.name} | Adore`,
+      description,
+      type: "website",
+      images: product.images[0]
+        ? [{ url: product.images[0].url, alt: product.images[0].alt ?? product.name }]
+        : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${product.name} | Adore`,
+      description,
+      images: product.images[0] ? [product.images[0].url] : undefined,
+    },
+  };
+}
+
+export default async function ProductPage({ params }: PageProps) {
+  const { slug } = await params;
+  const product = await getProductBySlug(slug);
+  if (!product) notFound();
+
+  const related = await getRelatedProducts(slug, 4);
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
+      <SiteHeader />
+      <main className="w-full px-6 py-8 sm:px-12 sm:py-12">
+        <ProductDetail product={product} />
+      </main>
+
+      {related.length > 0 && (
+        <section className="w-full px-6 pb-20 sm:px-12">
+          <div className="flex items-baseline justify-between">
+            <h2 className="font-serif text-2xl sm:text-3xl">
+              We Think You Might Enjoy...
+            </h2>
+            <a href="#" className="text-sm underline underline-offset-4">
+              View all
+            </a>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4 md:mt-10">
+            {related.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <Footer />
+    </div>
+  );
+}
