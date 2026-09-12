@@ -12,7 +12,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 /** GET /api/admin/products/[id] — full product for the edit form. */
 export async function GET(request: Request, ctx: RouteContext) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -30,7 +30,7 @@ export async function GET(request: Request, ctx: RouteContext) {
 
 /** PATCH /api/admin/products/[id] — update fields/variants/categories/status. */
 export async function PATCH(request: Request, ctx: RouteContext) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -68,7 +68,7 @@ export async function PATCH(request: Request, ctx: RouteContext) {
 
 /** PATCH-free status shortcut: DELETE archives (soft delete). */
 export async function DELETE(request: Request, ctx: RouteContext) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -86,7 +86,7 @@ export async function DELETE(request: Request, ctx: RouteContext) {
 
 /** POST /api/admin/products/[id] with {action:"status", status} — quick transitions. */
 export async function POST(request: Request, ctx: RouteContext) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;

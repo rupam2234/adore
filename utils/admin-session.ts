@@ -28,7 +28,7 @@ export async function requireAdminPage(): Promise<UserRow> {
     redirect("/admin/login");
   }
 
-  const payload = verifyAccessToken(cookie);
+  const payload = await verifyAccessToken(cookie);
   if (!payload || payload.role !== "admin") {
     redirect("/admin/login");
   }

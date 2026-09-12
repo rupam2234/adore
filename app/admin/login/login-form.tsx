@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 interface LoginFormProps {
@@ -8,7 +7,6 @@ interface LoginFormProps {
 }
 
 export default function LoginForm({ next }: LoginFormProps) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,6 +28,7 @@ export default function LoginForm({ next }: LoginFormProps) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       if (!res.ok) {
@@ -37,8 +36,9 @@ export default function LoginForm({ next }: LoginFormProps) {
         setError(data.error ?? "Login failed.");
         return;
       }
-      router.push(next);
-      router.refresh();
+      const data = await res.json();
+      console.log("[login-form] Login success:", data);
+      window.location.href = next;
     } catch (err) {
       console.error("Login error:", err);
       setError("Network error — is the server running?");
@@ -103,9 +103,7 @@ export default function LoginForm({ next }: LoginFormProps) {
           />
         </div>
 
-        {error && (
-          <p className="text-sm text-red-700">{error}</p>
-        )}
+        {error && <p className="text-sm text-red-700">{error}</p>}
 
         <button
           type="submit"

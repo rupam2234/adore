@@ -15,7 +15,7 @@ type RouteContext = { params: Promise<{ id: string }> };
  * truth for the storefront).
  */
 export async function DELETE(request: Request, ctx: RouteContext) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -43,7 +43,7 @@ export async function DELETE(request: Request, ctx: RouteContext) {
 
 /** PATCH /api/admin/products/[id]/images — {image_id} → make it primary. */
 export async function PATCH(request: Request, ctx: RouteContext) {
-  if (!isAdminRequest(request)) {
+  if (!(await isAdminRequest(request))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;

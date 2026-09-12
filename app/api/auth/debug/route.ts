@@ -5,7 +5,7 @@ import { verifyAccessToken, ACCESS_COOKIE_NAME } from "@/utils/auth";
 export async function GET(request: NextRequest) {
   const cookie = request.cookies.get(ACCESS_COOKIE_NAME);
   const token = cookie?.value ?? null;
-  const payload = token ? verifyAccessToken(token) : null;
+  const payload = token ? await verifyAccessToken(token) : null;
 
   let dbOk = false;
   let userCount = 0;

@@ -1,10 +1,15 @@
-import jwt from "jsonwebtoken";
+import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { pool } from "./db";
 
-export const JWT_SECRET = process.env.JWT_SECRET ?? "dev-secret-do-not-use-in-prod";
-export const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET ?? `${JWT_SECRET}-refresh`;
+const secretKey = process.env.JWT_SECRET ?? "dev-secret-do-not-use-in-prod";
+const refreshSecretKey = process.env.JWT_REFRESH_SECRET ?? `${secretKey}-refresh`;
+
+const encoder = new TextEncoder();
+const JWT_SECRET = encoder.encode(secretKey);
+const JWT_REFRESH_SECRET = encoder.encode(refreshSecretKey);
+
+console.log(`[auth] JWT_SECRET loaded: ${secretKey ? secretKey.substring(0, 4) + "..." : "NOT SET"}`);
 
 export const ACCESS_COOKIE_NAME = "adore_access_token";
 export const REFRESH_COOKIE_NAME = "adore_refresh_token";
@@ -54,29 +59,50 @@ export interface TokenPayload {
   role: string;
 }
 
-export function signAccessToken(payload: TokenPayload): string | null {
+export async function signAccessToken(payload: TokenPayload): Promise<string | null> {
   if (!JWT_SECRET) return null;
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: ACCESS_EXPIRY });
-}
-
-export function signRefreshToken(payload: TokenPayload): string | null {
-  if (!JWT_REFRESH_SECRET) return null;
-  return jwt.sign(payload, JWT_REFRESH_SECRET, { expiresIn: REFRESH_EXPIRY });
-}
-
-export function verifyAccessToken(token: string): TokenPayload | null {
-  if (!JWT_SECRET) return null;
+  console.log(`[signAccessToken] Signing...`);
   try {
-    return jwt.verify(token, JWT_SECRET) as TokenPayload;
+    return await new SignJWT({ ...payload })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(ACCESS_EXPIRY)
+      .sign(JWT_SECRET);
+  } catch (err) {
+    console.error("[signAccessToken] Error:", (err as Error).message);
+    return null;
+  }
+}
+
+export async function signRefreshToken(payload: TokenPayload): Promise<string | null> {
+  if (!JWT_REFRESH_SECRET) return null;
+  try {
+    return await new SignJWT({ ...payload })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(REFRESH_EXPIRY)
+      .sign(JWT_REFRESH_SECRET);
   } catch {
     return null;
   }
 }
 
-export function verifyRefreshToken(token: string): TokenPayload | null {
+export async function verifyAccessToken(token: string): Promise<TokenPayload | null> {
+  if (!JWT_SECRET) return null;
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return { userId: payload.userId as string, email: payload.email as string, role: payload.role as string };
+  } catch (err) {
+    console.error("[verifyAccessToken] Error:", (err as Error).message);
+    return null;
+  }
+}
+
+export async function verifyRefreshToken(token: string): Promise<TokenPayload | null> {
   if (!JWT_REFRESH_SECRET) return null;
   try {
-    return jwt.verify(token, JWT_REFRESH_SECRET) as TokenPayload;
+    const { payload } = await jwtVerify(token, JWT_REFRESH_SECRET);
+    return { userId: payload.userId as string, email: payload.email as string, role: payload.role as string };
   } catch {
     return null;
   }
@@ -208,7 +234,7 @@ export async function isSessionValid(token: string): Promise<boolean> {
 export async function refreshTokens(
   refreshToken: string,
 ): Promise<{ accessToken: string; refreshToken: string }> {
-  const payload = verifyRefreshToken(refreshToken);
+  const payload = await verifyRefreshToken(refreshToken);
   if (!payload) throw new Error("Invalid refresh token");
   const valid = await isSessionValid(refreshToken);
   if (!valid) throw new Error("Session revoked");
@@ -216,8 +242,8 @@ export async function refreshTokens(
   await revokeSession(refreshToken);
 
   const newPayload: TokenPayload = { userId: payload.userId, email: payload.email, role: payload.role };
-  const a = signAccessToken(newPayload);
-  const r = signRefreshToken(newPayload);
+  const a = await signAccessToken(newPayload);
+  const r = await signRefreshToken(newPayload);
   if (!a || !r) throw new Error("Failed to sign tokens");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await storeSession(payload.userId, r, expiresAt);
@@ -250,8 +276,8 @@ export async function login(
   }
 
   const payload: TokenPayload = { userId: user.id, email: user.email, role: user.role };
-  const accessToken = signAccessToken(payload);
-  const refreshToken = signRefreshToken(payload);
+  const accessToken = await signAccessToken(payload);
+  const refreshToken = await signRefreshToken(payload);
   if (!accessToken || !refreshToken) return { success: false, error: "Server configuration error" };
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);

@@ -1,14 +1,45 @@
 import { SiteHeader, Footer, ProductCard } from "@/components";
-import { getProductsForSection } from "@/utils";
+import { getProductsForSection, getCategories } from "@/utils";
 
-// Re-fetch products from the DB at most every 5 minutes (ISR)
 export const revalidate = 300;
 
+type GroupedProducts = {
+  category: { slug: string; name: string };
+  products: Awaited<ReturnType<typeof getProductsForSection>>;
+};
+
+async function getFeaturedByCategory(): Promise<GroupedProducts[]> {
+  const [featured, categories] = await Promise.all([
+    getProductsForSection({ limit: 50, featuredOnly: true }),
+    getCategories(),
+  ]);
+
+  if (featured.length === 0) return [];
+
+  const bySlug = new Map<string, GroupedProducts>();
+
+  for (const product of featured) {
+    const slugs = product.categories?.map((c) => c.slug) ?? ["uncategorized"];
+    const primarySlug = slugs[0];
+
+    if (!bySlug.has(primarySlug)) {
+      const cat = categories.find((c) => c.slug === primarySlug) ?? {
+        slug: primarySlug,
+        name: product.categories?.[0]?.name ?? "Featured",
+      };
+      bySlug.set(primarySlug, {
+        category: { slug: cat.slug, name: cat.name },
+        products: [],
+      });
+    }
+    bySlug.get(primarySlug)!.products.push(product);
+  }
+
+  return [...bySlug.values()];
+}
+
 export default async function Home() {
-  const newArrivals = await getProductsForSection({
-    limit: 8,
-    categorySlug: "dress",
-  });
+  const featuredGroups = await getFeaturedByCategory();
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
@@ -17,20 +48,37 @@ export default async function Home() {
       <HeroSection />
 
       <section id="shop" className="w-full px-6 py-20 sm:px-12">
-        <div className="flex items-baseline justify-between">
-          <h2 className="font-serif text-3xl">New arrivals</h2>
-          <a href="#" className="text-sm underline underline-offset-4">
-            View all
-          </a>
+        <div className="text-center">
+          <h2 className="font-serif text-4xl">New arrivals</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm italic leading-relaxed text-[#2B2620]/60">
+            "Every piece tells a story — of the hands that shaped it, the earth
+            that grew it, and the moments it will witness with you."
+          </p>
         </div>
-        <div className="mt-5 md:mt-10 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {newArrivals.length > 0 ? (
-            newArrivals.map((product) => (
-              <ProductCard key={product.id} product={product} />
+
+        <div className="mt-14 space-y-16">
+          {featuredGroups.length > 0 ? (
+            featuredGroups.map((group) => (
+              <div key={group.category.slug}>
+                <div className="mb-6 flex items-baseline justify-between border-b border-[#2B2620]/10 pb-3">
+                  <h3 className="font-serif text-2xl">{group.category.name}</h3>
+                  <a
+                    href={`/shop/${group.category.slug}`}
+                    className="text-sm underline underline-offset-4"
+                  >
+                    View all
+                  </a>
+                </div>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  {group.products.slice(0, 4).map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              </div>
             ))
           ) : (
-            <p className="col-span-2 text-sm text-[#2B2620]/60 sm:col-span-4">
-              No products yet — check back soon.
+            <p className="text-center text-sm text-[#2B2620]/60">
+              No featured pieces yet — check back soon.
             </p>
           )}
         </div>

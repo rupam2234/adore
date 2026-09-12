@@ -1,7 +1,7 @@
 import { verifyAccessToken, ACCESS_COOKIE_NAME } from "@/utils/auth";
 
 /** Returns true if the request carries a valid admin JWT. Open when JWT_SECRET is unset. */
-export function isAdminRequest(request: Request): boolean {
+export async function isAdminRequest(request: Request): Promise<boolean> {
   if (!process.env.JWT_SECRET) return true;
   const cookieHeader = request.headers.get("cookie");
   if (!cookieHeader) return false;
@@ -10,6 +10,6 @@ export function isAdminRequest(request: Request): boolean {
   if (!accessCookie) return false;
   const token = accessCookie.split("=")[1];
   if (!token) return false;
-  const payload = verifyAccessToken(token);
+  const payload = await verifyAccessToken(token);
   return payload !== null && payload.role === "admin";
 }

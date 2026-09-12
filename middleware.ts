@@ -13,8 +13,9 @@ function isAdminPath(pathname: string): boolean {
   );
 }
 
-export default function authMiddleware(request: NextRequest) {
+export default async function authMiddleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  console.log(`[middleware] Path: ${pathname}`);
 
   if (pathname === PUBLIC_ADMIN_PATH) {
     return NextResponse.next();
@@ -25,14 +26,17 @@ export default function authMiddleware(request: NextRequest) {
   }
 
   if (!process.env.JWT_SECRET) {
+    console.log("[middleware] JWT_SECRET not set, allowing through");
     return NextResponse.next();
   }
 
   const cookie = request.cookies.get(ACCESS_COOKIE_NAME);
   const token = cookie?.value ?? null;
-  const payload = token ? verifyAccessToken(token) : null;
+  console.log(`[middleware] Cookie present: ${!!token}`);
+  const payload = token ? await verifyAccessToken(token) : null;
 
   if (!payload) {
+    console.log("[middleware] No valid payload, redirecting to login");
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -41,6 +45,8 @@ export default function authMiddleware(request: NextRequest) {
     url.search = `?next=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
+
+  console.log(`[middleware] User: ${payload.email} (${payload.role})`);
 
   if (isAdminPath(pathname) && payload.role !== "admin") {
     if (pathname.startsWith("/api/")) {
@@ -57,6 +63,7 @@ export default function authMiddleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/admin",
     "/admin/:path*",
     "/api/admin/:path*",
     "/api/auth/login",
