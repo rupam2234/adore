@@ -116,6 +116,7 @@ function QuickViewModal({
   const displayCompareAtPrice =
     selectedVariant?.compareAtPrice ?? product.compareAtPrice;
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [careOpen, setCareOpen] = useState(false);
   const images = product.images;
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomStyle, setZoomStyle] = useState<CSSProperties>({});
@@ -308,6 +309,37 @@ function QuickViewModal({
             <p className="text-sm text-[#2B2620]/70">
               Material: {product.material}
             </p>
+          )}
+          {product.careInstructions.length > 0 && (
+            <div className="border-b border-[#2B2620]/10 pb-4">
+              <button
+                type="button"
+                onClick={() => setCareOpen((open) => !open)}
+                aria-expanded={careOpen}
+                className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
+              >
+                Cloth care
+                <span
+                  aria-hidden="true"
+                  className={`text-base leading-none transition-transform duration-300 ${
+                    careOpen ? "rotate-45" : ""
+                  }`}
+                >
+                  +
+                </span>
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                  careOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                }`}
+              >
+                <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm text-[#2B2620]/70">
+                  {product.careInstructions.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           )}
           <div>
             <p className="mb-2 text-[11px] uppercase tracking-wide text-[#2B2620]/50">

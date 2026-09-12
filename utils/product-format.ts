@@ -21,6 +21,12 @@ export type ProductSizeStock = {
   compareAtPrice: string | null;
 };
 
+export type ProductCategory = {
+  slug: string;
+  name: string;
+  parentSlug: string | null;
+};
+
 export type ProductCardData = {
   id: string;
   slug: string;
@@ -31,7 +37,10 @@ export type ProductCardData = {
   story: string | null;
   material: string | null;
   fit: string | null;
-  careInstructions: string | null;
+  /** Cloth-care bullets rendered as a list, like details. */
+  careInstructions: string[];
+  /** Garment class(es), e.g. dress / kurti / short-kurti (with parent link). */
+  categories: ProductCategory[];
   price: string;
   /** Original price when on sale (strikethrough next to price). */
   compareAtPrice: string | null;
@@ -50,4 +59,43 @@ export function formatPrice(price: string, currency: string): string {
   return `${symbol}${amount.toLocaleString("en-IN", {
     maximumFractionDigits: 0,
   })}`;
+}
+
+/**
+ * Normalize cloth-care instructions to a bullet list, like `details`.
+ *
+ * Accepts the legacy `text` value, a `jsonb` list (post-migration), or null:
+ * - `["Machine wash cold.", "Do not bleach."]` → as-is (trimmed)
+ * - `"Machine wash cold.\nDo not bleach."` → split on newlines
+ * - `"Machine wash cold. Do not bleach. Hang dry."` → split into sentences
+ *   so existing single-paragraph rows still render as a real list.
+ */
+export function normalizeCareInstructions(value: unknown): string[] {
+  const cleaned = (s: string) =>
+    s
+      .replace(/^[\s\-•*·>]+/, "")
+      .replace(/^\d+[.)\s]+/, "")
+      .trim();
+  const splitSentences = (s: string) =>
+    s
+      .split(/(?<=\.)\s+(?=[A-Z0-9"])/)
+      .map(cleaned)
+      .filter(Boolean);
+
+  if (value == null) return [];
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => {
+      if (entry == null) return [];
+      const text = String(entry).trim();
+      if (!text) return [];
+      // Array items may still hold newlines or multi-sentence prose.
+      return text.split(/\r?\n+/).flatMap(splitSentences);
+    });
+  }
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return [];
+    return text.split(/\r?\n+/).flatMap(splitSentences);
+  }
+  return [];
 }

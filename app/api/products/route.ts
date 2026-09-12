@@ -1,4 +1,5 @@
 import { getPublicUrl, pool } from "@/utils";
+import { normalizeCareInstructions } from "@/utils/product-format";
 import { NextResponse } from "next/server";
 
 type Images = {
@@ -101,6 +102,7 @@ export async function GET() {
     const productsWithUrls = products?.map((product) => ({
       ...product,
       details: product.details ?? [],
+      careInstructions: normalizeCareInstructions(product.care_instructions),
       colors: product.colors ?? [],
       sizes: (product.sizes ?? []).map(
         (s: {

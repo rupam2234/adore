@@ -93,16 +93,19 @@ export default async function ProductPage({ params }: PageProps) {
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
       <SiteHeader />
       <main className="w-full px-6 py-8 sm:px-12 sm:py-12">
-        <ProductDetail product={product} reviewSummary={reviewSummary} />
-        <div className="mt-12 max-w-3xl">
-          <ProductReviews
-            slug={product.slug}
-            initialSummary={reviewSummary}
-            initialReviews={initialReviews}
-            initialTotal={reviewTotal}
-            sizes={product.sizes.map((s) => s.size)}
-          />
-        </div>
+        <ProductDetail
+          product={product}
+          reviewSummary={reviewSummary}
+          reviews={
+            <ProductReviews
+              slug={product.slug}
+              initialSummary={reviewSummary}
+              initialReviews={initialReviews}
+              initialTotal={reviewTotal}
+              sizes={product.sizes.map((s) => s.size)}
+            />
+          }
+        />
         {reviewJsonLd && (
           <script
             type="application/ld+json"

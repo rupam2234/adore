@@ -20,7 +20,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Adore | Wear Love",
+  title: {
+    default: "Adore | Wear Love",
+    template: "%s | Adore",
+  },
   description: "Clothes that become more yours with every wear",
 };
 

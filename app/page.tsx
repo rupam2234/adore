@@ -36,6 +36,39 @@ export default async function Home() {
         </div>
       </section>
 
+      <section
+        id="how-we-make-it"
+        className="w-full scroll-mt-24 border-t border-[#2B2620]/10 px-6 py-16 sm:px-12"
+      >
+        <p className="text-sm text-[#5C6B4B]">How we make it</p>
+        <h2 className="mt-2 max-w-xl font-serif text-3xl">
+          Small batches, honest fabrics, made to keep
+        </h2>
+        <div className="mt-8 grid gap-8 text-sm leading-relaxed text-[#2B2620]/70 sm:grid-cols-3">
+          <div>
+            <p className="font-medium text-[#2B2620]">1. Thoughtful fabrics</p>
+            <p className="mt-2">
+              Breathable, natural-feeling materials chosen for comfort and
+              everyday wear.
+            </p>
+          </div>
+          <div>
+            <p className="font-medium text-[#2B2620]">2. Small-batch stitching</p>
+            <p className="mt-2">
+              Cut and sewn in limited runs so every piece gets proper attention
+              to fit and finish.
+            </p>
+          </div>
+          <div>
+            <p className="font-medium text-[#2B2620]">3. Made to be reworn</p>
+            <p className="mt-2">
+              Timeless silhouettes and cloth-care guidance, designed to move
+              with you season after season.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="w-full border-t border-[#2B2620]/10 bg-[#2B2620] px-6 py-16 text-[#FAF8F3] sm:px-12">
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>

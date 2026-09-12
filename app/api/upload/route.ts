@@ -1,5 +1,10 @@
 import { cloudinary, pool } from "@/utils";
+import { isAdminRequest } from "@/utils/admin-auth";
 import { NextResponse } from "next/server";
+
+/** Upload ceiling — reject oversized payloads before buffering them. */
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif"]);
 
 /**
  * POST /api/upload
@@ -17,6 +22,9 @@ import { NextResponse } from "next/server";
  * Media Library folder structure never matters — delivery always works.
  */
 export async function POST(request: Request) {
+    if (!isAdminRequest(request)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     try {
         const formData = await request.formData();
 
@@ -70,6 +78,18 @@ export async function POST(request: Request) {
 
         const inserted = [];
         for (const [index, file] of files.entries()) {
+            if (!ALLOWED_TYPES.has(file.type)) {
+                return NextResponse.json(
+                    { error: `Unsupported file type: ${file.type || file.name}` },
+                    { status: 415 }
+                );
+            }
+            if (file.size > MAX_FILE_BYTES) {
+                return NextResponse.json(
+                    { error: `${file.name} is larger than 10 MB` },
+                    { status: 413 }
+                );
+            }
             const buffer = Buffer.from(await file.arrayBuffer());
             const result = await cloudinary.uploader.upload(
                 `data:${file.type};base64,${buffer.toString("base64")}`,
@@ -88,11 +108,11 @@ export async function POST(request: Request) {
 
             const rows = await pool`
                 INSERT INTO product_images
-                    (product_id, public_id, secure_url, alt_text, width, height, sort_order, is_primary)
+                    (product_id, public_id, alt_text, width, height, sort_order, is_primary)
                 VALUES
-                    (${productId}, ${result.public_id}, ${result.secure_url}, ${altText},
+                    (${productId}, ${result.public_id}, ${altText},
                      ${result.width}, ${result.height}, ${nextSort}, ${isPrimary})
-                RETURNING id, public_id, secure_url, alt_text, width, height, sort_order, is_primary
+                RETURNING id, public_id, alt_text, width, height, sort_order, is_primary
             `;
             inserted.push(rows[0]);
             nextSort++;

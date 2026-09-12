@@ -7,6 +7,7 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type MouseEvent,
+  type ReactNode,
   type WheelEvent,
 } from "react";
 import { formatPrice, type ProductCardData } from "@/utils/product-format";
@@ -25,10 +26,13 @@ import { Stars } from "./stars";
 export default function ProductDetail({
   product,
   reviewSummary,
+  reviews,
 }: {
   product: ProductCardData;
   /** SSR review summary so stars render instantly; omit to hide. */
   reviewSummary?: ReviewSummary;
+  /** Reviews section rendered under the image grid (left column). */
+  reviews?: ReactNode;
 }) {
   const images = product.images;
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -44,7 +48,9 @@ export default function ProductDetail({
     .filter((p): p is string => typeof p === "string");
   const uniqueSizePrices = [...new Set(sizePrices.map((p) => Number(p)))];
   const hasVaryingPrices = uniqueSizePrices.length > 1;
-  const [openSection, setOpenSection] = useState<"details" | null>(null);
+  const [openSection, setOpenSection] = useState<"details" | "care" | null>(
+    null,
+  );
   const [qty, setQty] = useState(1);
 
   // Full page image viewer state
@@ -117,25 +123,28 @@ export default function ProductDetail({
 
   return (
     <div className="grid w-full grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
-      {/* Gallery — strict 2-column image grid, click to open the viewer */}
-      <div className="grid w-full grid-cols-2 gap-2">
-        {images.length > 0 ? (
-          images.map((img, i) => (
-            <div
-              key={img.id}
-              className="aspect-3/4 w-full overflow-hidden bg-[#E7DFCB]"
-            >
-              <img
-                src={img.url}
-                alt={img.alt ?? product.name}
-                onClick={() => openViewer(i)}
-                className="h-full w-full cursor-pointer object-cover"
-              />
-            </div>
-          ))
-        ) : (
-          <div className="col-span-2 aspect-3/4 w-full bg-[#E7DFCB]" />
-        )}
+      {/* Left column: gallery + reviews underneath */}
+      <div className="flex min-w-0 flex-col gap-12">
+        <div className="grid w-full grid-cols-2 gap-2">
+          {images.length > 0 ? (
+            images.map((img, i) => (
+              <div
+                key={img.id}
+                className="aspect-3/4 w-full overflow-hidden bg-[#E7DFCB]"
+              >
+                <img
+                  src={img.url}
+                  alt={img.alt ?? product.name}
+                  onClick={() => openViewer(i)}
+                  className="h-full w-full cursor-pointer object-cover"
+                />
+              </div>
+            ))
+          ) : (
+            <div className="col-span-2 aspect-3/4 w-full bg-[#E7DFCB]" />
+          )}
+        </div>
+        {reviews}
       </div>
 
       {/* Full page image viewer: < prev / next > + zoom */}
@@ -208,8 +217,10 @@ export default function ProductDetail({
         </div>
       )}
 
-      {/* Info — sticky on desktop */}
-      <div className="flex flex-col gap-4 lg:sticky lg:top-15 lg:self-start">
+      {/* Info — bottom-stuck on desktop: scrolls with the page until its
+          bottom edge would pass the viewport bottom, then sticks there.
+          Achieved with sticky bottom-0 + self-end inside the grid. */}
+      <div className="flex flex-col gap-4 lg:sticky lg:bottom-6 lg:self-end">
         <div>
           <div className="flex items-start justify-between gap-3">
             <h1 className="font-serif text-3xl">{product.name}</h1>
@@ -341,14 +352,39 @@ export default function ProductDetail({
           </div>
         )}
 
-        {product.careInstructions && (
+        {product.careInstructions.length > 0 && (
           <div className="border-b border-[#2B2620]/10 pb-4">
-            <p className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-              Cloth care:
-            </p>
-            <p className="mt-1.5 text-sm leading-relaxed text-[#2B2620]/70">
-              {product.careInstructions}
-            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setOpenSection((s) => (s === "care" ? null : "care"))
+              }
+              aria-expanded={openSection === "care"}
+              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
+            >
+              Cloth care
+              <span
+                aria-hidden="true"
+                className={`text-base leading-none transition-transform duration-300 ${
+                  openSection === "care" ? "rotate-45" : ""
+                }`}
+              >
+                +
+              </span>
+            </button>
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                openSection === "care"
+                  ? "grid-rows-[1fr]"
+                  : "grid-rows-[0fr]"
+              }`}
+            >
+              <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm leading-relaxed text-[#2B2620]/70">
+                {product.careInstructions.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
 

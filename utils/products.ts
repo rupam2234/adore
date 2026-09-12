@@ -1,7 +1,9 @@
 import { pool, ProductCardData, ProductImage } from ".";
 import { getPublicUrl } from "./cloudinary";
+import { CATEGORY_CHILDREN, type CategoryRow, type CategorySlug } from "./categories";
+import { normalizeCareInstructions } from "./product-format";
 
-export type { ProductCardData, ProductImage };
+export type { CategoryRow, CategorySlug, ProductCardData, ProductImage };
 
 type ProductRow = {
   id: string;
@@ -12,7 +14,12 @@ type ProductRow = {
   story: string | null;
   material: string | null;
   fit: string | null;
-  care_instructions: string | null;
+  care_instructions: string | string[] | null;
+  categories: Array<{
+    slug: string;
+    name: string;
+    parent_slug: string | null;
+  }> | null;
   price: string;
   compare_at_price: string | null;
   currency: string;
@@ -28,13 +35,28 @@ type ProductRow = {
 };
 
 type QueryOptions = {
-  /** Category slug, e.g. "dress" or "summer". Omit for all categories. */
+  /** Category slug, e.g. "dress" or "kurti". Parent slugs include children. */
   categorySlug?: string;
+  /**
+   * Include child categories when filtering by a parent (e.g. "kurti" also
+   * matches "short-kurti"). Defaults to true.
+   */
+  includeChildren?: boolean;
   /** Only products marked is_featured (e.g. "new arrivals"). */
   featuredOnly?: boolean;
   /** Max products to return (default 8). */
   limit?: number;
 };
+
+/**
+ * Expand a category slug to itself + known children (e.g. "kurti" →
+ * ["kurti", "short-kurti", "long-kurti", "ethnic-kurti"]). Unknown slugs pass
+ * through unchanged so DB-driven categories keep working.
+ */
+export function expandCategorySlugs(slug: string): string[] {
+  const children = CATEGORY_CHILDREN[slug as CategorySlug];
+  return children ? [slug, ...children] : [slug];
+}
 
 /** Map a raw SQL row (products + variant + image aggregates) to ProductCardData. */
 function mapProductRow(row: ProductRow): ProductCardData {
@@ -62,7 +84,12 @@ function mapProductRow(row: ProductRow): ProductCardData {
     story: row.story,
     material: row.material,
     fit: row.fit,
-    careInstructions: row.care_instructions,
+    careInstructions: normalizeCareInstructions(row.care_instructions),
+    categories: (row.categories ?? []).map((c) => ({
+      slug: c.slug,
+      name: c.name,
+      parentSlug: c.parent_slug,
+    })),
     price: row.price,
     compareAtPrice: row.compare_at_price,
     currency: row.currency,
@@ -88,7 +115,14 @@ function mapProductRow(row: ProductRow): ProductCardData {
 export async function getProductsForSection(
   options: QueryOptions = {},
 ): Promise<ProductCardData[]> {
-  const { categorySlug, featuredOnly = false, limit = 8 } = options;
+  const {
+    categorySlug,
+    includeChildren = true,
+    featuredOnly = false,
+    limit = 8,
+  } = options;
+  const categorySlugs =
+    categorySlug && includeChildren ? expandCategorySlugs(categorySlug) : categorySlug ? [categorySlug] : null;
 
   const rows = (await pool`
     SELECT
@@ -101,6 +135,16 @@ export async function getProductsForSection(
       p.material,
       p.fit,
       p.care_instructions,
+      (
+        SELECT json_agg(
+          json_build_object('slug', c.slug, 'name', c.name, 'parent_slug', parent.slug)
+          ORDER BY c.slug
+        )
+        FROM product_categories pc
+        JOIN categories c ON c.id = pc.category_id
+        LEFT JOIN categories parent ON parent.id = c.parent_id
+        WHERE pc.product_id = p.id
+      ) AS categories,
       min_active.price AS price,
       min_active.currency AS currency,
       min_active.compare_at_price AS compare_at_price,
@@ -153,10 +197,10 @@ export async function getProductsForSection(
       LIMIT 1
     ) min_active ON TRUE
     WHERE p.status = 'ACTIVE'
-      AND ${categorySlug ? pool`EXISTS (
+      AND ${categorySlugs ? pool`EXISTS (
             SELECT 1 FROM product_categories pc
             JOIN categories c ON c.id = pc.category_id
-            WHERE pc.product_id = p.id AND c.slug = ${categorySlug}
+            WHERE pc.product_id = p.id AND c.slug = ANY(${categorySlugs})
           )` : pool`TRUE`}
       AND (${featuredOnly} = FALSE OR p.is_featured)
     ORDER BY p.is_featured DESC, p.created_at DESC
@@ -184,6 +228,16 @@ export async function getProductBySlug(
       p.material,
       p.fit,
       p.care_instructions,
+      (
+        SELECT json_agg(
+          json_build_object('slug', c.slug, 'name', c.name, 'parent_slug', parent.slug)
+          ORDER BY c.slug
+        )
+        FROM product_categories pc
+        JOIN categories c ON c.id = pc.category_id
+        LEFT JOIN categories parent ON parent.id = c.parent_id
+        WHERE pc.product_id = p.id
+      ) AS categories,
       min_active.price AS price,
       min_active.currency AS currency,
       min_active.compare_at_price AS compare_at_price,
@@ -266,6 +320,16 @@ export async function getRelatedProducts(
       p.material,
       p.fit,
       p.care_instructions,
+      (
+        SELECT json_agg(
+          json_build_object('slug', c.slug, 'name', c.name, 'parent_slug', parent.slug)
+          ORDER BY c.slug
+        )
+        FROM product_categories pc
+        JOIN categories c ON c.id = pc.category_id
+        LEFT JOIN categories parent ON parent.id = c.parent_id
+        WHERE pc.product_id = p.id
+      ) AS categories,
       min_active.price AS price,
       min_active.currency AS currency,
       min_active.compare_at_price AS compare_at_price,
@@ -350,6 +414,16 @@ export async function getRelatedProducts(
       p.material,
       p.fit,
       p.care_instructions,
+      (
+        SELECT json_agg(
+          json_build_object('slug', c.slug, 'name', c.name, 'parent_slug', parent.slug)
+          ORDER BY c.slug
+        )
+        FROM product_categories pc
+        JOIN categories c ON c.id = pc.category_id
+        LEFT JOIN categories parent ON parent.id = c.parent_id
+        WHERE pc.product_id = p.id
+      ) AS categories,
       min_active.price AS price,
       min_active.currency AS currency,
       min_active.compare_at_price AS compare_at_price,
@@ -409,5 +483,21 @@ export async function getRelatedProducts(
   const byId = new Map<string, ProductRow>();
   [...categoryFiltered, ...filler].forEach((row) => byId.set(row.id, row));
   return [...byId.values()].slice(0, limit).map(mapProductRow);
+}
+
+/** Fetch every category with its parent link (for nav / filters). */
+export async function getCategories(): Promise<CategoryRow[]> {
+  const rows = (await pool`
+    SELECT
+      child.id,
+      child.slug,
+      child.name,
+      child.description,
+      parent.id AS "parentId"
+    FROM categories child
+    LEFT JOIN categories parent ON parent.id = child.parent_id
+    ORDER BY child.slug
+  `) as CategoryRow[];
+  return rows;
 }
 
