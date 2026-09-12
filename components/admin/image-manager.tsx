@@ -6,21 +6,19 @@ import { useRef, useState } from "react";
 export type AdminImage = {
   id: string;
   publicId: string;
-  /** Delivery URL built from public_id (same as the storefront) — always fresh. */
   url: string;
-  /** Legacy stored URL, only used as an onError fallback. */
   secureUrl: string;
   altText: string | null;
   sortOrder: number;
   isPrimary: boolean;
 };
 
-/**
- * Image manager for the admin edit page.
- * Flow: product must exist first (created as DRAFT by the form) → images
- * upload against its id. Each file uploads separately with per-file retry
- * so one bad file never blocks the batch.
- */
+interface UploadProgress {
+  fileName: string;
+  progress: number;
+  status: "uploading" | "done" | "error";
+}
+
 export function ImageManager({
   productId,
   images: initialImages,
@@ -31,34 +29,71 @@ export function ImageManager({
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState(initialImages);
-  const [failed, setFailed] = useState<string[]>([]); // file names to retry
+  const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [busy, setBusy] = useState(false);
+
+  function uploadFileWithProgress(file: File): Promise<boolean> {
+    return new Promise((resolve) => {
+      const body = new FormData();
+      body.set("product_id", productId);
+      body.set("file", file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/upload");
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          setUploads((prev) =>
+            prev.map((u) =>
+              u.fileName === file.name ? { ...u, progress: pct } : u
+            )
+          );
+        }
+      };
+
+      xhr.onload = () => {
+        const ok = xhr.status >= 200 && xhr.status < 300;
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.fileName === file.name
+              ? { ...u, progress: 100, status: ok ? "done" : "error" }
+              : u
+          )
+        );
+        resolve(ok);
+      };
+
+      xhr.onerror = () => {
+        setUploads((prev) =>
+          prev.map((u) =>
+            u.fileName === file.name ? { ...u, status: "error" } : u
+          )
+        );
+        resolve(false);
+      };
+
+      xhr.send(body);
+    });
+  }
 
   async function uploadFiles(files: File[]) {
     if (files.length === 0) return;
     setBusy(true);
-    setFailed([]);
+    setUploads(files.map((f) => ({ fileName: f.name, progress: 0, status: "uploading" as const })));
 
-    const done: string[] = [];
-    const errors: string[] = [];
-
+    let anySuccess = false;
     for (const file of files) {
-      try {
-        const body = new FormData();
-        body.set("product_id", productId);
-        body.set("file", file);
-        const res = await fetch("/api/upload", { method: "POST", body });
-        if (!res.ok) throw new Error();
-        done.push(file.name);
-      } catch {
-        errors.push(file.name);
-      }
+      const ok = await uploadFileWithProgress(file);
+      if (ok) anySuccess = true;
     }
 
-    setFailed(errors);
     setBusy(false);
     if (inputRef.current) inputRef.current.value = "";
-    if (done.length > 0) router.refresh();
+    if (anySuccess) router.refresh();
+
+    // Clear progress after a delay
+    setTimeout(() => setUploads([]), 3000);
   }
 
   async function handlePick() {
@@ -105,7 +140,7 @@ export function ImageManager({
     <section className="border border-[#2B2620]/10 bg-white p-6">
       <div className="flex items-center justify-between">
         <h2 className="font-serif text-lg">Images</h2>
-        <label className="cursor-pointer rounded-full border border-[#2B2620] px-4 py-2 text-xs transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3]">
+        <label className="cursor-pointer rounded-full border border-[#2B2620] px-4 py-2 text-xs transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3] disabled:opacity-50">
           + Upload
           <input
             ref={inputRef}
@@ -119,13 +154,36 @@ export function ImageManager({
         </label>
       </div>
 
-      {failed.length > 0 && (
-        <p className="mt-3 border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Failed: {failed.join(", ")} — press Upload again to retry these files.
-        </p>
+      {uploads.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {uploads.map((u) => (
+            <div key={u.fileName} className="flex items-center gap-3">
+              <div className="h-1.5 flex-1 overflow-hidden bg-[#2B2620]/10">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    u.status === "error" ? "bg-red-500" : u.status === "done" ? "bg-green-500" : "bg-[#5C6B4B]"
+                  }`}
+                  style={{ width: `${u.progress}%` }}
+                />
+              </div>
+              <span className="w-28 truncate text-xs text-[#2B2620]/60">
+                {u.fileName}
+              </span>
+              <span className="w-16 text-right text-xs">
+                {u.status === "error" ? (
+                  <span className="text-red-600">Failed</span>
+                ) : u.status === "done" ? (
+                  <span className="text-green-600">Done</span>
+                ) : (
+                  <span className="text-[#2B2620]/50">{u.progress}%</span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
 
-      {images.length === 0 && failed.length === 0 && (
+      {images.length === 0 && uploads.length === 0 && (
         <p className="mt-4 text-sm text-[#2B2620]/50">
           No images yet. Products need at least one image before activation.
         </p>
