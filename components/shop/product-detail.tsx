@@ -145,8 +145,8 @@ export default function ProductDetail({
 
   return (
     <div className="grid w-full grid-cols-1 gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:gap-12">
-      {/* Left column: gallery + reviews underneath */}
-      <div className="flex min-w-0 flex-col gap-12">
+      {/* Gallery — first on mobile, left column row 1 on desktop */}
+      <div className="order-1 min-w-0 lg:col-start-1 lg:row-start-1">
         <div className="grid w-full grid-cols-2 gap-2">
           {images.length > 0 ? (
             images.map((img, i) => (
@@ -166,7 +166,6 @@ export default function ProductDetail({
             <div className="col-span-2 aspect-3/4 w-full bg-[#E7DFCB]" />
           )}
         </div>
-        {reviews}
       </div>
 
       {/* Full page image viewer: < prev / next > + zoom */}
@@ -239,262 +238,270 @@ export default function ProductDetail({
         </div>
       )}
 
-      {/* Info — bottom-stuck on desktop: scrolls with the page until its
-          bottom edge would pass the viewport bottom, then sticks there.
-          Achieved with sticky bottom-0 + self-end inside the grid. */}
-      <div className="flex flex-col gap-4 lg:sticky lg:bottom-6 lg:self-end">
-        <div>
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="font-serif text-3xl">{product.name}</h1>
-            {reviewSummary && reviewSummary.count > 0 && (
-              <button
-                type="button"
-                onClick={() =>
-                  document
-                    .getElementById("reviews")
-                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                }
-                aria-label={`Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`}
-                title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? "" : "s"} — jump to reviews`}
-                className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
-              >
-                <Stars value={reviewSummary.average} />
-                <span className="text-xs text-[#2B2620]/50 underline-offset-4 group-hover:underline">
-                  {reviewSummary.average.toFixed(1)} ({reviewSummary.count})
-                </span>
-              </button>
-            )}
-          </div>
-          {product.shortDescription && (
-            <p className="mt-2 text-sm text-[#2B2620]/60">
-              {product.shortDescription}
-            </p>
-          )}
-        </div>
-
-        <p className="text-sm text-[#2B2620]/60">
-          {displayCompareAtPrice &&
-          Number(displayCompareAtPrice) > Number(displayPrice) ? (
-            <>
-              <span className="mr-2 text-[#2B2620]/40 line-through">
-                {formatPrice(displayCompareAtPrice, product.currency)}
-              </span>
-              <span className="text-[#A45A4B]">
-                {formatPrice(displayPrice, product.currency)}
-              </span>
-            </>
-          ) : (
-            formatPrice(displayPrice, product.currency)
-          )}
-          {!selectedVariant && hasVaryingPrices && (
-            <span className="ml-2 text-xs text-[#2B2620]/40">
-              · varies by size
-            </span>
-          )}
-        </p>
-
-        {product.colors.length > 0 && (
+      {/* Info — second on mobile, right column on desktop. The cell spans
+          BOTH rows (gallery + reviews), so the panel stays sticky through the
+          whole product area and releases right before "We Think You Might
+          Enjoy...". Height is capped so expanded sections scroll internally. */}
+      <div className="order-2 mt-2 min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <div className="flex flex-col gap-3 lg:sticky lg:top-25 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-2 scrollbar-thin">
           <div>
-            <p className="mb-2 text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-              Colour
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {product.colors.map((color) => (
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="font-serif text-3xl">{product.name}</h1>
+              {reviewSummary && reviewSummary.count > 0 && (
                 <button
-                  key={color.name}
                   type="button"
-                  onClick={() => setSelectedColor(color.name)}
-                  title={color.name}
-                  aria-label={`Colour: ${color.name}`}
-                  className={`cursor-pointer rounded-full border-2 p-0.5 transition-colors ${
-                    selectedColor === color.name
-                      ? "border-[#2B2620]"
-                      : "border-transparent hover:border-[#2B2620]/40"
-                  }`}
+                  onClick={() =>
+                    document
+                      .getElementById("reviews")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
+                  aria-label={`Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`}
+                  title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? "" : "s"} — jump to reviews`}
+                  className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
                 >
-                  <span
-                    className="block h-6 w-6 rounded-full border border-[#2B2620]/10"
-                    style={{ backgroundColor: color.hex ?? "#E7DFCB" }}
-                  />
+                  <Stars value={reviewSummary.average} />
+                  <span className="text-xs text-[#2B2620]/50 underline-offset-4 group-hover:underline">
+                    {reviewSummary.average.toFixed(1)} ({reviewSummary.count})
+                  </span>
                 </button>
-              ))}
+              )}
             </div>
-            {selectedColor && (
-              <p className="mt-1.5 text-xs text-[#2B2620]/60">
-                {selectedColor}
+            {product.shortDescription && (
+              <p className="mt-2 text-sm text-[#2B2620]/60">
+                {product.shortDescription}
               </p>
             )}
           </div>
-        )}
 
-        {product.details.length > 0 && (
-          <div className="border-b border-[#2B2620]/10 pb-4">
-            <button
-              type="button"
-              onClick={() =>
-                setOpenSection((s) => (s === "details" ? null : "details"))
-              }
-              aria-expanded={openSection === "details"}
-              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
-            >
-              Details
-              <span
-                aria-hidden="true"
-                className={`text-base leading-none transition-transform duration-300 ${
-                  openSection === "details" ? "rotate-45" : ""
-                }`}
-              >
-                +
+          <p className="text-sm text-[#2B2620]/60">
+            {displayCompareAtPrice &&
+            Number(displayCompareAtPrice) > Number(displayPrice) ? (
+              <>
+                <span className="mr-2 text-[#2B2620]/40 line-through">
+                  {formatPrice(displayCompareAtPrice, product.currency)}
+                </span>
+                <span className="text-[#A45A4B]">
+                  {formatPrice(displayPrice, product.currency)}
+                </span>
+              </>
+            ) : (
+              formatPrice(displayPrice, product.currency)
+            )}
+            {!selectedVariant && hasVaryingPrices && (
+              <span className="ml-2 text-xs text-[#2B2620]/40">
+                · varies by size
               </span>
-            </button>
-            <div
-              className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                openSection === "details"
-                  ? "grid-rows-[1fr]"
-                  : "grid-rows-[0fr]"
-              }`}
-            >
-              <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm">
-                {product.details.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {product.material && (
-          <div className="border-b border-[#2B2620]/10 pb-4">
-            <p className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-              Material:
-            </p>
-            <p className="mt-1.5 text-sm leading-relaxed text-[#2B2620]/70">
-              {product.material}
-            </p>
-          </div>
-        )}
-
-        {product.careInstructions.length > 0 && (
-          <div className="border-b border-[#2B2620]/10 pb-4">
-            <button
-              type="button"
-              onClick={() =>
-                setOpenSection((s) => (s === "care" ? null : "care"))
-              }
-              aria-expanded={openSection === "care"}
-              className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
-            >
-              Cloth care
-              <span
-                aria-hidden="true"
-                className={`text-base leading-none transition-transform duration-300 ${
-                  openSection === "care" ? "rotate-45" : ""
-                }`}
-              >
-                +
-              </span>
-            </button>
-            <div
-              className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                openSection === "care" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-              }`}
-            >
-              <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm leading-relaxed text-[#2B2620]/70">
-                {product.careInstructions.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-
-        <div>
-          <p className="mb-2 text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-            Size
+            )}
           </p>
-          <div className="flex flex-wrap gap-1.5">
-            {product.sizes.length > 0 ? (
-              product.sizes.map((s) => (
-                <button
-                  key={s.size}
-                  type="button"
-                  onClick={() => setSelectedSize(s.size)}
-                  disabled={s.stock <= 0}
-                  title={
-                    s.price
-                      ? `${s.size} — ${formatPrice(s.price, product.currency)}`
-                      : s.size
-                  }
-                  className={`cursor-pointer border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                    selectedSize === s.size
-                      ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
-                      : "border-[#2B2620]/20 hover:border-[#2B2620]"
+
+          {product.colors.length > 0 && (
+            <div>
+              <p className="mb-2 text-[11px] uppercase tracking-wide text-[#2B2620]/50">
+                Colour
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {product.colors.map((color) => (
+                  <button
+                    key={color.name}
+                    type="button"
+                    onClick={() => setSelectedColor(color.name)}
+                    title={color.name}
+                    aria-label={`Colour: ${color.name}`}
+                    className={`cursor-pointer rounded-full border-2 p-0.5 transition-colors ${
+                      selectedColor === color.name
+                        ? "border-[#2B2620]"
+                        : "border-transparent hover:border-[#2B2620]/40"
+                    }`}
+                  >
+                    <span
+                      className="block h-6 w-6 rounded-full border border-[#2B2620]/10"
+                      style={{ backgroundColor: color.hex ?? "#E7DFCB" }}
+                    />
+                  </button>
+                ))}
+              </div>
+              {selectedColor && (
+                <p className="mt-1.5 text-xs text-[#2B2620]/60">
+                  {selectedColor}
+                </p>
+              )}
+            </div>
+          )}
+
+          {product.details.length > 0 && (
+            <div className="border-b border-[#2B2620]/10 pb-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenSection((s) => (s === "details" ? null : "details"))
+                }
+                aria-expanded={openSection === "details"}
+                className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
+              >
+                Details
+                <span
+                  aria-hidden="true"
+                  className={`text-base leading-none transition-transform duration-300 ${
+                    openSection === "details" ? "rotate-45" : ""
                   }`}
                 >
-                  {s.size}
-                  {s.stock > 0 && s.stock <= 3 && (
-                    <span className="ml-1 text-[10px] opacity-60">
-                      {s.stock} left
-                    </span>
-                  )}
-                </button>
-              ))
-            ) : (
-              <span className="text-sm text-[#2B2620]/50">Sold out</span>
+                  +
+                </span>
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                  openSection === "details"
+                    ? "grid-rows-[1fr]"
+                    : "grid-rows-[0fr]"
+                }`}
+              >
+                <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm">
+                  {product.details.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {product.material && (
+            <div className="border-b border-[#2B2620]/10 pb-4">
+              <p className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
+                Material:
+              </p>
+              <p className="mt-1.5 text-sm leading-relaxed text-[#2B2620]/70">
+                {product.material}
+              </p>
+            </div>
+          )}
+
+          {product.careInstructions.length > 0 && (
+            <div className="border-b border-[#2B2620]/10 pb-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenSection((s) => (s === "care" ? null : "care"))
+                }
+                aria-expanded={openSection === "care"}
+                className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
+              >
+                Cloth care
+                <span
+                  aria-hidden="true"
+                  className={`text-base leading-none transition-transform duration-300 ${
+                    openSection === "care" ? "rotate-45" : ""
+                  }`}
+                >
+                  +
+                </span>
+              </button>
+              <div
+                className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                  openSection === "care" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                }`}
+              >
+                <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm leading-relaxed text-[#2B2620]/70">
+                  {product.careInstructions.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-[11px] uppercase tracking-wide text-[#2B2620]/50">
+              Size
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {product.sizes.length > 0 ? (
+                product.sizes.map((s) => (
+                  <button
+                    key={s.size}
+                    type="button"
+                    onClick={() => setSelectedSize(s.size)}
+                    disabled={s.stock <= 0}
+                    title={
+                      s.price
+                        ? `${s.size} — ${formatPrice(s.price, product.currency)}`
+                        : s.size
+                    }
+                    className={`cursor-pointer border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                      selectedSize === s.size
+                        ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
+                        : "border-[#2B2620]/20 hover:border-[#2B2620]"
+                    }`}
+                  >
+                    {s.size}
+                    {s.stock > 0 && s.stock <= 3 && (
+                      <span className="ml-1 text-[10px] opacity-60">
+                        {s.stock} left
+                      </span>
+                    )}
+                  </button>
+                ))
+              ) : (
+                <span className="text-sm text-[#2B2620]/50">Sold out</span>
+              )}
+            </div>
+            {product.sizes.length > 0 && (
+              <p className="mt-2 text-xs italic text-[#5C6B4B]">
+                Not sure about your size? Go for the larger one. Our cuts are
+                true to size and a slightly relaxed fit always looks better than
+                a tight one.
+              </p>
             )}
           </div>
-          {product.sizes.length > 0 && (
-            <p className="mt-2 text-xs italic text-[#5C6B4B]">
-              Not sure about your size? Go for the larger one. Our cuts are true
-              to size and a slightly relaxed fit always looks better than a
-              tight one.
-            </p>
-          )}
-        </div>
 
-        {/* Quantity + add to basket */}
-        <div className="mt-2 flex items-stretch gap-2">
-          <div className="flex items-center border border-[#2B2620]/20">
+          {/* Quantity + add to basket */}
+          <div className="mt-2 flex items-stretch gap-2">
+            <div className="flex items-center border border-[#2B2620]/20">
+              <button
+                type="button"
+                onClick={() => setQty((q) => Math.max(q - 1, 1))}
+                aria-label="Decrease quantity"
+                disabled={qty <= 1}
+                className="cursor-pointer px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                −
+              </button>
+              <span className="min-w-8 text-center text-sm">{qty}</span>
+              <button
+                type="button"
+                onClick={() => setQty((q) => Math.min(q + 1, 9))}
+                aria-label="Increase quantity"
+                className="cursor-pointer px-3 py-2 text-sm"
+              >
+                +
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => setQty((q) => Math.max(q - 1, 1))}
-              aria-label="Decrease quantity"
-              disabled={qty <= 1}
-              className="cursor-pointer px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={handleAddToCart}
+              className="flex-1 cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!canAdd || adding || product.totalStock <= 0}
             >
-              −
-            </button>
-            <span className="min-w-8 text-center text-sm">{qty}</span>
-            <button
-              type="button"
-              onClick={() => setQty((q) => Math.min(q + 1, 9))}
-              aria-label="Increase quantity"
-              className="cursor-pointer px-3 py-2 text-sm"
-            >
-              +
+              {product.totalStock <= 0
+                ? "Sold out"
+                : adding
+                  ? "Adding…"
+                  : selectedSize
+                    ? `Add to basket — ${selectedSize}`
+                    : "Select a size"}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={handleAddToCart}
-            className="flex-1 cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!canAdd || adding || product.totalStock <= 0}
-          >
-            {product.totalStock <= 0
-              ? "Sold out"
-              : adding
-                ? "Adding…"
-                : selectedSize
-                  ? `Add to basket — ${selectedSize}`
-                  : "Select a size"}
-          </button>
+          {canAdd && variantStock <= 3 && (
+            <p className="mt-2 text-xs text-[#8A5A2B]">
+              Only {variantStock} left in {matchedVariant?.size}
+            </p>
+          )}
+          {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}
         </div>
-        {canAdd && variantStock <= 3 && (
-          <p className="mt-2 text-xs text-[#8A5A2B]">
-            Only {variantStock} left in {matchedVariant?.size}
-          </p>
-        )}
-        {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}
+      </div>
+
+      {/* Reviews — last on mobile, left column row 2 on desktop */}
+      <div className="order-3 mt-4 lg:col-start-1 lg:row-start-2">
+        {reviews}
       </div>
     </div>
   );
