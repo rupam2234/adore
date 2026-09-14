@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/utils";
+import { db, productReviews } from "@/utils";
 import {
   getApprovedReviews,
   getProductIdBySlug,
@@ -113,28 +113,30 @@ export async function POST(request: Request, { params }: RouteContext) {
     return error("Headline must be under 120 characters.");
   }
 
-  const rows = (await pool`
-    INSERT INTO product_reviews
-      (product_id, rating, title, body, author_name, size_purchased, fit_feedback)
-    VALUES (
-      ${productId}, ${rating}, ${title === "" ? null : title}, ${body},
-      ${authorName}, ${sizePurchased}, ${fitFeedback}
-    )
-    RETURNING id, rating, title, body, author_name, size_purchased,
-              fit_feedback, helpful_count, created_at
-  `) as unknown as Array<{
-    id: string;
-    rating: number;
-    title: string | null;
-    body: string;
-    author_name: string;
-    size_purchased: string | null;
-    fit_feedback: "runs_small" | "true_to_size" | "runs_large" | null;
-    helpful_count: number;
-    created_at: Date | string;
-  }>;
+  const inserted = await db
+    .insert(productReviews)
+    .values({
+      productId,
+      rating,
+      title: title === "" ? null : title,
+      body,
+      authorName,
+      sizePurchased,
+      fitFeedback: fitFeedback as "runs_small" | "true_to_size" | "runs_large" | null,
+    })
+    .returning({
+      id: productReviews.id,
+      rating: productReviews.rating,
+      title: productReviews.title,
+      body: productReviews.body,
+      author_name: productReviews.authorName,
+      size_purchased: productReviews.sizePurchased,
+      fit_feedback: productReviews.fitFeedback,
+      helpful_count: productReviews.helpfulCount,
+      created_at: productReviews.createdAt,
+    });
 
-  const r = rows[0];
+  const r = inserted[0];
   return NextResponse.json(
     {
       ok: true,

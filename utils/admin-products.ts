@@ -1,4 +1,13 @@
-import { pool } from "./db.ts";
+import { and, count, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import {
+  db,
+  rawQuery,
+  categories,
+  productCategories,
+  productImages,
+  productVariants,
+  products,
+} from "./db";
 import { getPublicUrl } from "./cloudinary.ts";
 import { buildSku, slugify, type ProductPayload, type ProductStatus } from "./admin-schema.ts";
 
@@ -24,8 +33,16 @@ export async function uniqueSlug(
   for (let i = 1; i < 100; i++) {
     const candidate = i === 1 ? root : `${root}-${i}`;
     const rows = excludeId
-      ? await pool`SELECT 1 FROM products WHERE slug = ${candidate} AND id <> ${excludeId} LIMIT 1`
-      : await pool`SELECT 1 FROM products WHERE slug = ${candidate} LIMIT 1`;
+      ? await db
+          .select({ id: products.id })
+          .from(products)
+          .where(and(eq(products.slug, candidate), ne(products.id, excludeId)))
+          .limit(1)
+      : await db
+          .select({ id: products.id })
+          .from(products)
+          .where(eq(products.slug, candidate))
+          .limit(1);
     if (rows.length === 0) return candidate;
   }
   return `${root}-${Date.now()}`;
@@ -38,17 +55,22 @@ export async function createProduct(payload: ProductPayload): Promise<{
 }> {
   const slug = await uniqueSlug(payload.slug);
 
-  const rows = await pool`
-    INSERT INTO products
-      (name, slug, short_description, details, story, material,
-       care_instructions, fit, status, is_featured)
-    VALUES
-      (${payload.name}, ${slug}, ${payload.shortDescription},
-       ${JSON.stringify(payload.details)}::jsonb, ${payload.story},
-       ${payload.material}, ${payload.careInstructions}, ${payload.fit},
-       'DRAFT'::product_status, ${payload.isFeatured})
-    RETURNING id, slug`;
-  const product = rows[0] as { id: string; slug: string };
+  const inserted = await db
+    .insert(products)
+    .values({
+      name: payload.name,
+      slug,
+      shortDescription: payload.shortDescription,
+      details: payload.details,
+      story: payload.story,
+      material: payload.material,
+      careInstructions: payload.careInstructions,
+      fit: payload.fit,
+      status: "DRAFT",
+      isFeatured: payload.isFeatured,
+    })
+    .returning({ id: products.id, slug: products.slug });
+  const product = inserted[0];
 
   await syncVariants(product.id, product.slug, payload.variants);
   await syncCategories(product.id, payload.categorySlugs);
@@ -62,26 +84,40 @@ async function syncVariants(
   slug: string,
   variants: ProductPayload["variants"],
 ): Promise<void> {
-  await pool`
-    UPDATE product_variants SET is_active = false, updated_at = NOW()
-    WHERE product_id = ${productId}`;
+  await db
+    .update(productVariants)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(productVariants.productId, productId));
 
-  for (const v of variants) {
-    await pool`
-      INSERT INTO product_variants
-        (product_id, sku, color, color_hex, size, price, compare_at_price,
-         currency, stock_quantity, is_active)
-      VALUES
-        (${productId}, ${buildSku(slug, v)}, ${v.color}, ${v.colorHex},
-         ${v.size}, ${v.price}, ${v.compareAtPrice}, 'INR', ${v.stock}, true)
-      ON CONFLICT (product_id, color, size) DO UPDATE SET
-        sku = EXCLUDED.sku,
-        color_hex = EXCLUDED.color_hex,
-        price = EXCLUDED.price,
-        compare_at_price = EXCLUDED.compare_at_price,
-        stock_quantity = EXCLUDED.stock_quantity,
-        is_active = true,
-        updated_at = NOW()`;
+  if (variants.length > 0) {
+    await db
+      .insert(productVariants)
+      .values(
+        variants.map((v) => ({
+          productId,
+          sku: buildSku(slug, v),
+          color: v.color,
+          colorHex: v.colorHex,
+          size: v.size,
+          price: String(v.price),
+          compareAtPrice: v.compareAtPrice === null ? null : String(v.compareAtPrice),
+          currency: "INR",
+          stockQuantity: v.stock,
+          isActive: true,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [productVariants.productId, productVariants.color, productVariants.size],
+        set: {
+          sku: sql`excluded.sku`,
+          colorHex: sql`excluded.color_hex`,
+          price: sql`excluded.price`,
+          compareAtPrice: sql`excluded.compare_at_price`,
+          stockQuantity: sql`excluded.stock_quantity`,
+          isActive: sql`true`,
+          updatedAt: sql`NOW()`,
+        },
+      });
   }
 }
 
@@ -91,29 +127,35 @@ export async function syncCategories(
   categorySlugs: string[],
 ): Promise<void> {
   if (categorySlugs.length === 0) {
-    await pool`
-      DELETE FROM product_categories WHERE product_id = ${productId}`;
+    await db
+      .delete(productCategories)
+      .where(eq(productCategories.productId, productId));
     return;
   }
 
   // Unknown slugs are skipped (checkpoint: bad ids never 500 the request)
-  const categories = await pool`
-    SELECT id FROM categories
-    WHERE slug = ANY(${categorySlugs}::text[])`;
+  const matched = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(inArray(categories.slug, categorySlugs));
 
-  for (const c of categories) {
-    await pool`
-      INSERT INTO product_categories (product_id, category_id)
-      VALUES (${productId}, ${c.id})
-      ON CONFLICT DO NOTHING`;
+  for (const c of matched) {
+    await db
+      .insert(productCategories)
+      .values({ productId, categoryId: c.id })
+      .onConflictDoNothing();
   }
 
   // Remove links not in the payload
-  const keepIds = (categories as { id: string }[]).map((c) => c.id);
-  await pool`
-    DELETE FROM product_categories
-    WHERE product_id = ${productId}
-      AND category_id <> ALL(${keepIds}::uuid[])`;
+  const keepIds = matched.map((c) => c.id);
+  await db.delete(productCategories).where(
+    keepIds.length > 0
+      ? and(
+          eq(productCategories.productId, productId),
+          notInArray(productCategories.categoryId, keepIds),
+        )
+      : eq(productCategories.productId, productId),
+  );
 }
 
 /** Update an existing product (fields + variants + categories + status). */
@@ -121,27 +163,31 @@ export async function updateProduct(
   productId: string,
   payload: ProductPayload,
 ): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
-  const current = await pool`
-    SELECT id, slug, status FROM products WHERE id = ${productId}`;
+  const current = await db
+    .select({ id: products.id, slug: products.slug, status: products.status })
+    .from(products)
+    .where(eq(products.id, productId));
   if (current.length === 0) return { ok: false, error: "Product not found" };
 
-  const row = current[0] as { slug: string; status: ProductStatus };
+  const row = current[0];
   const slug =
     payload.slug === row.slug ? row.slug : await uniqueSlug(payload.slug, productId);
 
-  await pool`
-    UPDATE products SET
-      name = ${payload.name},
-      slug = ${slug},
-      short_description = ${payload.shortDescription},
-      details = ${JSON.stringify(payload.details)}::jsonb,
-      story = ${payload.story},
-      material = ${payload.material},
-      care_instructions = ${payload.careInstructions},
-      fit = ${payload.fit},
-      is_featured = ${payload.isFeatured},
-      updated_at = NOW()
-    WHERE id = ${productId}`;
+  await db
+    .update(products)
+    .set({
+      name: payload.name,
+      slug,
+      shortDescription: payload.shortDescription,
+      details: payload.details,
+      story: payload.story,
+      material: payload.material,
+      careInstructions: payload.careInstructions,
+      fit: payload.fit,
+      isFeatured: payload.isFeatured,
+      updatedAt: new Date(),
+    })
+    .where(eq(products.id, productId));
 
   await syncVariants(productId, slug, payload.variants);
   await syncCategories(productId, payload.categorySlugs);
@@ -164,30 +210,43 @@ export async function setStatus(
   status: ProductStatus,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (status === "ACTIVE") {
-    const checks = await pool`
-      SELECT
-        (SELECT COUNT(*) FROM product_variants
-         WHERE product_id = ${productId} AND is_active) AS variants,
-        (SELECT COUNT(*) FROM product_images
-         WHERE product_id = ${productId}) AS images`;
-    const { variants, images } = checks[0] as { variants: number; images: number };
-    if (Number(variants) === 0)
+    const [variantRows, imageRows] = await Promise.all([
+      db
+        .select({ c: count() })
+        .from(productVariants)
+        .where(
+          and(
+            eq(productVariants.productId, productId),
+            eq(productVariants.isActive, true),
+          ),
+        ),
+      db
+        .select({ c: count() })
+        .from(productImages)
+        .where(eq(productImages.productId, productId)),
+    ]);
+    const variants = Number(variantRows[0]?.c ?? 0);
+    const images = Number(imageRows[0]?.c ?? 0);
+    if (variants === 0)
       return { ok: false, error: "Cannot activate: at least one active variant is required." };
-    if (Number(images) === 0)
+    if (images === 0)
       return { ok: false, error: "Cannot activate: upload at least one image first." };
   }
 
-  await pool`
-    UPDATE products SET status = ${status}::product_status, updated_at = NOW()
-    WHERE id = ${productId}`;
+  await db
+    .update(products)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(products.id, productId));
   return { ok: true };
 }
 
 /** Soft-delete a product (ARCHIVED). The storefront stops seeing it. */
 export async function archiveProduct(productId: string): Promise<boolean> {
-  const rows = await pool`
-    UPDATE products SET status = 'ARCHIVED'::product_status, updated_at = NOW()
-    WHERE id = ${productId} RETURNING id`;
+  const rows = await db
+    .update(products)
+    .set({ status: "ARCHIVED", updatedAt: new Date() })
+    .where(eq(products.id, productId))
+    .returning({ id: products.id });
   return rows.length > 0;
 }
 
@@ -205,7 +264,7 @@ export async function listAdminProducts(): Promise<
     updatedAt: string;
   }[]
 > {
-  const rows = await pool`
+  const rows = await rawQuery<Record<string, unknown>>(sql`
     SELECT p.id, p.name, p.slug, p.status, p.is_featured, p.updated_at,
       (SELECT COUNT(*) FROM product_variants v
        WHERE v.product_id = p.id AND v.is_active) AS variant_count,
@@ -213,8 +272,8 @@ export async function listAdminProducts(): Promise<
       (SELECT MIN(v.price) FROM product_variants v
        WHERE v.product_id = p.id AND v.is_active) AS min_price
     FROM products p
-    ORDER BY p.updated_at DESC`;
-  return (rows as Record<string, unknown>[]).map((r) => ({
+    ORDER BY p.updated_at DESC`);
+  return rows.map((r) => ({
     id: r.id as string,
     name: r.name as string,
     slug: r.slug as string,
@@ -229,27 +288,59 @@ export async function listAdminProducts(): Promise<
 
 /** Load one product with variants, images and category slugs for the edit form. */
 export async function getAdminProduct(productId: string) {
-  const rows = await pool`
-    SELECT id, slug, name, short_description, details, story, material,
-           care_instructions, fit, status, is_featured
-    FROM products WHERE id = ${productId}`;
+  const rows = await db
+    .select({
+      id: products.id,
+      slug: products.slug,
+      name: products.name,
+      short_description: products.shortDescription,
+      details: products.details,
+      story: products.story,
+      material: products.material,
+      care_instructions: products.careInstructions,
+      fit: products.fit,
+      status: products.status,
+      is_featured: products.isFeatured,
+    })
+    .from(products)
+    .where(eq(products.id, productId));
   if (rows.length === 0) return null;
 
-  const p = rows[0] as Record<string, unknown>;
+  const p = rows[0];
 
-  const variantRows = await pool`
-    SELECT id, color, color_hex, size, price, compare_at_price,
-           stock_quantity, is_active
-    FROM product_variants WHERE product_id = ${productId}
-    ORDER BY is_active DESC, color, size`;
-  const imageRows = await pool`
-    SELECT id, public_id, secure_url, alt_text, sort_order, is_primary
-    FROM product_images WHERE product_id = ${productId}
-    ORDER BY is_primary DESC, sort_order`;
-  const categoryRows = await pool`
-    SELECT c.slug FROM product_categories pc
-    JOIN categories c ON c.id = pc.category_id
-    WHERE pc.product_id = ${productId}`;
+  const [variantRows, imageRows, categoryRows] = await Promise.all([
+    db
+      .select({
+        id: productVariants.id,
+        color: productVariants.color,
+        color_hex: productVariants.colorHex,
+        size: productVariants.size,
+        price: productVariants.price,
+        compare_at_price: productVariants.compareAtPrice,
+        stock_quantity: productVariants.stockQuantity,
+        is_active: productVariants.isActive,
+      })
+      .from(productVariants)
+      .where(eq(productVariants.productId, productId))
+      .orderBy(desc(productVariants.isActive), productVariants.color, productVariants.size),
+    db
+      .select({
+        id: productImages.id,
+        public_id: productImages.publicId,
+        secure_url: productImages.secureUrl,
+        alt_text: productImages.altText,
+        sort_order: productImages.sortOrder,
+        is_primary: productImages.isPrimary,
+      })
+      .from(productImages)
+      .where(eq(productImages.productId, productId))
+      .orderBy(desc(productImages.isPrimary), productImages.sortOrder),
+    db
+      .select({ slug: categories.slug })
+      .from(productCategories)
+      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .where(eq(productCategories.productId, productId)),
+  ]);
 
   return {
     id: p.id as string,
@@ -295,26 +386,35 @@ export async function deleteProductImage(
   productId: string,
   imageId: string,
 ): Promise<{ ok: true; publicId: string } | { ok: false; error: string }> {
-  const rows = await pool`
-    SELECT id, public_id FROM product_images
-    WHERE id = ${imageId} AND product_id = ${productId}`;
+  const rows = await db
+    .select({ id: productImages.id, publicId: productImages.publicId })
+    .from(productImages)
+    .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)));
   if (rows.length === 0) return { ok: false, error: "Image not found" };
 
-  const wasPrimary = await pool`
-    SELECT is_primary FROM product_images WHERE id = ${imageId}`;
-  await pool`DELETE FROM product_images WHERE id = ${imageId}`;
+  const wasPrimary = await db
+    .select({ isPrimary: productImages.isPrimary })
+    .from(productImages)
+    .where(eq(productImages.id, imageId));
+  await db.delete(productImages).where(eq(productImages.id, imageId));
 
   // Fallback: if we removed the primary, promote the first remaining image
-  if (wasPrimary[0]?.is_primary) {
-    await pool`
-      UPDATE product_images SET is_primary = true
-      WHERE id = (
-        SELECT id FROM product_images WHERE product_id = ${productId}
-        ORDER BY sort_order LIMIT 1
-      )`;
+  if (wasPrimary[0]?.isPrimary) {
+    await db
+      .update(productImages)
+      .set({ isPrimary: true })
+      .where(eq(
+        productImages.id,
+        db
+          .select({ id: productImages.id })
+          .from(productImages)
+          .where(eq(productImages.productId, productId))
+          .orderBy(productImages.sortOrder)
+          .limit(1),
+      ));
   }
 
-  return { ok: true, publicId: rows[0].public_id as string };
+  return { ok: true, publicId: rows[0].publicId };
 }
 
 /** Set which image is primary (exactly one per product). */
@@ -322,13 +422,19 @@ export async function setPrimaryImage(
   productId: string,
   imageId: string,
 ): Promise<boolean> {
-  const owned = await pool`
-    SELECT 1 FROM product_images WHERE id = ${imageId} AND product_id = ${productId}`;
+  const owned = await db
+    .select({ id: productImages.id })
+    .from(productImages)
+    .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)));
   if (owned.length === 0) return false;
 
-  await pool`
-    UPDATE product_images SET is_primary = false WHERE product_id = ${productId}`;
-  await pool`
-    UPDATE product_images SET is_primary = true WHERE id = ${imageId}`;
+  await db
+    .update(productImages)
+    .set({ isPrimary: false })
+    .where(eq(productImages.productId, productId));
+  await db
+    .update(productImages)
+    .set({ isPrimary: true })
+    .where(eq(productImages.id, imageId));
   return true;
 }

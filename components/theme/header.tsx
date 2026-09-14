@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { CATEGORY_TREE } from "@/utils/categories";
+import Image from "next/image";
 
 export default function Header() {
   const [megaOpen, setMegaOpen] = useState(false);
@@ -19,9 +20,18 @@ export default function Header() {
           href="/"
           className="font-semibold text-3xl tracking-tight text-primary/80 transition-colors"
         >
-          Adore
+          {/* Adore */}
+          <Image
+            src={"/images/Adore_logo.png"}
+            alt="Adore_tag"
+            width={100}
+            height={20}
+          />
         </Link>
-        <nav aria-label="Primary" className="hidden items-center gap-8 text-sm sm:flex">
+        <nav
+          aria-label="Primary"
+          className="hidden items-center gap-8 text-sm sm:flex"
+        >
           <Link
             href="/"
             className="group relative inline-block hover:text-[#5C6B4B]"
@@ -201,7 +211,9 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() =>
-                      setMobileExpanded((s) => (s === cat.slug ? null : cat.slug))
+                      setMobileExpanded((s) =>
+                        s === cat.slug ? null : cat.slug,
+                      )
                     }
                     aria-expanded={mobileExpanded === cat.slug}
                     aria-label={`Expand ${cat.name} sub-categories`}

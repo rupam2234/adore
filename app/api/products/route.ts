@@ -1,4 +1,4 @@
-import { getPublicUrl, pool } from "@/utils";
+import { getPublicUrl, rawQuery, sql } from "@/utils";
 import { normalizeCareInstructions } from "@/utils/product-format";
 import { NextResponse } from "next/server";
 
@@ -10,7 +10,7 @@ type Images = {
 
 export async function GET() {
   try {
-    const products = await pool.query(` SELECT
+    const products = (await rawQuery(sql` SELECT
             p.id,
             p.name,
             p.slug,
@@ -97,7 +97,25 @@ export async function GET() {
 
           ORDER BY p.created_at DESC
 
-          LIMIT 8;`)
+          LIMIT 8`)) as Array<{
+      id: string;
+      name: string;
+      slug: string;
+      short_description: string | null;
+      details: string[] | null;
+      story: string | null;
+      material: string | null;
+      fit: string | null;
+      care_instructions: string | string[] | null;
+      is_featured: boolean;
+      price: string | null;
+      compare_at_price: string | null;
+      currency: string | null;
+      total_stock: number | null;
+      colors: Array<{ name: string; hex: string | null }> | null;
+      sizes: Array<{ size: string; stock: number; price: string; compare_at_price: string | null }> | null;
+      images: Array<Images> | null;
+    }>;
 
     const productsWithUrls = products?.map((product) => ({
       ...product,
@@ -118,7 +136,7 @@ export async function GET() {
         }),
       ),
       total_stock: Number(product.total_stock ?? 0),
-      images: product.images.map((image: Images) => ({
+      images: (product.images ?? []).map((image) => ({
         ...image,
         url: getPublicUrl(image.public_id),
       })),

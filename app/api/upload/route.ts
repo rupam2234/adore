@@ -1,4 +1,5 @@
-import { cloudinary, pool } from "@/utils";
+import { cloudinary, db, productImages, products } from "@/utils";
+import { count, eq, max } from "drizzle-orm";
 import { isAdminRequest } from "@/utils/admin-auth";
 import { NextResponse } from "next/server";
 
@@ -17,11 +18,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "product_id is required" }, { status: 400 });
         }
 
-        const products = await pool`SELECT id, slug FROM products WHERE id = ${productId}`;
-        if (products.length === 0) {
+        const productRows = await db
+            .select({ id: products.id, slug: products.slug })
+            .from(products)
+            .where(eq(products.id, productId));
+        if (productRows.length === 0) {
             return NextResponse.json({ error: "Product not found" }, { status: 404 });
         }
-        const slug = products[0].slug as string;
+        const slug = productRows[0].slug;
 
         const files = formData.getAll("file").filter((f): f is File => f instanceof File);
         if (files.length === 0) {
@@ -30,15 +34,18 @@ export async function POST(request: Request) {
 
         const makePrimary = formData.get("is_primary") === "true";
 
-        const existing = await pool`
-            SELECT COALESCE(MAX(sort_order), 0) AS max_sort, COUNT(*) AS count
-            FROM product_images WHERE product_id = ${productId}
-        `;
-        let nextSort = Number(existing[0].max_sort) + 1;
-        const hasImages = Number(existing[0].count) > 0;
+        const existingRows = await db
+            .select({ maxSort: max(productImages.sortOrder), c: count() })
+            .from(productImages)
+            .where(eq(productImages.productId, productId));
+        let nextSort = Number(existingRows[0]?.maxSort ?? 0) + 1;
+        const hasImages = Number(existingRows[0]?.c ?? 0) > 0;
 
         if (makePrimary && hasImages) {
-            await pool`UPDATE product_images SET is_primary = false WHERE product_id = ${productId}`;
+            await db
+                .update(productImages)
+                .set({ isPrimary: false })
+                .where(eq(productImages.productId, productId));
         }
 
         const inserted = [];
@@ -60,14 +67,28 @@ export async function POST(request: Request) {
                 file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ");
             const isPrimary = !hasImages && index === 0;
 
-            const rows = await pool`
-                INSERT INTO product_images
-                    (product_id, public_id, secure_url, alt_text, width, height, sort_order, is_primary)
-                VALUES
-                    (${productId}, ${result.public_id}, ${result.secure_url}, ${altText},
-                     ${result.width}, ${result.height}, ${nextSort}, ${isPrimary})
-                RETURNING id, public_id, secure_url, alt_text, width, height, sort_order, is_primary
-            `;
+            const rows = await db
+                .insert(productImages)
+                .values({
+                    productId,
+                    publicId: result.public_id,
+                    secureUrl: result.secure_url,
+                    altText: altText,
+                    width: result.width,
+                    height: result.height,
+                    sortOrder: nextSort,
+                    isPrimary: isPrimary,
+                })
+                .returning({
+                    id: productImages.id,
+                    public_id: productImages.publicId,
+                    secure_url: productImages.secureUrl,
+                    alt_text: productImages.altText,
+                    width: productImages.width,
+                    height: productImages.height,
+                    sort_order: productImages.sortOrder,
+                    is_primary: productImages.isPrimary,
+                });
             inserted.push(rows[0]);
             nextSort++;
         }

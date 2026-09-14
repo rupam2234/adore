@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
-import { pool } from "./db";
+import { and, eq, gt } from "drizzle-orm";
+import { db, sessions, users } from "./db";
 
 const secretKey = process.env.JWT_SECRET ?? "dev-secret-do-not-use-in-prod";
 const refreshSecretKey = process.env.JWT_REFRESH_SECRET ?? `${secretKey}-refresh`;
@@ -124,65 +125,62 @@ export interface UserRow {
 export async function getUserByEmail(
   email: string,
 ): Promise<(UserRow & { passwordHash: string }) | null> {
-  const rows = await pool`
-    SELECT id, email, name, role, avatar_url, metadata,
-           password_hash, created_at, updated_at
-    FROM users
-    WHERE email = ${email}
-    LIMIT 1
-  `;
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      avatarUrl: users.avatarUrl,
+      metadata: users.metadata,
+      passwordHash: users.passwordHash,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
   if (rows.length === 0) return null;
-  const r = rows[0] as {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    avatar_url: string | null;
-    metadata: Record<string, unknown>;
-    password_hash: string;
-    created_at: Date;
-    updated_at: Date;
-  };
+  const r = rows[0];
   return {
     id: r.id,
     email: r.email,
     name: r.name,
     role: r.role as UserRole,
-    avatarUrl: r.avatar_url,
+    avatarUrl: r.avatarUrl,
     metadata: r.metadata,
-    passwordHash: r.password_hash,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    passwordHash: r.passwordHash,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
   };
 }
 
 export async function getUserById(id: string): Promise<UserRow | null> {
-  const rows = await pool`
-    SELECT id, email, name, role, avatar_url, metadata, created_at, updated_at
-    FROM users
-    WHERE id = ${id}
-    LIMIT 1
-  `;
+  const rows = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+      avatarUrl: users.avatarUrl,
+      metadata: users.metadata,
+      createdAt: users.createdAt,
+      updatedAt: users.updatedAt,
+    })
+    .from(users)
+    .where(eq(users.id, id))
+    .limit(1);
   if (rows.length === 0) return null;
-  const r = rows[0] as {
-    id: string;
-    email: string;
-    name: string;
-    role: string;
-    avatar_url: string | null;
-    metadata: Record<string, unknown>;
-    created_at: Date;
-    updated_at: Date;
-  };
+  const r = rows[0];
   return {
     id: r.id,
     email: r.email,
     name: r.name,
     role: r.role as UserRole,
-    avatarUrl: r.avatar_url,
+    avatarUrl: r.avatarUrl,
     metadata: r.metadata,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
   };
 }
 
@@ -216,18 +214,19 @@ export async function storeSession(
   token: string,
   expiresAt: Date,
 ): Promise<void> {
-  await pool`
-    INSERT INTO sessions (user_id, token, expires_at)
-    VALUES (${userId}, ${token}, ${expiresAt})
-  `;
+  await db.insert(sessions).values({ userId, token, expiresAt });
 }
 
 export async function revokeSession(token: string): Promise<void> {
-  await pool`DELETE FROM sessions WHERE token = ${token}`;
+  await db.delete(sessions).where(eq(sessions.token, token));
 }
 
 export async function isSessionValid(token: string): Promise<boolean> {
-  const rows = await pool`SELECT 1 FROM sessions WHERE token = ${token} AND expires_at > NOW()`;
+  const rows = await db
+    .select({ userId: sessions.userId })
+    .from(sessions)
+    .where(and(eq(sessions.token, token), gt(sessions.expiresAt, new Date())))
+    .limit(1);
   return rows.length > 0;
 }
 

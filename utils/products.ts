@@ -1,4 +1,4 @@
-import { pool, ProductCardData, ProductImage } from ".";
+import { rawQuery, sql, ProductCardData, ProductImage } from ".";
 import { getPublicUrl } from "./cloudinary";
 import { CATEGORY_CHILDREN, type CategoryRow, type CategorySlug } from "./categories";
 import { normalizeCareInstructions } from "./product-format";
@@ -124,7 +124,20 @@ export async function getProductsForSection(
   const categorySlugs =
     categorySlug && includeChildren ? expandCategorySlugs(categorySlug) : categorySlug ? [categorySlug] : null;
 
-  const rows = (await pool`
+  // Filter fragment: EXISTS over matched categories (parameterized IN list),
+  // or plain TRUE when no category filter is given.
+  const categoryFilter = categorySlugs
+    ? sql`EXISTS (
+            SELECT 1 FROM product_categories pc
+            JOIN categories c ON c.id = pc.category_id
+            WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
+              categorySlugs.map((s) => sql`${s}`),
+              sql`, `,
+            )}))
+          `
+    : sql`TRUE`;
+
+  const rows = await rawQuery<ProductRow>(sql`
     SELECT
       p.id,
       p.slug,
@@ -197,15 +210,11 @@ export async function getProductsForSection(
       LIMIT 1
     ) min_active ON TRUE
     WHERE p.status = 'ACTIVE'
-      AND ${categorySlugs ? pool`EXISTS (
-            SELECT 1 FROM product_categories pc
-            JOIN categories c ON c.id = pc.category_id
-            WHERE pc.product_id = p.id AND c.slug = ANY(${categorySlugs})
-          )` : pool`TRUE`}
+      AND ${categoryFilter}
       AND (${featuredOnly} = FALSE OR p.is_featured)
     ORDER BY p.is_featured DESC, p.created_at DESC
     LIMIT ${limit}
-  `) as ProductRow[];
+  `);
 
   return rows.map(mapProductRow);
 }
@@ -217,7 +226,7 @@ export async function getProductsForSection(
 export async function getProductBySlug(
   slug: string,
 ): Promise<ProductCardData | null> {
-  const rows = (await pool`
+  const rows = await rawQuery<ProductRow>(sql`
     SELECT
       p.id,
       p.slug,
@@ -291,7 +300,7 @@ export async function getProductBySlug(
     ) min_active ON TRUE
     WHERE p.slug = ${slug} AND p.status = 'ACTIVE'
     LIMIT 1
-  `) as ProductRow[];
+  `);
 
   const row = rows[0];
   if (!row) return null;
@@ -309,7 +318,7 @@ export async function getRelatedProducts(
   slug: string,
   limit = 4,
 ): Promise<ProductCardData[]> {
-  const categoryFiltered = (await pool`
+  const categoryFiltered = await rawQuery<ProductRow>(sql`
     SELECT
       p.id,
       p.slug,
@@ -396,14 +405,14 @@ export async function getRelatedProducts(
       )
     ORDER BY p.is_featured DESC, p.created_at DESC
     LIMIT ${limit}
-  `) as ProductRow[];
+  `);
 
   if (categoryFiltered.length >= limit) {
     return categoryFiltered.map(mapProductRow);
   }
 
   // Fallback: fill up with the newest active products excluding the current one
-  const filler = (await pool`
+  const filler = await rawQuery<ProductRow>(sql`
     SELECT
       p.id,
       p.slug,
@@ -478,7 +487,7 @@ export async function getRelatedProducts(
     WHERE p.status = 'ACTIVE' AND p.slug != ${slug}
     ORDER BY p.created_at DESC
     LIMIT ${limit}
-  `) as ProductRow[];
+  `);
 
   const byId = new Map<string, ProductRow>();
   [...categoryFiltered, ...filler].forEach((row) => byId.set(row.id, row));
@@ -487,7 +496,7 @@ export async function getRelatedProducts(
 
 /** Fetch every category with its parent link (for nav / filters). */
 export async function getCategories(): Promise<CategoryRow[]> {
-  const rows = (await pool`
+  const rows = await rawQuery<CategoryRow>(sql`
     SELECT
       child.id,
       child.slug,
@@ -497,7 +506,7 @@ export async function getCategories(): Promise<CategoryRow[]> {
     FROM categories child
     LEFT JOIN categories parent ON parent.id = child.parent_id
     ORDER BY child.slug
-  `) as CategoryRow[];
+  `);
   return rows;
 }
 

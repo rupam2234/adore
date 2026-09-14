@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { pool } from "@/utils";
+import { rawQuery, sql } from "@/utils";
 
 type RouteContext = { params: Promise<{ slug: string; id: string }> };
 
@@ -10,7 +10,8 @@ export async function POST(_request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Missing review id" }, { status: 400 });
   }
 
-  const rows = (await pool`
+  // UPDATE ... FROM join: kept as raw SQL (the builder can't express it cleanly).
+  const rows = await rawQuery<{ helpful_count: number }>(sql`
     UPDATE product_reviews r
     SET helpful_count = helpful_count + 1, updated_at = NOW()
     FROM products p
@@ -19,7 +20,7 @@ export async function POST(_request: Request, { params }: RouteContext) {
       AND p.slug = ${slug}
       AND r.is_approved = TRUE
     RETURNING r.helpful_count
-  `) as Array<{ helpful_count: number }>;
+  `);
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "Review not found" }, { status: 404 });

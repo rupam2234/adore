@@ -1,4 +1,5 @@
-import { pool } from "./db";
+import { and, count, desc, eq } from "drizzle-orm";
+import { db, productReviews, products } from "./db";
 import { EMPTY_SUMMARY } from "./review-format";
 import type {
   FitFeedback,
@@ -9,7 +10,7 @@ import type {
 export { EMPTY_SUMMARY };
 export type { FitFeedback, ProductReview, ReviewSummary };
 
-type ReviewRow = {
+function mapReviewRow(row: {
   id: string;
   rating: number;
   title: string | null;
@@ -19,9 +20,7 @@ type ReviewRow = {
   fit_feedback: FitFeedback | null;
   helpful_count: number;
   created_at: string | Date;
-};
-
-function mapReviewRow(row: ReviewRow): ProductReview {
+}): ProductReview {
   return {
     id: row.id,
     rating: Number(row.rating),
@@ -42,12 +41,16 @@ function mapReviewRow(row: ReviewRow): ProductReview {
 export async function getReviewSummary(
   productId: string,
 ): Promise<ReviewSummary> {
-  const rows = (await pool`
-    SELECT rating, COUNT(*) AS count
-    FROM product_reviews
-    WHERE product_id = ${productId} AND is_approved = TRUE
-    GROUP BY rating
-  `) as unknown as Array<{ rating: number; count: string }>;
+  const rows = await db
+    .select({ rating: productReviews.rating, total: count() })
+    .from(productReviews)
+    .where(
+      and(
+        eq(productReviews.productId, productId),
+        eq(productReviews.isApproved, true),
+      ),
+    )
+    .groupBy(productReviews.rating);
 
   const distribution: ReviewSummary["distribution"] = {
     1: 0,
@@ -56,18 +59,18 @@ export async function getReviewSummary(
     4: 0,
     5: 0,
   };
-  let count = 0;
+  let totalReviews = 0;
   let total = 0;
   for (const row of rows) {
     const rating = Number(row.rating) as 1 | 2 | 3 | 4 | 5;
-    const n = Number(row.count);
+    const n = Number(row.total);
     if (rating >= 1 && rating <= 5) distribution[rating] = n;
-    count += n;
+    totalReviews += n;
     total += rating * n;
   }
   return {
-    average: count > 0 ? Math.round((total / count) * 10) / 10 : 0,
-    count,
+    average: totalReviews > 0 ? Math.round((total / totalReviews) * 10) / 10 : 0,
+    count: totalReviews,
     distribution,
   };
 }
@@ -83,44 +86,51 @@ export async function getApprovedReviews(
   const offset = (page - 1) * limit;
   const sort: ReviewSort = options.sort === "helpful" ? "helpful" : "recent";
 
-  // NOTE: neon() has no fragment composer, so sort gets two explicit queries.
-  const reviewQuery =
-    sort === "helpful"
-      ? pool`
-          SELECT id, rating, title, body, author_name, size_purchased,
-                 fit_feedback, helpful_count, created_at
-          FROM product_reviews
-          WHERE product_id = ${productId} AND is_approved = TRUE
-          ORDER BY helpful_count DESC, created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `
-      : pool`
-          SELECT id, rating, title, body, author_name, size_purchased,
-                 fit_feedback, helpful_count, created_at
-          FROM product_reviews
-          WHERE product_id = ${productId} AND is_approved = TRUE
-          ORDER BY created_at DESC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
+  const approved = and(
+    eq(productReviews.productId, productId),
+    eq(productReviews.isApproved, true),
+  );
 
-  const [reviews, totalRows] = await Promise.all([
-    reviewQuery as unknown as Promise<ReviewRow[]>,
-    pool`
-      SELECT COUNT(*) AS count FROM product_reviews
-      WHERE product_id = ${productId} AND is_approved = TRUE
-    ` as unknown as Promise<Array<{ count: string }>>,
+  const [rows, totalRows] = await Promise.all([
+    db
+      .select({
+        id: productReviews.id,
+        rating: productReviews.rating,
+        title: productReviews.title,
+        body: productReviews.body,
+        author_name: productReviews.authorName,
+        size_purchased: productReviews.sizePurchased,
+        fit_feedback: productReviews.fitFeedback,
+        helpful_count: productReviews.helpfulCount,
+        created_at: productReviews.createdAt,
+      })
+      .from(productReviews)
+      .where(approved)
+      .orderBy(
+        ...(sort === "helpful"
+          ? [desc(productReviews.helpfulCount), desc(productReviews.createdAt)]
+          : [desc(productReviews.createdAt)]),
+      )
+      .limit(limit)
+      .offset(offset),
+    db
+      .select({ count: count() })
+      .from(productReviews)
+      .where(approved),
   ]);
 
   return {
-    reviews: reviews.map(mapReviewRow),
+    reviews: rows.map(mapReviewRow),
     total: Number(totalRows[0]?.count ?? 0),
   };
 }
 
 /** Resolve a product slug to its id (for review API routes). */
 export async function getProductIdBySlug(slug: string): Promise<string | null> {
-  const rows = (await pool`
-    SELECT id FROM products WHERE slug = ${slug} LIMIT 1
-  `) as unknown as Array<{ id: string }>;
+  const rows = await db
+    .select({ id: products.id })
+    .from(products)
+    .where(eq(products.slug, slug))
+    .limit(1);
   return rows[0]?.id ?? null;
 }

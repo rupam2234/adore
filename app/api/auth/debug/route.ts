@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { pool } from "@/utils/db";
+import { count } from "drizzle-orm";
+import { db, users } from "@/utils/db";
 import { verifyAccessToken, ACCESS_COOKIE_NAME } from "@/utils/auth";
 
 export async function GET(request: NextRequest) {
@@ -10,8 +11,8 @@ export async function GET(request: NextRequest) {
   let dbOk = false;
   let userCount = 0;
   try {
-    const rows = await pool`SELECT COUNT(*) AS c FROM users`;
-    userCount = (rows[0] as { c: number }).c;
+    const rows = await db.select({ c: count() }).from(users);
+    userCount = Number(rows[0]?.c ?? 0);
     dbOk = true;
   } catch (err) {
     console.error("Debug DB error:", err);

@@ -50,6 +50,15 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
             )}
           </a>
 
+          {/* Circular brand tag badge — pinned to the image's top-right corner. */}
+          <img
+            src="/images/Adore_tag.png"
+            alt="Adore tag"
+            aria-hidden="true"
+            loading="lazy"
+            className="absolute right-3 top-3 z-10 h-12 w-12 rounded-full border border-[#2B2620]/10 bg-[#FAF8F3] object-cover shadow-sm"
+          />
+
           {/* Bottom overlay: sizes + quick view (revealed on hover/focus, desktop only).
               Sits outside the product link so clicking it opens the modal, not the PDP. */}
           <div className="absolute inset-x-0 bottom-0 flex translate-y-full flex-col gap-2 bg-[#FAF8F3]/95 p-3 opacity-0 backdrop-blur-sm transition-[transform,opacity] duration-300 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
@@ -136,20 +145,20 @@ function QuickViewModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[#2B2620]/60 p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[#2B2620]/60 p-0 sm:items-center sm:p-6"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label={`Quick view: ${product.name}`}
     >
       <div
-        className="grid w-full max-w-2xl grid-cols-1 gap-6 bg-[#FAF8F3] p-6 sm:grid-cols-2 sm:p-8"
+        className="grid max-h-[92dvh] w-full max-w-2xl grid-cols-1 gap-4 overflow-y-auto rounded-t-2xl bg-[#FAF8F3] p-4 sm:grid-cols-2 sm:gap-6 sm:rounded-none sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Image slider + hover zoom */}
         <div className="flex flex-col gap-2">
           <div
-            className="relative aspect-3/4 w-full cursor-zoom-in overflow-hidden bg-[#E7DFCB]"
+            className="relative h-[34dvh] w-full cursor-zoom-in overflow-hidden bg-[#E7DFCB] sm:aspect-3/4 sm:h-auto"
             onMouseMove={handleZoomMove}
             onMouseLeave={() => setZoomStyle({})}
           >

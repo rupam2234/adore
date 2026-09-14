@@ -1,4 +1,14 @@
-export { pool } from "./db";
+export { db, rawQuery, pool, sql } from "./db";
+export {
+  products,
+  productVariants,
+  productCategories,
+  productImages,
+  productReviews,
+  categories,
+  users,
+  sessions,
+} from "./schema";
 export { cloudinary, getPublicUrl } from "./cloudinary";
 export {
   getProductsForSection,

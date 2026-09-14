@@ -51,8 +51,8 @@ export default async function Home() {
         <div className="text-center">
           <h2 className="font-serif text-4xl">New arrivals</h2>
           <p className="mx-auto mt-3 max-w-md text-sm italic leading-relaxed text-[#2B2620]/60">
-            "Every piece tells a story — of the hands that shaped it, the earth
-            that grew it, and the moments it will witness with you."
+            Every piece tells a story of the hands that shaped it and the
+            moments it will witness with you.
           </p>
         </div>
 
@@ -84,7 +84,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section
+      {/* <section
         id="how-we-make-it"
         className="w-full scroll-mt-24 border-t border-[#2B2620]/10 px-6 py-16 sm:px-12"
       >
@@ -101,7 +101,9 @@ export default async function Home() {
             </p>
           </div>
           <div>
-            <p className="font-medium text-[#2B2620]">2. Small-batch stitching</p>
+            <p className="font-medium text-[#2B2620]">
+              2. Small-batch stitching
+            </p>
             <p className="mt-2">
               Cut and sewn in limited runs so every piece gets proper attention
               to fit and finish.
@@ -115,7 +117,7 @@ export default async function Home() {
             </p>
           </div>
         </div>
-      </section>
+      </section> */}
 
       <section className="w-full border-t border-[#2B2620]/10 bg-[#2B2620] px-6 py-16 text-[#FAF8F3] sm:px-12">
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
