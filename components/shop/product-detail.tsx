@@ -12,6 +12,7 @@ import {
 } from "react";
 import { formatPrice, type ProductCardData } from "@/utils/product-format";
 import type { ReviewSummary } from "@/utils/review-format";
+import { useCart } from "@/components/cart/cart-provider";
 import { Stars } from "./stars";
 
 /**
@@ -52,6 +53,27 @@ export default function ProductDetail({
     null,
   );
   const [qty, setQty] = useState(1);
+  const { addItem, adding, error, setDrawerOpen } = useCart();
+
+  const activeVariants = product.variants ?? [];
+  const matchedVariant =
+    activeVariants.find(
+      (v) =>
+        v.size === selectedSize &&
+        (!selectedColor || v.color === selectedColor),
+    ) ??
+    (selectedSize
+      ? activeVariants.find((v) => v.size === selectedSize && v.stock > 0) ??
+        activeVariants.find((v) => v.size === selectedSize)
+      : null);
+  const variantStock = matchedVariant?.stock ?? 0;
+  const canAdd = Boolean(matchedVariant) && variantStock > 0;
+
+  const handleAddToCart = async () => {
+    if (!matchedVariant) return;
+    const ok = await addItem(matchedVariant.id, qty);
+    if (ok) setDrawerOpen(true);
+  };
 
   // Full page image viewer state
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
@@ -449,16 +471,25 @@ export default function ProductDetail({
           </div>
           <button
             type="button"
+            onClick={handleAddToCart}
             className="flex-1 cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!selectedSize || product.totalStock <= 0}
+            disabled={!canAdd || adding || product.totalStock <= 0}
           >
             {product.totalStock <= 0
               ? "Sold out"
-              : selectedSize
-                ? `Add to basket — ${selectedSize}`
-                : "Select a size"}
+              : adding
+                ? "Adding…"
+                : selectedSize
+                  ? `Add to basket — ${selectedSize}`
+                  : "Select a size"}
           </button>
         </div>
+        {canAdd && variantStock <= 3 && (
+          <p className="mt-2 text-xs text-[#8A5A2B]">
+            Only {variantStock} left in {matchedVariant?.size}
+          </p>
+        )}
+        {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}
       </div>
     </div>
   );

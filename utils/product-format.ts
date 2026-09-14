@@ -21,6 +21,16 @@ export type ProductSizeStock = {
   compareAtPrice: string | null;
 };
 
+export type ProductVariantOption = {
+  id: string;
+  color: string;
+  colorHex: string | null;
+  size: string;
+  price: string;
+  compareAtPrice: string | null;
+  stock: number;
+};
+
 export type ProductCategory = {
   slug: string;
   name: string;
@@ -48,6 +58,8 @@ export type ProductCardData = {
   colors: ProductColor[];
   /** Active variants with stock quantity per size. */
   sizes: ProductSizeStock[];
+  /** Active variants for cart selection (color + size → variant id). */
+  variants: ProductVariantOption[];
   totalStock: number;
   images: ProductImage[];
 };

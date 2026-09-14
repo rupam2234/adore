@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties, type MouseEvent } from "react";
 import { formatPrice, type ProductCardData } from "@/utils/product-format";
+import { useCart } from "@/components/cart/cart-provider";
 
 /**
  * Product card for shop sections.
@@ -121,11 +122,23 @@ function QuickViewModal({
   const selectedVariant = selectedSize
     ? (product.sizes.find((s) => s.size === selectedSize) ?? null)
     : null;
+  const quickVariants = product.variants ?? [];
+  const matchedVariant =
+    quickVariants.find(
+      (v) =>
+        v.size === selectedSize &&
+        (!selectedColor || v.color === selectedColor) &&
+        v.stock > 0,
+    ) ??
+    (selectedSize
+      ? quickVariants.find((v) => v.size === selectedSize && v.stock > 0)
+      : null);
   const displayPrice = selectedVariant?.price ?? product.price;
   const displayCompareAtPrice =
     selectedVariant?.compareAtPrice ?? product.compareAtPrice;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [careOpen, setCareOpen] = useState(false);
+  const { addItem, adding, error } = useCart();
   const images = product.images;
   const [activeIndex, setActiveIndex] = useState(0);
   const [zoomStyle, setZoomStyle] = useState<CSSProperties>({});
@@ -383,11 +396,21 @@ function QuickViewModal({
           </div>
           <button
             type="button"
+            onClick={async () => {
+              if (!matchedVariant) return;
+              const ok = await addItem(matchedVariant.id, 1);
+              if (ok) onClose();
+            }}
             className="mt-auto cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!selectedSize}
+            disabled={!matchedVariant || adding}
           >
-            {selectedSize ? `Add to bag — ${selectedSize}` : "Select a size"}
+            {adding
+              ? "Adding…"
+              : matchedVariant
+                ? `Add to bag — ${selectedSize}`
+                : "Select a size"}
           </button>
+          {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}
         </div>
       </div>
     </div>

@@ -121,3 +121,22 @@ export const productReviews = pgTable("product_reviews", {
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const carts = pgTable("carts", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const cartItems = pgTable(
+    "cart_items",
+    {
+        id: text("id").primaryKey().$defaultFn(randomId),
+        cartId: text("cart_id").notNull(),
+        variantId: text("variant_id").notNull(),
+        quantity: integer("quantity").notNull().default(1),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [uniqueIndex("cart_items_cart_variant_key").on(t.cartId, t.variantId)],
+);

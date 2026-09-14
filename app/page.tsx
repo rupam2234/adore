@@ -1,5 +1,6 @@
 import { SiteHeader, Footer, ProductCard } from "@/components";
 import { getProductsForSection, getCategories } from "@/utils";
+import { CATEGORY_TREE } from "@/utils/categories";
 
 export const revalidate = 300;
 
@@ -8,34 +9,67 @@ type GroupedProducts = {
   products: Awaited<ReturnType<typeof getProductsForSection>>;
 };
 
+/** Child category slug → its top-level parent slug (parents map to themselves). */
+const topLevelOf: Map<string, string> = (() => {
+  const map = new Map<string, string>();
+  for (const cat of CATEGORY_TREE) {
+    map.set(cat.slug, cat.slug);
+    for (const child of cat.children ?? []) map.set(child.slug, cat.slug);
+  }
+  return map;
+})();
+
+/** Section order mirrors CATEGORY_TREE, so rows always appear in nav order. */
+const topLevelOrder: Map<string, number> = (() => {
+  const map = new Map<string, number>();
+  CATEGORY_TREE.forEach((cat, i) => map.set(cat.slug, i));
+  return map;
+})();
+
+const MAX_PER_GROUP = 4;
+
+/**
+ * Homepage "New arrivals": group featured products by their *top-level*
+ * category (Dress / Kurti) rather than whichever category comes first on
+ * the product — subcategories would otherwise fragment into tiny rows.
+ */
 async function getFeaturedByCategory(): Promise<GroupedProducts[]> {
   const [featured, categories] = await Promise.all([
     getProductsForSection({ limit: 50, featuredOnly: true }),
     getCategories(),
   ]);
 
-  if (featured.length === 0) return [];
+  // Fallback: nothing flagged as featured → show the newest products instead,
+  // so the section never renders empty on a stocked shop.
+  const products =
+    featured.length > 0
+      ? featured
+      : await getProductsForSection({ limit: 12 });
+
+  if (products.length === 0) return [];
 
   const bySlug = new Map<string, GroupedProducts>();
 
-  for (const product of featured) {
-    const slugs = product.categories?.map((c) => c.slug) ?? ["uncategorized"];
-    const primarySlug = slugs[0];
+  for (const product of products) {
+    const primarySlug = topLevelOf.get(product.categories?.[0]?.slug ?? "") ?? "uncategorized";
 
     if (!bySlug.has(primarySlug)) {
-      const cat = categories.find((c) => c.slug === primarySlug) ?? {
-        slug: primarySlug,
-        name: product.categories?.[0]?.name ?? "Featured",
-      };
+      const cat = categories.find((c) => c.slug === primarySlug);
       bySlug.set(primarySlug, {
-        category: { slug: cat.slug, name: cat.name },
+        category: cat
+          ? { slug: cat.slug, name: cat.name }
+          : { slug: "all", name: "Everything else" },
         products: [],
       });
     }
     bySlug.get(primarySlug)!.products.push(product);
   }
 
-  return [...bySlug.values()];
+  return [...bySlug.values()].sort(
+    (a, b) =>
+      (topLevelOrder.get(a.category.slug) ?? Number.MAX_SAFE_INTEGER) -
+      (topLevelOrder.get(b.category.slug) ?? Number.MAX_SAFE_INTEGER),
+  );
 }
 
 export default async function Home() {
@@ -70,7 +104,7 @@ export default async function Home() {
                   </a>
                 </div>
                 <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  {group.products.slice(0, 4).map((product) => (
+                  {group.products.slice(0, MAX_PER_GROUP).map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>

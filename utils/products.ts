@@ -25,6 +25,15 @@ type ProductRow = {
   currency: string;
   colors: Array<{ name: string; hex: string | null }> | null;
   sizes: Array<{ size: string; stock: number; price: string; compare_at_price: string | null }> | null;
+  variants: Array<{
+    id: string;
+    color: string;
+    color_hex: string | null;
+    size: string;
+    price: string;
+    compare_at_price: string | null;
+    stock: number;
+  }> | null;
   total_stock: number | null;
   images: Array<{
     id: string;
@@ -32,6 +41,16 @@ type ProductRow = {
     alt_text: string | null;
     is_primary: boolean;
   }> | null;
+};
+
+/** Whitelisted sort options — mapped to SQL below, never interpolated raw. */
+export type ProductSort = "featured" | "newest" | "price-asc" | "price-desc";
+
+const SORT_CLAUSES: Record<ProductSort, string> = {
+  featured: "p.is_featured DESC, p.created_at DESC",
+  newest: "p.created_at DESC",
+  "price-asc": "min_active.price ASC",
+  "price-desc": "min_active.price DESC",
 };
 
 type QueryOptions = {
@@ -42,8 +61,21 @@ type QueryOptions = {
    * matches "short-kurti"). Defaults to true.
    */
   includeChildren?: boolean;
-  /** Only products marked is_featured (e.g. "new arrivals"). */
   featuredOnly?: boolean;
+  /** Case-insensitive search over name / short description / story. */
+  search?: string;
+  /** Result ordering (whitelisted, no user input reaches SQL raw). */
+  sort?: ProductSort;
+  /** Only products with an active variant in one of these colour names. */
+  colors?: string[];
+  /** Only products with an active variant in one of these sizes. */
+  sizes?: string[];
+  /** Only products with at least one in-stock variant. */
+  inStockOnly?: boolean;
+  /** Cheapest-variant price floor (inclusive). */
+  minPrice?: number;
+  /** Cheapest-variant price ceiling (inclusive). */
+  maxPrice?: number;
   /** Max products to return (default 8). */
   limit?: number;
 };
@@ -95,6 +127,15 @@ function mapProductRow(row: ProductRow): ProductCardData {
     currency: row.currency,
     colors: row.colors ?? [],
     sizes,
+    variants: (row.variants ?? []).map((v) => ({
+      id: v.id,
+      color: v.color,
+      colorHex: v.color_hex,
+      size: v.size,
+      price: v.price,
+      compareAtPrice: v.compare_at_price,
+      stock: Number(v.stock),
+    })),
     totalStock: Number(row.total_stock ?? 0),
     images: (row.images ?? []).map((img) => ({
       id: img.id,
@@ -119,6 +160,13 @@ export async function getProductsForSection(
     categorySlug,
     includeChildren = true,
     featuredOnly = false,
+    search,
+    sort = "featured",
+    colors,
+    sizes,
+    inStockOnly = false,
+    minPrice,
+    maxPrice,
     limit = 8,
   } = options;
   const categorySlugs =
@@ -136,6 +184,42 @@ export async function getProductsForSection(
             )}))
           `
     : sql`TRUE`;
+
+  // Parameterized ILIKE over the searchable text fields; TRUE when no query.
+  const searchPattern = search ? `%${search}%` : null;
+  const searchFilter = searchPattern
+    ? sql`(p.name ILIKE ${searchPattern}
+        OR p.short_description ILIKE ${searchPattern}
+        OR p.story ILIKE ${searchPattern})`
+    : sql`TRUE`;
+
+  // Advanced filters — each is an EXISTS over active variants (parameterized
+  // IN lists), or TRUE when unset. Prices compare against the cheapest variant.
+  const variantIn = (column: "color" | "size", values: string[]) =>
+    sql`EXISTS (
+          SELECT 1 FROM product_variants v
+          WHERE v.product_id = p.id AND v.is_active
+            AND v.${sql.raw(column)} IN (${sql.join(
+              values.map((v) => sql`${v}`),
+              sql`, `,
+            )}))`;
+
+  const colorFilter = colors?.length ? variantIn("color", colors) : sql`TRUE`;
+  const sizeFilter = sizes?.length ? variantIn("size", sizes) : sql`TRUE`;
+  const stockFilter = inStockOnly
+    ? sql`EXISTS (
+          SELECT 1 FROM product_variants v
+          WHERE v.product_id = p.id AND v.is_active AND v.stock_quantity > 0)`
+    : sql`TRUE`;
+  const priceFilter =
+    minPrice != null && maxPrice != null
+      ? sql`min_active.price BETWEEN ${minPrice} AND ${maxPrice}`
+      : minPrice != null
+        ? sql`min_active.price >= ${minPrice}`
+        : maxPrice != null
+          ? sql`min_active.price <= ${maxPrice}`
+          : sql`TRUE`;
+
 
   const rows = await rawQuery<ProductRow>(sql`
     SELECT
@@ -185,6 +269,21 @@ export async function getProductsForSection(
         ) s
       ) AS sizes,
       (
+        SELECT json_agg(
+          json_build_object(
+            'id', v.id,
+            'color', v.color,
+            'color_hex', v.color_hex,
+            'size', v.size,
+            'price', v.price,
+            'compare_at_price', v.compare_at_price,
+            'stock', v.stock_quantity
+          ) ORDER BY v.color, v.size
+        )
+        FROM product_variants v
+        WHERE v.product_id = p.id AND v.is_active
+      ) AS variants,
+      (
         SELECT COALESCE(SUM(v.stock_quantity), 0)
         FROM product_variants v
         WHERE v.product_id = p.id AND v.is_active
@@ -211,12 +310,64 @@ export async function getProductsForSection(
     ) min_active ON TRUE
     WHERE p.status = 'ACTIVE'
       AND ${categoryFilter}
+      AND ${searchFilter}
+      AND ${colorFilter}
+      AND ${sizeFilter}
+      AND ${stockFilter}
+      AND ${priceFilter}
       AND (${featuredOnly} = FALSE OR p.is_featured)
-    ORDER BY p.is_featured DESC, p.created_at DESC
+    ORDER BY ${sql.raw(SORT_CLAUSES[sort])}
     LIMIT ${limit}
   `);
 
   return rows.map(mapProductRow);
+}
+
+/**
+ * Distinct colours and sizes available across active products — the facet
+ * options for the advanced filter panel. Optionally scoped to a category
+ * (parent slugs include children, same as product queries).
+ */
+export async function getFilterFacets(
+  categorySlug?: string,
+): Promise<{
+  colors: { name: string; hex: string | null }[];
+  sizes: string[];
+}> {
+  const categorySlugs =
+    categorySlug && categorySlug !== "all"
+      ? expandCategorySlugs(categorySlug)
+      : null;
+
+  const categoryFilter = categorySlugs
+    ? sql`EXISTS (
+            SELECT 1 FROM product_categories pc
+            JOIN categories c ON c.id = pc.category_id
+            WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
+              categorySlugs.map((s) => sql`${s}`),
+              sql`, `,
+            )}))`
+    : sql`TRUE`;
+
+  const rows = await rawQuery<{ color: string; color_hex: string | null; size: string }>(sql`
+    SELECT DISTINCT v.color, v.color_hex, v.size
+    FROM product_variants v
+    JOIN products p ON p.id = v.product_id
+    WHERE v.is_active AND p.status = 'ACTIVE' AND ${categoryFilter}
+    ORDER BY v.color, v.size
+  `);
+
+  const colorMap = new Map<string, string | null>();
+  const sizeSet = new Set<string>();
+  for (const row of rows) {
+    if (!colorMap.has(row.color)) colorMap.set(row.color, row.color_hex);
+    sizeSet.add(row.size);
+  }
+
+  return {
+    colors: [...colorMap].map(([name, hex]) => ({ name, hex })),
+    sizes: [...sizeSet].sort(),
+  };
 }
 
 /**
@@ -273,6 +424,21 @@ export async function getProductBySlug(
           GROUP BY v.size
         ) s
       ) AS sizes,
+      (
+        SELECT json_agg(
+          json_build_object(
+            'id', v.id,
+            'color', v.color,
+            'color_hex', v.color_hex,
+            'size', v.size,
+            'price', v.price,
+            'compare_at_price', v.compare_at_price,
+            'stock', v.stock_quantity
+          ) ORDER BY v.color, v.size
+        )
+        FROM product_variants v
+        WHERE v.product_id = p.id AND v.is_active
+      ) AS variants,
       (
         SELECT COALESCE(SUM(v.stock_quantity), 0)
         FROM product_variants v
@@ -365,6 +531,21 @@ export async function getRelatedProducts(
           GROUP BY v.size
         ) s
       ) AS sizes,
+      (
+        SELECT json_agg(
+          json_build_object(
+            'id', v.id,
+            'color', v.color,
+            'color_hex', v.color_hex,
+            'size', v.size,
+            'price', v.price,
+            'compare_at_price', v.compare_at_price,
+            'stock', v.stock_quantity
+          ) ORDER BY v.color, v.size
+        )
+        FROM product_variants v
+        WHERE v.product_id = p.id AND v.is_active
+      ) AS variants,
       (
         SELECT COALESCE(SUM(v.stock_quantity), 0)
         FROM product_variants v

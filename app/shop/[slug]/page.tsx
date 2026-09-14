@@ -1,9 +1,13 @@
-import { SiteHeader, Footer, ProductCard } from "@/components";
+import { SiteHeader, Footer, ProductCard, FilterStripe, AdvancedFilters } from "@/components";
 import {
   ALL_CATEGORIES,
+  CATEGORY_TREE,
   categoryPageMetadata,
   getCategories,
   getProductsForSection,
+  getFilterFacets,
+  parseShopFilters,
+  preservedParams,
 } from "@/utils";
 import Link from "next/link";
 import type { Metadata } from "next";
@@ -11,6 +15,7 @@ import { notFound } from "next/navigation";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export async function generateMetadata({
@@ -27,18 +32,29 @@ export async function generateMetadata({
   );
 }
 
-export default async function ShopCategoryPage({ params }: PageProps) {
+export default async function ShopCategoryPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
+  const filters = parseShopFilters(await searchParams);
+  const keep = preservedParams(filters);
 
   // Validate against the static taxonomy (single source of truth).
   const category = ALL_CATEGORIES.find((c) => c.slug === slug);
   if (!category) notFound();
 
   // Parent slugs (e.g. "kurti") include their children automatically.
-  const products = await getProductsForSection({
-    categorySlug: slug,
-    limit: 24,
-  });
+  const [products, facets] = await Promise.all([
+    getProductsForSection({
+      categorySlug: slug,
+      sort: filters.sort,
+      colors: filters.colors,
+      sizes: filters.sizes,
+      inStockOnly: filters.inStockOnly,
+      minPrice: filters.minPrice,
+      maxPrice: filters.maxPrice,
+      limit: 24,
+    }),
+    getFilterFacets(slug),
+  ]);
 
   // Siblings / children for sub-navigation (prefer live DB tree when present).
   let subNav: { slug: string; name: string }[] = [];
@@ -114,6 +130,29 @@ export default async function ShopCategoryPage({ params }: PageProps) {
             ))}
           </div>
         )}
+
+        <div className="mt-8">
+          <FilterStripe
+            categories={CATEGORY_TREE}
+            activeSlug={slug}
+            basePath={`/shop/${slug}`}
+            sort={filters.sort}
+            showAllPill={false}
+          />
+          <div className="px-6 pt-4 sm:px-12">
+            <AdvancedFilters
+              colors={facets.colors}
+              sizes={facets.sizes}
+              activeColors={filters.colors}
+              activeSizes={filters.sizes}
+              inStockOnly={filters.inStockOnly}
+              minPrice={filters.minPrice}
+              maxPrice={filters.maxPrice}
+              basePath={`/shop/${slug}`}
+              preservedParams={keep}
+            />
+          </div>
+        </div>
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {products.length > 0 ? (
