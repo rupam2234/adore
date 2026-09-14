@@ -32,7 +32,7 @@ export async function generateMetadata({
     `${product.name} — Adore`;
 
   return {
-    title: `${product.name} | Adore`,
+    title: product.name, // root layout template appends "| Adore"
     description,
     alternates: { canonical: `/products/${product.slug}` },
     openGraph: {

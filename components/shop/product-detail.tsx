@@ -63,8 +63,8 @@ export default function ProductDetail({
         (!selectedColor || v.color === selectedColor),
     ) ??
     (selectedSize
-      ? activeVariants.find((v) => v.size === selectedSize && v.stock > 0) ??
-        activeVariants.find((v) => v.size === selectedSize)
+      ? (activeVariants.find((v) => v.size === selectedSize && v.stock > 0) ??
+        activeVariants.find((v) => v.size === selectedSize))
       : null);
   const variantStock = matchedVariant?.stock ?? 0;
   const canAdd = Boolean(matchedVariant) && variantStock > 0;
@@ -396,9 +396,7 @@ export default function ProductDetail({
             </button>
             <div
               className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                openSection === "care"
-                  ? "grid-rows-[1fr]"
-                  : "grid-rows-[0fr]"
+                openSection === "care" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
               }`}
             >
               <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm leading-relaxed text-[#2B2620]/70">
@@ -445,6 +443,13 @@ export default function ProductDetail({
               <span className="text-sm text-[#2B2620]/50">Sold out</span>
             )}
           </div>
+          {product.sizes.length > 0 && (
+            <p className="mt-2 text-xs italic text-[#5C6B4B]">
+              Not sure about your size? Go for the larger one. Our cuts are true
+              to size and a slightly relaxed fit always looks better than a
+              tight one.
+            </p>
+          )}
         </div>
 
         {/* Quantity + add to basket */}

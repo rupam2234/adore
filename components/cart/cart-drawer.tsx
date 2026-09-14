@@ -25,7 +25,7 @@ export function CartDrawer() {
   return (
     <div
       aria-hidden={!drawerOpen}
-      className={`fixed inset-0 z-[60] ${drawerOpen ? "" : "pointer-events-none"}`}
+      className={`fixed inset-0 z-60 ${drawerOpen ? "" : "pointer-events-none"}`}
     >
       <div
         onClick={() => setDrawerOpen(false)}
