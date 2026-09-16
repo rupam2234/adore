@@ -5,6 +5,7 @@ import { useState } from "react";
 import { CATEGORY_TREE } from "@/utils/categories";
 import SearchBar from "./search-bar";
 import { useCart } from "@/components/cart/cart-provider";
+import { useAuthUser } from "@/components/auth/use-auth-user";
 import Image from "next/image";
 
 export default function Header() {
@@ -12,6 +13,7 @@ export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null);
   const { cart, setDrawerOpen } = useCart();
+  const { user, loading } = useAuthUser();
 
   return (
     <header
@@ -190,6 +192,27 @@ export default function Header() {
             )}
           </button>
           <Link
+            href={user ? "/account" : "/login"}
+            className="group relative inline-flex items-center gap-1.5 text-sm hover:text-[#5C6B4B]"
+            aria-label={user ? "Your account" : "Log in"}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4.5 w-4.5"
+            >
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
+            </svg>
+            {!loading && user && (
+              <span className="hidden lg:inline">{user.name.split(" ")[0]}</span>
+            )}
+          </Link>
+          <Link
             href="/shop"
             className="hidden rounded-full border border-[#2B2620] px-5 py-2 text-sm transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3] sm:inline-block"
           >
@@ -275,6 +298,13 @@ export default function Header() {
               )}
             </div>
           ))}
+          <Link
+            href={user ? "/account" : "/login"}
+            onClick={() => setMobileOpen(false)}
+            className="block border-t border-[#2B2620]/10 py-2 text-sm font-medium"
+          >
+            {user ? "My account" : "Log in"}
+          </Link>
           <Link
             href="/#how-we-make-it"
             onClick={() => setMobileOpen(false)}

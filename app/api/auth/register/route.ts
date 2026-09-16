@@ -62,6 +62,13 @@ export async function POST(request: NextRequest) {
     await storeSession(user.id, refreshToken, expiresAt);
 
     const cookies = setAuthCookies(accessToken, refreshToken);
+    try {
+      const { ensureCustomer } = await import("@/utils/account");
+      await ensureCustomer(user);
+    } catch (err) {
+      console.error("Customer provisioning failed:", err);
+    }
+
     const response = NextResponse.json({ user }, { status: 201 });
     response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
     response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);

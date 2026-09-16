@@ -168,3 +168,71 @@ export const promoRedemptions = pgTable(
     },
     (t) => [uniqueIndex("promo_redemptions_code_user_key").on(t.promoCodeId, t.userId)],
 );
+
+export const customers = pgTable("customers", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    userId: text("user_id").unique(),
+    email: text("email").notNull(),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    phone: text("phone"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const customerAddresses = pgTable("customer_addresses", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    customerId: text("customer_id").notNull(),
+    fullName: text("full_name"),
+    phone: text("phone"),
+    addressLine1: text("address_line_1").notNull(),
+    addressLine2: text("address_line_2"),
+    city: text("city").notNull(),
+    state: text("state").notNull(),
+    postalCode: text("postal_code").notNull(),
+    country: text("country").notNull().default("India"),
+    addressType: text("address_type"),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const orders = pgTable("orders", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    customerId: text("customer_id").notNull(),
+    orderNumber: text("order_number").notNull().unique(),
+    status: text("status")
+        .$type<
+            | "PENDING"
+            | "CONFIRMED"
+            | "PROCESSING"
+            | "SHIPPED"
+            | "DELIVERED"
+            | "CANCELLED"
+            | "REFUNDED"
+        >()
+        .notNull()
+        .default("PENDING"),
+    subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull(),
+    discountAmount: numeric("discount_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+    shippingAmount: numeric("shipping_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+    taxAmount: numeric("tax_amount", { precision: 10, scale: 2 }).notNull().default("0"),
+    totalAmount: numeric("total_amount", { precision: 10, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("INR"),
+    shippingAddressId: text("shipping_address_id"),
+    shippingAddressSnapshot: jsonb("shipping_address_snapshot").$type<Record<string, string>>(),
+    promoCodeId: text("promo_code_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const orderItems = pgTable("order_items", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    orderId: text("order_id").notNull(),
+    productId: text("product_id").notNull(),
+    variantId: text("variant_id").notNull(),
+    productName: text("product_name").notNull(),
+    sku: text("sku").notNull(),
+    quantity: integer("quantity").notNull(),
+    unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
+    totalPrice: numeric("total_price", { precision: 10, scale: 2 }).notNull(),
+});
