@@ -12,7 +12,7 @@ const roboto = Roboto({
   variable: "--font-geist-roboto",
   subsets: ["latin"],
   preload: true,
-  weight: ["400", "200"],
+  weight: ["200", "400", "500"],
 });
 
 const geistMono = Geist_Mono({

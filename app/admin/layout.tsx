@@ -23,6 +23,10 @@ export default function AdminLayout({
               Products
               <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
             </Link>
+            <Link href="/admin/promos" className="group relative inline-block">
+              Promo codes
+              <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
+            </Link>
             <Link href="/admin/products/new" className="group relative inline-block">
               + New product
               <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />

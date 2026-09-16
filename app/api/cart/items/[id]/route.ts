@@ -8,6 +8,8 @@ import {
 } from "@/utils/cart";
 import { cookies } from "next/headers";
 import { CART_COOKIE } from "@/utils/cart";
+import { getSessionUserId } from "@/utils/request-user";
+import { revalidateAttachedPromo } from "@/utils/promo";
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -28,7 +30,9 @@ export async function PATCH(request: Request, ctx: Context) {
       return NextResponse.json({ error: "quantity is required" }, { status: 400 });
     }
     await updateCartItem(cartId, id, quantity);
-    return NextResponse.json(await getCartDetail(cartId));
+    const userId = await getSessionUserId();
+    await revalidateAttachedPromo(cartId, userId);
+    return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {
     if (error instanceof CartError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -44,7 +48,9 @@ export async function DELETE(_request: Request, ctx: Context) {
     if (!cartId) throw new CartError("Cart not found", 404);
 
     await removeCartItem(cartId, id);
-    return NextResponse.json(await getCartDetail(cartId));
+    const userId = await getSessionUserId();
+    await revalidateAttachedPromo(cartId, userId);
+    return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {
     if (error instanceof CartError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

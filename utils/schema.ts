@@ -125,6 +125,7 @@ export const productReviews = pgTable("product_reviews", {
 export const carts = pgTable("carts", {
     id: text("id").primaryKey().$defaultFn(randomId),
     token: text("token").notNull().unique(),
+    promoCodeId: text("promo_code_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -139,4 +140,31 @@ export const cartItems = pgTable(
         createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     },
     (t) => [uniqueIndex("cart_items_cart_variant_key").on(t.cartId, t.variantId)],
+);
+
+export const promoCodes = pgTable("promo_codes", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    code: text("code").notNull().unique(),
+    description: text("description"),
+    discountType: text("discount_type").$type<"PERCENT" | "FIXED">().notNull(),
+    discountValue: numeric("discount_value", { precision: 10, scale: 2 }).notNull(),
+    minSubtotal: numeric("min_subtotal", { precision: 10, scale: 2 }),
+    maxRedemptions: integer("max_redemptions"),
+    redemptionCount: integer("redemption_count").notNull().default(0),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const promoRedemptions = pgTable(
+    "promo_redemptions",
+    {
+        id: text("id").primaryKey().$defaultFn(randomId),
+        promoCodeId: text("promo_code_id").notNull(),
+        userId: text("user_id").notNull(),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [uniqueIndex("promo_redemptions_code_user_key").on(t.promoCodeId, t.userId)],
 );

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { formatPrice } from "@/utils/product-format";
+import { PinChecker } from "@/components/shop/pin-checker";
+import { useAuthUser } from "@/components/auth/use-auth-user";
 import { useCart } from "./cart-provider";
 
 export function CartDrawer() {
@@ -74,6 +76,89 @@ export function CartDrawer() {
         )}
       </aside>
     </div>
+  );
+}
+
+function PromoSection() {
+  const { cart, applyPromo, removePromo, error } = useCart();
+  const { user, loading } = useAuthUser();
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  if (!loading && !user) {
+    return (
+      <div className="mt-4 flex items-center justify-between rounded-lg bg-[#E7DFCB]/50 px-3 py-2.5 text-xs">
+        <span className="text-[#2B2620]/60">
+          Promo codes are for members
+        </span>
+        <Link
+          href="/login"
+          className="font-medium underline underline-offset-2 hover:text-[#2B2620]"
+        >
+          Log in
+        </Link>
+      </div>
+    );
+  }
+
+  if (cart.promo) {
+    return (
+      <div className="mt-4 flex items-center justify-between rounded-lg border border-[#5C6B4B]/40 bg-[#5C6B4B]/10 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium uppercase tracking-wide text-[#5C6B4B]">
+            {cart.promo.code}
+          </p>
+          {cart.promo.description && (
+            <p className="truncate text-xs text-[#2B2620]/50">
+              {cart.promo.description}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => removePromo()}
+          aria-label={`Remove promo code ${cart.promo.code}`}
+          className="cursor-pointer text-xs text-[#2B2620]/50 underline-offset-2 hover:text-[#A45A4B] hover:underline"
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!code.trim() || busy) return;
+        setBusy(true);
+        const ok = await applyPromo(code);
+        if (ok) setCode("");
+        setBusy(false);
+      }}
+      className="mt-4"
+    >
+      <div className="flex gap-2">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          placeholder="Promo code"
+          aria-label="Promo code"
+          disabled={busy}
+          className="min-w-0 flex-1 rounded-lg border border-[#2B2620]/20 bg-white px-3 py-2 text-sm uppercase
+                   placeholder:normal-case placeholder:text-[#2B2620]/30 focus:border-[#2B2620] focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={busy || !code.trim()}
+          className="cursor-pointer rounded-lg border border-[#2B2620] px-4 py-2 text-sm transition-colors
+                   hover:bg-[#2B2620] hover:text-[#FAF8F3] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {busy ? "…" : "Apply"}
+        </button>
+      </div>
+      {error && <p className="mt-1.5 text-xs text-[#A45A4B]">{error}</p>}
+    </form>
   );
 }
 
@@ -159,11 +244,27 @@ function DrawerBody() {
       </ul>
 
       <div className="border-t border-[#2B2620]/10 px-6 py-5">
-        <div className="flex items-center justify-between text-sm">
-          <span>Subtotal</span>
-          <span className="font-medium">
-            {formatPrice(cart.subtotal, cart.currency!)}
-          </span>
+        <PinChecker />
+        <PromoSection />
+        <div className="mt-4 space-y-1.5 text-sm">
+          <div className="flex items-center justify-between">
+            <span>Subtotal</span>
+            <span className="font-medium">
+              {formatPrice(cart.subtotal, cart.currency!)}
+            </span>
+          </div>
+          {cart.promo && (
+            <div className="flex items-center justify-between text-[#5C6B4B]">
+              <span>Discount ({cart.promo.code})</span>
+              <span className="font-medium">
+                −{formatPrice(cart.discount, cart.currency!)}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between border-t border-[#2B2620]/10 pt-2 text-base font-medium">
+            <span>Total</span>
+            <span>{formatPrice(cart.total, cart.currency!)}</span>
+          </div>
         </div>
         <p className="mt-1 text-xs text-[#2B2620]/50">
           Shipping and taxes calculated at checkout.

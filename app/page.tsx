@@ -1,79 +1,51 @@
 import { SiteHeader, Footer, ProductCard } from "@/components";
-import { getProductsForSection, getCategories } from "@/utils";
-import { CATEGORY_TREE } from "@/utils/categories";
+import { getProductsForSection } from "@/utils";
 
 export const revalidate = 300;
 
-type GroupedProducts = {
-  category: { slug: string; name: string };
-  products: Awaited<ReturnType<typeof getProductsForSection>>;
-};
-
-/** Child category slug → its top-level parent slug (parents map to themselves). */
-const topLevelOf: Map<string, string> = (() => {
-  const map = new Map<string, string>();
-  for (const cat of CATEGORY_TREE) {
-    map.set(cat.slug, cat.slug);
-    for (const child of cat.children ?? []) map.set(child.slug, cat.slug);
-  }
-  return map;
-})();
-
-/** Section order mirrors CATEGORY_TREE, so rows always appear in nav order. */
-const topLevelOrder: Map<string, number> = (() => {
-  const map = new Map<string, number>();
-  CATEGORY_TREE.forEach((cat, i) => map.set(cat.slug, i));
-  return map;
-})();
-
-const MAX_PER_GROUP = 4;
+const LATEST_LIMIT = 8;
+const FAVOURITES_LIMIT = 4;
 
 /**
- * Homepage "New arrivals": group featured products by their *top-level*
- * category (Dress / Kurti) rather than whichever category comes first on
- * the product — subcategories would otherwise fragment into tiny rows.
+ * Homepage product data:
+ * - "Latest arrivals" — newest products across all categories, one mixed grid.
+ * - "Most loved" — featured products (excluding anything already shown above),
+ *   with a newest-products fallback so the section is never empty on a
+ *   stocked shop.
  */
-async function getFeaturedByCategory(): Promise<GroupedProducts[]> {
-  const [featured, categories] = await Promise.all([
-    getProductsForSection({ limit: 50, featuredOnly: true }),
-    getCategories(),
+async function getHomeProducts(): Promise<{
+  latest: Awaited<ReturnType<typeof getProductsForSection>>;
+  favourites: Awaited<ReturnType<typeof getProductsForSection>>;
+}> {
+  const [latest, featured] = await Promise.all([
+    getProductsForSection({ sort: "newest", limit: LATEST_LIMIT }),
+    getProductsForSection({ featuredOnly: true, limit: 8 }),
   ]);
 
-  // Fallback: nothing flagged as featured → show the newest products instead,
-  // so the section never renders empty on a stocked shop.
-  const products =
-    featured.length > 0
-      ? featured
-      : await getProductsForSection({ limit: 12 });
+  const latestIds = new Set(latest.map((p) => p.id));
 
-  if (products.length === 0) return [];
+  let favourites = featured
+    .filter((p) => !latestIds.has(p.id))
+    .slice(0, FAVOURITES_LIMIT);
 
-  const bySlug = new Map<string, GroupedProducts>();
-
-  for (const product of products) {
-    const primarySlug = topLevelOf.get(product.categories?.[0]?.slug ?? "") ?? "uncategorized";
-
-    if (!bySlug.has(primarySlug)) {
-      const cat = categories.find((c) => c.slug === primarySlug);
-      bySlug.set(primarySlug, {
-        category: cat
-          ? { slug: cat.slug, name: cat.name }
-          : { slug: "all", name: "Everything else" },
-        products: [],
-      });
-    }
-    bySlug.get(primarySlug)!.products.push(product);
+  // Fallback: nothing featured (or all of it already in the latest row) →
+  // fill with the next-newest products instead.
+  if (favourites.length === 0) {
+    const filler = await getProductsForSection({
+      sort: "newest",
+      limit: LATEST_LIMIT + FAVOURITES_LIMIT,
+    });
+    const shown = new Set(latestIds);
+    favourites = filler
+      .filter((p) => !shown.has(p.id) && shown.add(p.id))
+      .slice(0, FAVOURITES_LIMIT);
   }
 
-  return [...bySlug.values()].sort(
-    (a, b) =>
-      (topLevelOrder.get(a.category.slug) ?? Number.MAX_SAFE_INTEGER) -
-      (topLevelOrder.get(b.category.slug) ?? Number.MAX_SAFE_INTEGER),
-  );
+  return { latest, favourites };
 }
 
 export default async function Home() {
-  const featuredGroups = await getFeaturedByCategory();
+  const { latest, favourites } = await getHomeProducts();
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
@@ -83,75 +55,61 @@ export default async function Home() {
 
       <section id="shop" className="w-full px-6 py-20 sm:px-12">
         <div className="text-center">
-          <h2 className="font-serif text-4xl">New arrivals</h2>
+          <h2 className="font-serif text-4xl">Latest arrivals</h2>
           <p className="mx-auto mt-3 max-w-md text-sm italic leading-relaxed text-[#2B2620]/60">
             Every piece tells a story of the hands that shaped it and the
             moments it will witness with you.
           </p>
         </div>
 
-        <div className="mt-14 space-y-16">
-          {featuredGroups.length > 0 ? (
-            featuredGroups.map((group) => (
-              <div key={group.category.slug}>
-                <div className="mb-6 flex items-baseline justify-between border-b border-[#2B2620]/10 pb-3">
-                  <h3 className="font-serif text-2xl">{group.category.name}</h3>
-                  <a
-                    href={`/shop/${group.category.slug}`}
-                    className="text-sm underline underline-offset-4"
-                  >
-                    View all
-                  </a>
-                </div>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                  {group.products.slice(0, MAX_PER_GROUP).map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
+        <div className="mt-14">
+          {latest.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {latest.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
               </div>
-            ))
+              <div className="mt-10 text-center">
+                <a
+                  href="/shop"
+                  className="inline-block rounded-full border border-[#2B2620]/30 px-6 py-3 text-sm transition-colors hover:border-[#2B2620]"
+                >
+                  View all pieces
+                </a>
+              </div>
+            </>
           ) : (
             <p className="text-center text-sm text-[#2B2620]/60">
-              No featured pieces yet — check back soon.
+              No pieces yet — check back soon.
             </p>
           )}
         </div>
       </section>
 
-      {/* <section
-        id="how-we-make-it"
-        className="w-full scroll-mt-24 border-t border-[#2B2620]/10 px-6 py-16 sm:px-12"
-      >
-        <p className="text-sm text-[#5C6B4B]">How we make it</p>
-        <h2 className="mt-2 max-w-xl font-serif text-3xl">
-          Small batches, honest fabrics, made to keep
-        </h2>
-        <div className="mt-8 grid gap-8 text-sm leading-relaxed text-[#2B2620]/70 sm:grid-cols-3">
-          <div>
-            <p className="font-medium text-[#2B2620]">1. Thoughtful fabrics</p>
-            <p className="mt-2">
-              Breathable, natural-feeling materials chosen for comfort and
-              everyday wear.
-            </p>
+      {favourites.length > 0 && (
+        <section
+          id="favourites"
+          className="w-full border-t border-[#2B2620]/10 bg-[#F3EFE6] px-6 py-20 sm:px-12"
+        >
+          <div className="flex items-baseline justify-between border-b border-[#2B2620]/10 pb-3">
+            <div>
+              <h2 className="font-serif text-3xl">Most loved</h2>
+              <p className="mt-2 text-sm text-[#2B2620]/60">
+                The pieces our customers keep coming back to.
+              </p>
+            </div>
+            <a href="/shop" className="text-sm underline underline-offset-4">
+              View all
+            </a>
           </div>
-          <div>
-            <p className="font-medium text-[#2B2620]">
-              2. Small-batch stitching
-            </p>
-            <p className="mt-2">
-              Cut and sewn in limited runs so every piece gets proper attention
-              to fit and finish.
-            </p>
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {favourites.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
           </div>
-          <div>
-            <p className="font-medium text-[#2B2620]">3. Made to be reworn</p>
-            <p className="mt-2">
-              Timeless silhouettes and cloth-care guidance, designed to move
-              with you season after season.
-            </p>
-          </div>
-        </div>
-      </section> */}
+        </section>
+      )}
 
       <section className="w-full border-t border-[#2B2620]/10 bg-[#2B2620] px-6 py-16 text-[#FAF8F3] sm:px-12">
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">

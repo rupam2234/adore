@@ -9,6 +9,8 @@ import {
   CartError,
 } from "@/utils/cart";
 import { rawQuery, sql } from "@/utils/db";
+import { getSessionUserId } from "@/utils/request-user";
+import { revalidateAttachedPromo } from "@/utils/promo";
 
 async function getOrCreateCartId(): Promise<string> {
   const cookieStore = await cookies();
@@ -42,7 +44,9 @@ export async function POST(request: Request) {
     }
     const cartId = await getOrCreateCartId();
     await addCartItem(cartId, variantId, quantity);
-    return NextResponse.json(await getCartDetail(cartId));
+    const userId = await getSessionUserId();
+    await revalidateAttachedPromo(cartId, userId);
+    return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {
     if (error instanceof CartError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

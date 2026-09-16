@@ -1,5 +1,7 @@
 import { rawQuery, sql } from "./db";
 import { getPublicUrl } from "./cloudinary";
+import { getAttachedPromo, type AppliedPromo } from "./promo";
+import { computeDiscount } from "./promo-format";
 
 export const CART_COOKIE = "adore_cart";
 export const CART_MAX_AGE = 60 * 60 * 24 * 90;
@@ -26,6 +28,9 @@ export type CartSummary = {
   items: CartLine[];
   itemCount: number;
   subtotal: string;
+  discount: string;
+  total: string;
+  promo: AppliedPromo | null;
   currency: string | null;
 };
 
@@ -33,6 +38,9 @@ const EMPTY_CART: CartSummary = {
   items: [],
   itemCount: 0,
   subtotal: "0",
+  discount: "0",
+  total: "0",
+  promo: null,
   currency: null,
 };
 
@@ -53,7 +61,7 @@ type CartRow = {
   stock: number;
 };
 
-function mapCart(rows: CartRow[]): CartSummary {
+function mapCart(rows: CartRow[], promo: Omit<AppliedPromo, "discount"> | null): CartSummary {
   const items = rows.map((row) => ({
     id: row.id,
     variantId: row.variant_id,
@@ -72,12 +80,20 @@ function mapCart(rows: CartRow[]): CartSummary {
     lineTotal: String(Number(row.price) * row.quantity),
   }));
 
+  const subtotal = String(
+    items.reduce((sum, item) => sum + Number(item.lineTotal), 0),
+  );
+  const discount = promo
+    ? computeDiscount(promo.discountType, promo.discountValue, subtotal)
+    : "0";
+
   return {
     items,
     itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
-    subtotal: String(
-      items.reduce((sum, item) => sum + Number(item.lineTotal), 0),
-    ),
+    subtotal,
+    discount,
+    total: String(Number(subtotal) - Number(discount)),
+    promo: promo ? { ...promo, discount } : null,
     currency: items[0]?.currency ?? null,
   };
 }
@@ -94,9 +110,11 @@ export async function findCartId(
 
 export async function getCartDetail(
   cartId: string | null,
+  userId: string | null = null,
 ): Promise<CartSummary> {
   if (!cartId) return EMPTY_CART;
-  const rows = await rawQuery<CartRow>(sql`
+  const [rows, promo] = await Promise.all([
+    rawQuery<CartRow>(sql`
     SELECT
       ci.id,
       ci.variant_id,
@@ -123,8 +141,10 @@ export async function getCartDetail(
     JOIN products p ON p.id = v.product_id AND p.status = 'ACTIVE'
     WHERE ci.cart_id = ${cartId}
     ORDER BY ci.created_at ASC
-  `);
-  return mapCart(rows);
+  `),
+    getAttachedPromo(cartId, userId),
+  ]);
+  return mapCart(rows, promo);
 }
 
 export async function addCartItem(

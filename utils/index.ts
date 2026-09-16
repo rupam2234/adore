@@ -60,6 +60,10 @@ export type {
   ProductStatus,
   FieldErrors,
 } from "./admin-schema";
+export { removePromo, applyPromo, PromoError } from "./promo";
+export type { AppliedPromo } from "./promo";
+export { computeDiscount } from "./promo-format";
+export { getSessionUserId } from "./request-user";
 export { isAdminRequest } from "./admin-auth";
 
 // Auth exports
