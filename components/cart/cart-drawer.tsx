@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { formatPrice } from "@/utils/product-format";
-import { PinChecker } from "@/components/shop/pin-checker";
+import {
+  PinChecker,
+  usePinCheck,
+} from "@/components/shop/pin-checker";
 import { useAuthUser } from "@/components/auth/use-auth-user";
 import { useCart } from "./cart-provider";
 
@@ -164,6 +167,12 @@ function PromoSection() {
 
 function DrawerBody() {
   const { cart, setDrawerOpen, updateItem, removeItem, clear } = useCart();
+  // PIN deliverability is verified here, before the customer ever reaches
+  // checkout — checkout reuses this verified PIN instead of asking again.
+  const pinCheck = usePinCheck();
+  const pinVerified =
+    pinCheck.status.kind === "result" && pinCheck.status.result.serviceable;
+  const pinChecking = pinCheck.status.kind === "checking";
 
   return (
     <>
@@ -244,7 +253,7 @@ function DrawerBody() {
       </ul>
 
       <div className="border-t border-[#2B2620]/10 px-6 py-5">
-        <PinChecker />
+        <PinChecker pinCheck={pinCheck} />
         <PromoSection />
         <div className="mt-4 space-y-1.5 text-sm">
           <div className="flex items-center justify-between">
@@ -269,13 +278,33 @@ function DrawerBody() {
         <p className="mt-1 text-xs text-[#2B2620]/50">
           Shipping and taxes calculated at checkout.
         </p>
-        <button
-          type="button"
-          disabled
-          className="mt-4 w-full cursor-not-allowed rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] opacity-60"
-        >
-          Checkout — coming soon
-        </button>
+        {pinVerified ? (
+          <Link
+            href="/checkout"
+            onClick={() => setDrawerOpen(false)}
+            className="mt-4 block w-full cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-center text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
+          >
+            Checkout
+          </Link>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => void pinCheck.check()}
+              disabled={pinChecking || pinCheck.pin.length !== 6}
+              aria-disabled="true"
+              title="Verify your delivery PIN first"
+              className="mt-4 block w-full cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-center text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Checkout
+            </button>
+            <p className="mt-1.5 text-center text-xs text-[#2B2620]/50">
+              {pinChecking
+                ? "Checking delivery…"
+                : "Check your delivery PIN above to continue."}
+            </p>
+          </>
+        )}
         <button
           type="button"
           onClick={clear}

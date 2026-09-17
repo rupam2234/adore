@@ -65,6 +65,28 @@ export type { AppliedPromo } from "./promo";
 export { computeDiscount } from "./promo-format";
 export { getSessionUserId } from "./request-user";
 export { isAdminRequest } from "./admin-auth";
+export {
+  createCheckoutSession,
+  verifyAndConfirmPayment,
+  getOrderConfirmation,
+  CheckoutError,
+  RECENT_ORDER_COOKIE,
+} from "./checkout";
+export type {
+  CheckoutAddress,
+  CheckoutSession,
+  CheckoutSessionInput,
+  OrderConfirmation,
+  ConfirmationItem,
+} from "./checkout";
+export {
+  computeCheckoutTotals,
+  computeShippingAmount,
+  toPaise,
+  SHIPPING_FLAT,
+  FREE_SHIPPING_THRESHOLD,
+} from "./checkout-format";
+export type { CheckoutTotals } from "./checkout-format";
 
 // Auth exports
 export {

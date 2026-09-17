@@ -350,7 +350,7 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
                 className={`${inputCls} col-span-2`}
                 value={v.compareAtPrice}
                 onChange={(e) => setVariant(i, "compareAtPrice", e.target.value)}
-                placeholder="Compare at"
+                placeholder="Compare at (optional)"
                 inputMode="decimal"
                 aria-label={`Variant ${i + 1} compare-at price`}
               />

@@ -15,6 +15,8 @@ type Props = {
   initialReviews: ProductReview[];
   initialTotal: number;
   sizes: string[];
+  /** Account display name when logged in, null for guests. */
+  authorName: string | null;
 };
 
 const PAGE_SIZE = 5;
@@ -34,6 +36,7 @@ export default function ProductReviews({
   initialReviews,
   initialTotal,
   sizes,
+  authorName,
 }: Props) {
   const [summary, setSummary] = useState(initialSummary);
   const [reviews, setReviews] = useState(initialReviews);
@@ -188,7 +191,29 @@ export default function ProductReviews({
             ref={formRef}
             className="mt-8 scroll-mt-24 border border-[#2B2620]/15 bg-white/40 p-5 sm:p-6"
           >
-            <ReviewForm slug={slug} sizes={sizes} onPosted={handlePosted} />
+            {authorName ? (
+              <ReviewForm
+                slug={slug}
+                sizes={sizes}
+                authorName={authorName}
+                onPosted={handlePosted}
+              />
+            ) : (
+              <div className="py-2 text-center">
+                <p className="font-serif text-xl">Reviews are for members</p>
+                <p className="mt-1 text-sm text-[#2B2620]/60">
+                  Please log in with your Adore account to share your review.
+                </p>
+                <a
+                  href={`/login?next=${encodeURIComponent(
+                    `/products/${slug}`,
+                  )}`}
+                  className="mt-4 inline-block cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
+                >
+                  Log in to write a review
+                </a>
+              </div>
+            )}
           </div>
         )}
         {reviews.length > 0 ? (

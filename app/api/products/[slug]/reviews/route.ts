@@ -4,8 +4,11 @@ import {
   getApprovedReviews,
   getProductIdBySlug,
   getReviewSummary,
+  hasPurchasedProduct,
   type ReviewSort,
 } from "@/utils/reviews";
+import { getSessionUserId } from "@/utils/request-user";
+import { getUserById } from "@/utils/auth";
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -59,11 +62,28 @@ export async function GET(request: Request, { params }: RouteContext) {
   });
 }
 
-/** POST /api/products/[slug]/reviews — submit a review (auto-approved). */
+/** POST /api/products/[slug]/reviews — submit a review.
+ *
+ * Logged-in users: verified purchases are auto-approved; others held for
+ * moderation. Guest reviews are always held for moderation (name is required).
+ */
 export async function POST(request: Request, { params }: RouteContext) {
   const { slug } = await params;
   const productId = await getProductIdBySlug(slug);
   if (!productId) return error("Product not found", 404);
+
+  // Reviews require an account.
+  const userId = await getSessionUserId();
+  if (!userId) {
+    return error("Please log in to write a review.", 401);
+  }
+  const user = await getUserById(userId);
+  if (!user) {
+    return error("Your session has expired — please log in again.", 401);
+  }
+
+  // Verified purchase → auto-approve; otherwise hold for moderation.
+  const verifiedPurchase = await hasPurchasedProduct(userId, productId);
 
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
@@ -88,8 +108,8 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const rating = Number(b.rating);
   const body = typeof b.body === "string" ? b.body.trim() : "";
-  const authorName =
-    typeof b.authorName === "string" ? b.authorName.trim() : "";
+  // Author name comes from the account; ignore any client-supplied value.
+  const authorName = user.name?.trim() || user.email.split("@")[0] || "Customer";
   const title = typeof b.title === "string" ? b.title.trim() : "";
   const sizePurchased =
     typeof b.sizePurchased === "string" && b.sizePurchased.trim() !== ""
@@ -102,9 +122,6 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
     return error("Please select a star rating (1–5).");
-  }
-  if (authorName.length < 2 || authorName.length > 60) {
-    return error("Please enter your name (2–60 characters).");
   }
   if (body.length < 2 || body.length > 2000) {
     return error("Please write a review (2–2000 characters).");
@@ -122,6 +139,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       body,
       authorName,
       sizePurchased,
+      isApproved: verifiedPurchase,
       fitFeedback: fitFeedback as "runs_small" | "true_to_size" | "runs_large" | null,
     })
     .returning({
@@ -140,6 +158,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   return NextResponse.json(
     {
       ok: true,
+      approved: verifiedPurchase,
       review: {
         id: r.id,
         rating: Number(r.rating),

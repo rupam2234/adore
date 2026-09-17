@@ -8,7 +8,7 @@ export default async function NewProductPage() {
 
   return (
     <section>
-      <h1 className="font-serif text-2xl">New product</h1>
+      <h1 className="font-admin font-bold text-2xl">New product</h1>
       <p className="mt-1 text-sm text-[#2B2620]/60">
         Saved as a draft first — upload images, then activate when ready.
       </p>

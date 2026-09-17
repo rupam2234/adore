@@ -50,8 +50,8 @@ export default function LoginForm({ next }: LoginFormProps) {
   return (
     <div className="mx-auto mt-24 flex max-w-md flex-col items-center gap-8">
       <div className="flex flex-col items-center gap-3">
-        <span className="font-serif text-5xl text-[#2B2620]">🛍️</span>
-        <h1 className="font-serif text-2xl text-[#2B2620]">Admin</h1>
+        <span className="font-admin text-5xl text-[#2B2620]">🛍️</span>
+        <h1 className="font-admin font-bold text-2xl text-[#2B2620]">Admin</h1>
         <p className="text-sm text-[#2B2620]/60">
           Sign in with your email and password to continue.
         </p>
@@ -118,7 +118,7 @@ export default function LoginForm({ next }: LoginFormProps) {
       </form>
 
       <p className="text-xs text-[#2B2620]/50">
-        If you don't have an account, contact an administrator.
+        If you don&apos;t have an account, contact an administrator.
       </p>
     </div>
   );

@@ -18,7 +18,7 @@ export default async function AdminPromosPage() {
 
   return (
     <section>
-      <h1 className="font-serif text-2xl">Promo Codes</h1>
+      <h1 className="font-admin font-bold text-2xl">Promo Codes</h1>
 
       {error && (
         <p className="mt-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

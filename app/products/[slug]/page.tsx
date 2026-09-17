@@ -8,11 +8,13 @@ import {
 import { getProductBySlug, getRelatedProducts } from "@/utils";
 import { getApprovedReviews, getReviewSummary } from "@/utils/reviews";
 import { EMPTY_SUMMARY } from "@/utils/review-format";
+import { getSessionUserId } from "@/utils/request-user";
+import { getUserById } from "@/utils/auth";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-// Re-fetch the product at most every 5 minutes (ISR)
-export const revalidate = 300;
+// Review form needs the session cookie, so the page must render per-request.
+export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -56,6 +58,13 @@ export default async function ProductPage({ params }: PageProps) {
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product) notFound();
+
+  // Current account (if any) — used to gate + pre-fill the review form.
+  const sessionUserId = await getSessionUserId();
+  const sessionUser = sessionUserId ? await getUserById(sessionUserId) : null;
+  const authorName = sessionUser
+    ? sessionUser.name?.trim() || sessionUser.email.split("@")[0]
+    : null;
 
   const related = await getRelatedProducts(slug, 4);
   let reviewSummary = EMPTY_SUMMARY;
@@ -103,6 +112,7 @@ export default async function ProductPage({ params }: PageProps) {
               initialReviews={initialReviews}
               initialTotal={reviewTotal}
               sizes={product.sizes.map((s) => s.size)}
+              authorName={authorName}
             />
           }
         />

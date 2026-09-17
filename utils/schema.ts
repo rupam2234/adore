@@ -221,6 +221,9 @@ export const orders = pgTable("orders", {
     shippingAddressId: text("shipping_address_id"),
     shippingAddressSnapshot: jsonb("shipping_address_snapshot").$type<Record<string, string>>(),
     promoCodeId: text("promo_code_id"),
+    razorpayOrderId: text("razorpay_order_id"),
+    razorpayPaymentId: text("razorpay_payment_id"),
+    shiprocketOrderId: text("shiprocket_order_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -235,4 +238,21 @@ export const orderItems = pgTable("order_items", {
     quantity: integer("quantity").notNull(),
     unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
     totalPrice: numeric("total_price", { precision: 10, scale: 2 }).notNull(),
+});
+
+/**
+ * Stock reservations: holds inventory while a PENDING order is being paid
+ * for (TTL 10 minutes). Stock is PHYSICALLY decremented from
+ * `product_variants.stock_quantity` when the reservation is created, so
+ * `stock_quantity` always reflects what is actually buyable everywhere.
+ * See utils/reservations.ts for the lifecycle.
+ */
+export const stockReservations = pgTable("stock_reservations", {
+    id: text("id").primaryKey().$defaultFn(randomId),
+    orderId: text("order_id").notNull().unique(),
+    cartId: text("cart_id"),
+    variantId: text("variant_id").notNull(),
+    quantity: integer("quantity").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

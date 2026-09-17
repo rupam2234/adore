@@ -21,7 +21,7 @@ export default async function EditProductPage({ params }: PageProps) {
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <h1 className="font-serif text-2xl">{product.name}</h1>
+        <h1 className="font-admin font-bold text-2xl">{product.name}</h1>
         <span className="rounded-full bg-[#2B2620]/10 px-3 py-1 text-xs">
           {product.status}
         </span>

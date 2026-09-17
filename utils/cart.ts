@@ -2,6 +2,7 @@ import { rawQuery, sql } from "./db";
 import { getPublicUrl } from "./cloudinary";
 import { getAttachedPromo, type AppliedPromo } from "./promo";
 import { computeDiscount } from "./promo-format";
+import { sweepReservations } from "./reservations";
 
 export const CART_COOKIE = "adore_cart";
 export const CART_MAX_AGE = 60 * 60 * 24 * 90;
@@ -112,6 +113,9 @@ export async function getCartDetail(
   cartId: string | null,
   userId: string | null = null,
 ): Promise<CartSummary> {
+  // Lazy housekeeping: expired checkout reservations go back on sale here, so
+  // the bag always shows true availability. Idempotent and cheap.
+  await sweepReservations();
   if (!cartId) return EMPTY_CART;
   const [rows, promo] = await Promise.all([
     rawQuery<CartRow>(sql`

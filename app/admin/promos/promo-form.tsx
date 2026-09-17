@@ -61,7 +61,7 @@ export default function PromoForm() {
 
   return (
     <form onSubmit={handleSubmit} className="mt-6 rounded-xl border border-[#2B2620]/10 bg-white p-6">
-      <h2 className="font-serif text-lg">New promo code</h2>
+      <h2 className="font-admin font-semibold text-lg">New promo code</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="promo-code" className={labelClass}>Code</label>

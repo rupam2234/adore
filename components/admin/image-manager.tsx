@@ -139,7 +139,7 @@ export function ImageManager({
   return (
     <section className="border border-[#2B2620]/10 bg-white p-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-lg">Images</h2>
+        <h2 className="text-lg font-semibold">Images</h2>
         <label className="cursor-pointer rounded-full border border-[#2B2620] px-4 py-2 text-xs transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3] disabled:opacity-50">
           + Upload
           <input

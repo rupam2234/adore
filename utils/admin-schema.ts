@@ -62,7 +62,9 @@ function optionalStr(value: unknown): string | null {
 }
 
 function num(value: unknown): number | null {
-  const n = typeof value === "number" ? value : Number(str(value));
+  if (value == null || (typeof value === "string" && !value.trim())) return null;
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const n = typeof value === "number" ? value : Number(value.trim());
   return Number.isFinite(n) ? n : null;
 }
 
@@ -107,8 +109,12 @@ export function validateProductPayload(
     if (!size) errors[`${label}.size`] = "Size is required.";
     if (price === null || price <= 0)
       errors[`${label}.price`] = "Price must be a positive number.";
-    if (compareAtPrice !== null && price !== null && compareAtPrice < price)
-      errors[`${label}.compareAtPrice`] = "Compare-at price must be ≥ price.";
+    if (v.compareAtPrice != null &&
+        !(typeof v.compareAtPrice === "string" && !v.compareAtPrice.trim()) &&
+        compareAtPrice === null)
+      errors[`${label}.compareAtPrice`] = "Compare-at price must be a valid number or left blank.";
+    else if (compareAtPrice !== null && price !== null && compareAtPrice <= price)
+      errors[`${label}.compareAtPrice`] = "Compare-at price must be higher than price to show a discount.";
     if (stock < 0) errors[`${label}.stock`] = "Stock cannot be negative.";
 
     const key = `${color}|${size}`;

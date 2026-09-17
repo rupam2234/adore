@@ -30,7 +30,7 @@ export default function Header() {
             src={"/images/Adore_logo.png"}
             alt="Adore_tag"
             width={100}
-            height={20}
+            height={42}
           />
         </Link>
         <nav

@@ -42,3 +42,6 @@ next-env.d.ts
 .env*.local
 
 *.log
+
+# Shiprocket JWT token cache (auto-managed by utils/shipping.ts)
+.shiprocket-token.json

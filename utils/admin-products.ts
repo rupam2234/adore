@@ -251,7 +251,7 @@ export async function archiveProduct(productId: string): Promise<boolean> {
 }
 
 /** List every product (all statuses) with light aggregates for the admin table. */
-export async function listAdminProducts(): Promise<
+export async function listAdminProducts(search = ""): Promise<
   {
     id: string;
     name: string;
@@ -272,6 +272,14 @@ export async function listAdminProducts(): Promise<
       (SELECT MIN(v.price) FROM product_variants v
        WHERE v.product_id = p.id AND v.is_active) AS min_price
     FROM products p
+    WHERE (${search.trim()} = ''
+      OR STRPOS(LOWER(p.name), LOWER(${search.trim()})) > 0
+      OR STRPOS(LOWER(p.slug), LOWER(${search.trim()})) > 0
+      OR EXISTS (
+        SELECT 1 FROM product_variants sv
+        WHERE sv.product_id = p.id
+          AND STRPOS(LOWER(sv.sku), LOWER(${search.trim()})) > 0
+      ))
     ORDER BY p.updated_at DESC`);
   return rows.map((r) => ({
     id: r.id as string,

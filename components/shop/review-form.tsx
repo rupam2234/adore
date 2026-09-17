@@ -7,12 +7,17 @@ import { StarInput } from "./stars";
 type Props = {
   slug: string;
   sizes: string[];
+  /** Account display name when logged in — read-only for members, editable for guests. */
+  authorName: string | null;
   onPosted: (review: ProductReview) => void;
 };
 
-export function ReviewForm({ slug, sizes, onPosted }: Props) {
+export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
+  const isLoggedIn = authorName !== null;
+
   const [rating, setRating] = useState(0);
-  const [authorName, setAuthorName] = useState("");
+  const [reviewerName, setReviewerName] = useState(isLoggedIn ? authorName! : "");
+  const [reviewerEmail, setReviewerEmail] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [sizePurchased, setSizePurchased] = useState("");
@@ -20,6 +25,7 @@ export function ReviewForm({ slug, sizes, onPosted }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formOk, setFormOk] = useState(false);
+  const [pending, setPending] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +41,6 @@ export function ReviewForm({ slug, sizes, onPosted }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           rating,
-          authorName,
           title,
           body,
           sizePurchased: sizePurchased || null,
@@ -45,8 +50,8 @@ export function ReviewForm({ slug, sizes, onPosted }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Submit failed");
       if (data.review) onPosted(data.review);
+      setPending(data.approved === false);
       setRating(0);
-      setAuthorName("");
       setTitle("");
       setBody("");
       setSizePurchased("");
@@ -64,7 +69,9 @@ export function ReviewForm({ slug, sizes, onPosted }: Props) {
       <div className="py-2 text-center">
         <p className="font-serif text-xl">Thank you! ♥</p>
         <p className="mt-1 text-sm text-[#2B2620]/60">
-          Your review is live below.
+          {pending
+            ? "Your review has been submitted and will appear once it's approved."
+            : "Your review is live below."}
         </p>
         <button
           type="button"
@@ -87,19 +94,30 @@ export function ReviewForm({ slug, sizes, onPosted }: Props) {
         <StarInput value={rating} onChange={setRating} />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-            Name *
-          </span>
-          <input
-            value={authorName}
-            onChange={(e) => setAuthorName(e.target.value)}
-            placeholder="e.g. Ananya"
-            maxLength={60}
-            required
-            className="border border-[#2B2620]/20 bg-[#FAF8F3] px-3 py-2.5 text-sm outline-none placeholder:text-[#2B2620]/35 focus:border-[#2B2620]"
-          />
-        </label>
+        {isLoggedIn ? (
+          <div className="flex flex-col gap-1.5 text-sm">
+            <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
+              Posting as
+            </span>
+            <p className="border border-dashed border-[#2B2620]/20 bg-transparent px-3 py-2.5 text-sm text-[#2B2620]/70">
+              {authorName}
+            </p>
+          </div>
+        ) : (
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
+              Your name *
+            </span>
+            <input
+              value={reviewerName}
+              onChange={(e) => setReviewerName(e.target.value)}
+              placeholder="How should we call you?"
+              maxLength={100}
+              required
+              className="border border-[#2B2620]/20 bg-[#FAF8F3] px-3 py-2.5 text-sm outline-none placeholder:text-[#2B2620]/35 focus:border-[#2B2620]"
+            />
+          </label>
+        )}
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
             Headline
@@ -113,6 +131,11 @@ export function ReviewForm({ slug, sizes, onPosted }: Props) {
           />
         </label>
       </div>
+      {!isLoggedIn && (
+        <p className="text-xs text-[#2B2620]/50">
+          Guest reviews are held for moderation before they appear publicly.
+        </p>
+      )}
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
           Your review *

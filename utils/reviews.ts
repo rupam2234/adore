@@ -1,5 +1,6 @@
-import { and, count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, notInArray } from "drizzle-orm";
 import { db, productReviews, products } from "./db";
+import { orders, orderItems, customers } from "./schema";
 import { EMPTY_SUMMARY } from "./review-format";
 import type {
   FitFeedback,
@@ -133,4 +134,33 @@ export async function getProductIdBySlug(slug: string): Promise<string | null> {
     .where(eq(products.slug, slug))
     .limit(1);
   return rows[0]?.id ?? null;
+}
+
+/**
+ * True when the user has at least one non-cancelled order containing this
+ * product (verified-purchase check). Returns false rather than throwing so
+ * review submission never fails because of it.
+ */
+export async function hasPurchasedProduct(
+  userId: string,
+  productId: string,
+): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ id: orderItems.id })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .innerJoin(customers, eq(orders.customerId, customers.id))
+      .where(
+        and(
+          eq(customers.userId, userId),
+          eq(orderItems.productId, productId),
+          notInArray(orders.status, ["CANCELLED", "REFUNDED"]),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
 }

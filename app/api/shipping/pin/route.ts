@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const result = await checkPinServiceability(pin);
     return NextResponse.json({ pin, ...result });
   } catch (error) {
+    console.error("[shipping/pin] check failed:", error);
     if (error instanceof ShippingUnavailableError) {
       return NextResponse.json(
         { error: "Couldn't check delivery right now. Please try again." },

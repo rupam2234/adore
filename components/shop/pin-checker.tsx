@@ -2,28 +2,33 @@
 
 import { useEffect, useState } from "react";
 
-type PinResult = {
+export type PinResult = {
   serviceable: boolean;
   etaDays: number | null;
   estimatedDelivery: string | null;
   cod: boolean | null;
 };
 
-type Status =
+export type PinStatus =
   | { kind: "idle" }
   | { kind: "checking" }
   | { kind: "result"; pin: string; result: PinResult }
   | { kind: "error"; message: string };
 
-const PIN_STORAGE_KEY = "adore_pin";
+export const PIN_STORAGE_KEY = "adore_pin";
 
-export function PinChecker({ className = "" }: { className?: string }) {
+/**
+ * Delivery-PIN verification shared by the bag (gate checkout on it) and the
+ * checkout form (prefills the verified PIN so it's never asked for twice).
+ */
+export function usePinCheck() {
   const [pin, setPin] = useState("");
-  const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [status, setStatus] = useState<PinStatus>({ kind: "idle" });
 
-  // Restore a previously checked PIN so returning visitors see it instantly.
+  // Restore a previously verified PIN so returning visitors see it instantly.
   useEffect(() => {
     const saved = localStorage.getItem(PIN_STORAGE_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (saved && /^\d{6}$/.test(saved)) setPin(saved);
   }, []);
 
@@ -51,7 +56,10 @@ export function PinChecker({ className = "" }: { className?: string }) {
         estimatedDelivery: data.estimatedDelivery ?? null,
         cod: data.cod ?? null,
       };
-      localStorage.setItem(PIN_STORAGE_KEY, pin);
+      // Only remember deliverable PINs — an unserviceable PIN must never be
+      // carried into checkout as if it were verified.
+      if (result.serviceable) localStorage.setItem(PIN_STORAGE_KEY, pin);
+      else localStorage.removeItem(PIN_STORAGE_KEY);
       setStatus({ kind: "result", pin, result });
     } catch {
       setStatus({
@@ -60,6 +68,23 @@ export function PinChecker({ className = "" }: { className?: string }) {
       });
     }
   };
+
+  const reset = () => setStatus({ kind: "idle" });
+
+  return { pin, setPin, status, check, reset };
+}
+
+export type PinCheck = ReturnType<typeof usePinCheck>;
+/** Presentational PIN checker — pass a shared `usePinCheck()` state (the bag does, to gate checkout) or let it manage its own. */
+export function PinChecker({
+  pinCheck,
+  className = "",
+}: {
+  pinCheck?: PinCheck;
+  className?: string;
+}) {
+  const internal = usePinCheck();
+  const { pin, setPin, status, check, reset } = pinCheck ?? internal;
 
   const resultLine = (() => {
     if (status.kind === "result") {
@@ -110,7 +135,7 @@ export function PinChecker({ className = "" }: { className?: string }) {
           value={pin}
           onChange={(e) => {
             setPin(e.target.value.replace(/\D/g, "").slice(0, 6));
-            if (status.kind !== "idle") setStatus({ kind: "idle" });
+            if (status.kind !== "idle") reset();
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
