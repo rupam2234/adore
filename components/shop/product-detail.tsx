@@ -13,7 +13,6 @@ import {
 import { formatPrice, type ProductCardData } from "@/utils/product-format";
 import type { ReviewSummary } from "@/utils/review-format";
 import { useCart } from "@/components/cart/cart-provider";
-import { PinChecker } from "./pin-checker";
 import { Stars } from "./stars";
 
 /**
@@ -497,7 +496,6 @@ export default function ProductDetail({
             </p>
           )}
           {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}
-          <PinChecker className="mt-4" />
         </div>
       </div>
 

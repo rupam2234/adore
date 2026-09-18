@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { formatPrice } from "@/utils/product-format";
 import {
@@ -13,6 +14,16 @@ import { useCart } from "./cart-provider";
 export function CartDrawer() {
   const { cart, drawerOpen, setDrawerOpen, updateItem, removeItem, clear } =
     useCart();
+  const pathname = usePathname();
+
+  // The drawer is mounted app-wide (root layout) and survives route changes,
+  // so a link tapped inside it (e.g. "Log in") would otherwise leave the
+  // drawer, its overlay and the body scroll lock sitting on top of the next
+  // page. Close it whenever the route changes; links also close it on click
+  // for instant feedback — this is the safety net.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname, setDrawerOpen]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -30,6 +41,7 @@ export function CartDrawer() {
   return (
     <div
       aria-hidden={!drawerOpen}
+      inert={!drawerOpen ? true : undefined}
       className={`fixed inset-0 z-60 ${drawerOpen ? "" : "pointer-events-none"}`}
     >
       <div
@@ -83,7 +95,7 @@ export function CartDrawer() {
 }
 
 function PromoSection() {
-  const { cart, applyPromo, removePromo, error } = useCart();
+  const { cart, applyPromo, removePromo, error, setDrawerOpen } = useCart();
   const { user, loading } = useAuthUser();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -96,6 +108,7 @@ function PromoSection() {
         </span>
         <Link
           href="/login"
+          onClick={() => setDrawerOpen(false)}
           className="font-medium underline underline-offset-2 hover:text-[#2B2620]"
         >
           Log in

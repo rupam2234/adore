@@ -96,7 +96,19 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
         </div>
         <p className="mt-2 text-sm">{product.name}</p>
         <p className="text-sm text-[#2B2620]/60">
-          {formatPrice(product.price, product.currency)}
+          {product.compareAtPrice &&
+          Number(product.compareAtPrice) > Number(product.price) ? (
+            <>
+              <span className="mr-2 text-[#2B2620]/40 line-through">
+                {formatPrice(product.compareAtPrice, product.currency)}
+              </span>
+              <span className="text-[#A45A4B]">
+                {formatPrice(product.price, product.currency)}
+              </span>
+            </>
+          ) : (
+            formatPrice(product.price, product.currency)
+          )}
         </p>
       </div>
 
