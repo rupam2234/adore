@@ -5,6 +5,7 @@ import {
   type ProductReview,
   type ReviewSummary,
 } from "@/utils/review-format";
+import { useAuthUser } from "@/components/auth/use-auth-user";
 import { Stars } from "./stars";
 import { ReviewForm } from "./review-form";
 import { ReviewListItem } from "./review-list";
@@ -15,20 +16,9 @@ type Props = {
   initialReviews: ProductReview[];
   initialTotal: number;
   sizes: string[];
-  /** Account display name when logged in, null for guests. */
-  authorName: string | null;
 };
 
 const PAGE_SIZE = 5;
-
-function initials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
-}
 
 export default function ProductReviews({
   slug,
@@ -36,8 +26,15 @@ export default function ProductReviews({
   initialReviews,
   initialTotal,
   sizes,
-  authorName,
 }: Props) {
+  // Resolve the logged-in reviewer client-side so this component (and the
+  // page that renders it) can be ISR-cached. useAuthUser() verifies the JWT
+  // (no DB) and fetches the profile on `/api/auth/me` on demand.
+  const { user } = useAuthUser();
+  const authorName = user
+    ? user.name?.trim() || user.email.split("@")[0]
+    : null;
+
   const [summary, setSummary] = useState(initialSummary);
   const [reviews, setReviews] = useState(initialReviews);
   const [total, setTotal] = useState(initialTotal);

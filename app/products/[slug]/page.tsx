@@ -5,16 +5,31 @@ import {
   ProductCard,
   ProductReviews,
 } from "@/components";
-import { getProductBySlug, getRelatedProducts } from "@/utils";
+import { getProductBySlug, getRelatedProducts, getActiveProductSlugs } from "@/utils";
 import { getApprovedReviews, getReviewSummary } from "@/utils/reviews";
 import { EMPTY_SUMMARY } from "@/utils/review-format";
-import { getSessionUserId } from "@/utils/request-user";
-import { getUserById } from "@/utils/auth";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-// Review form needs the session cookie, so the page must render per-request.
-export const dynamic = "force-dynamic";
+// ISR: cache the product shell at the edge (60s). Only the logged-in
+// reviewer name is resolved client-side (see <ProductReviews>), so the
+// whole page is safe to cache — just like the homepage's `revalidate = 300`.
+export const revalidate = 60;
+
+/**
+ * Prerender the live catalogue at build time.
+ *
+ * This is what actually turns caching on: for a dynamic segment, `revalidate`
+ * alone does nothing — without `generateStaticParams` the route is treated as
+ * fully dynamic and re-runs every query on every request (no Full Route Cache).
+ *
+ * Products published after the build still work: `dynamicParams` defaults to
+ * true, so Next renders them on demand and caches them for `revalidate` too.
+ */
+export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
+  const slugs = await getActiveProductSlugs();
+  return slugs.map((slug) => ({ slug }));
+}
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -56,17 +71,16 @@ export async function generateMetadata({
 
 export default async function ProductPage({ params }: PageProps) {
   const { slug } = await params;
-  const product = await getProductBySlug(slug);
+
+  // Both lookups need only `slug`, so run them together. On the Neon HTTP
+  // driver every query is its own network round-trip, so awaiting these
+  // sequentially added a full round-trip to each render.
+  const [product, related] = await Promise.all([
+    getProductBySlug(slug),
+    getRelatedProducts(slug, 4),
+  ]);
   if (!product) notFound();
 
-  // Current account (if any) — used to gate + pre-fill the review form.
-  const sessionUserId = await getSessionUserId();
-  const sessionUser = sessionUserId ? await getUserById(sessionUserId) : null;
-  const authorName = sessionUser
-    ? sessionUser.name?.trim() || sessionUser.email.split("@")[0]
-    : null;
-
-  const related = await getRelatedProducts(slug, 4);
   let reviewSummary = EMPTY_SUMMARY;
   let initialReviews: Awaited<
     ReturnType<typeof getApprovedReviews>
@@ -112,7 +126,6 @@ export default async function ProductPage({ params }: PageProps) {
               initialReviews={initialReviews}
               initialTotal={reviewTotal}
               sizes={product.sizes.map((s) => s.size)}
-              authorName={authorName}
             />
           }
         />

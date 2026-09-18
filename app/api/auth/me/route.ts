@@ -1,5 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserById, verifyAccessToken, ACCESS_COOKIE_NAME } from "@/utils/auth";
+import {
+  getUserById,
+  verifyAccessToken,
+  ACCESS_COOKIE_NAME,
+  loginHintCookie,
+} from "@/utils/auth";
+
+/**
+ * Attach the client-readable login hint so `useAuthUser()` never has to guess
+ * the session state. This is the one route that learns whether the browser is
+ * signed in without issuing new tokens, so it is where the hint gets corrected
+ * (e.g. after the access token expires) instead of every page load asking.
+ */
+function withLoginHint(response: NextResponse, value: "0" | "1"): NextResponse {
+  const hint = loginHintCookie(value);
+  response.cookies.set(hint.name, hint.value, hint.options);
+  // This route returns user-specific data (or a 401 that depends on the
+  // caller's cookies), so it must never be cached by a browser, proxy or CDN.
+  // `Set-Cookie` already deters CDNs, but stating it makes the intent explicit
+  // instead of relying on that heuristic.
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
 
 /**
  * GET /api/auth/me
@@ -9,30 +31,42 @@ import { getUserById, verifyAccessToken, ACCESS_COOKIE_NAME } from "@/utils/auth
 export async function GET(request: NextRequest) {
   const cookie = request.cookies.get(ACCESS_COOKIE_NAME);
   if (!cookie?.value) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    return withLoginHint(
+      NextResponse.json({ error: "Not authenticated" }, { status: 401 }),
+      "0",
+    );
   }
 
   const payload = await verifyAccessToken(cookie.value);
   if (!payload) {
-    return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 });
+    return withLoginHint(
+      NextResponse.json({ error: "Invalid or expired token" }, { status: 401 }),
+      "0",
+    );
   }
 
   const user = await getUserById(payload.userId);
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 401 });
+    return withLoginHint(
+      NextResponse.json({ error: "User not found" }, { status: 401 }),
+      "0",
+    );
   }
 
-  return NextResponse.json(
-    {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        avatarUrl: user.avatarUrl,
-        metadata: user.metadata,
+  return withLoginHint(
+    NextResponse.json(
+      {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          avatarUrl: user.avatarUrl,
+          metadata: user.metadata,
+        },
       },
-    },
-    { status: 200 },
+      { status: 200 },
+    ),
+    "1",
   );
 }

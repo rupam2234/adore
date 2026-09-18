@@ -23,5 +23,11 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ ok: true }, { status: 200 });
   response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
   response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);
+  // Must clear the hint too, or the client keeps asking /api/auth/me after logout.
+  response.cookies.set(
+    cookies.loggedIn.name,
+    cookies.loggedIn.value,
+    cookies.loggedIn.options,
+  );
   return response;
 }

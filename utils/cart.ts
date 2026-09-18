@@ -113,10 +113,16 @@ export async function getCartDetail(
   cartId: string | null,
   userId: string | null = null,
 ): Promise<CartSummary> {
-  // Lazy housekeeping: expired checkout reservations go back on sale here, so
-  // the bag always shows true availability. Idempotent and cheap.
-  await sweepReservations();
+  // No cart → nothing to report, so return BEFORE the housekeeping sweep. The
+  // sweep is two sequential round-trips (~2 x 114ms on the Neon HTTP driver)
+  // and its result is discarded here: an empty bag has no availability to show.
+  // Guests with no cart (the bulk of page loads) take this path every time.
   if (!cartId) return EMPTY_CART;
+
+  // Lazy housekeeping: expired checkout reservations go back on sale here, so
+  // the bag always shows true availability. Idempotent and cheap. Checkout
+  // (reserveCartItems) sweeps too, so an expired hold is never stranded.
+  await sweepReservations();
   const [rows, promo] = await Promise.all([
     rawQuery<CartRow>(sql`
     SELECT

@@ -1,4 +1,5 @@
 import { rawQuery, sql, ProductCardData, ProductImage } from ".";
+import { cache } from "react";
 import { getPublicUrl } from "./cloudinary";
 import { CATEGORY_CHILDREN, type CategoryRow, type CategorySlug } from "./categories";
 import { normalizeCareInstructions } from "./product-format";
@@ -374,7 +375,7 @@ export async function getFilterFacets(
  * Fetch a single product by slug for the product detail page.
  * Same shape as ProductCardData; returns null when not found or inactive.
  */
-export async function getProductBySlug(
+export const getProductBySlug = cache(async function getProductBySlug(
   slug: string,
 ): Promise<ProductCardData | null> {
   const rows = await rawQuery<ProductRow>(sql`
@@ -472,19 +473,24 @@ export async function getProductBySlug(
   if (!row) return null;
 
   return mapProductRow(row);
-}
+});
 
 /**
  * Fetch related products for the "We think you might enjoy…" section:
  * active products sharing a category with the given product (excluding it),
  * falling back to the newest active products when there are no shared
  * categories. Same shape as ProductCardData.
+ *
+ * Runs as a SINGLE query: category matches are ranked ahead of the fallback
+ * fill (featured-first within each group, then newest-first), so one LIMIT
+ * returns exactly the rows the previous two-query "matches then filler" merge
+ * produced — but with one network round-trip instead of two.
  */
-export async function getRelatedProducts(
+export const getRelatedProducts = cache(async function getRelatedProducts(
   slug: string,
   limit = 4,
 ): Promise<ProductCardData[]> {
-  const categoryFiltered = await rawQuery<ProductRow>(sql`
+  const rows = await rawQuery<ProductRow>(sql`
     SELECT
       p.id,
       p.slug,
@@ -573,106 +579,56 @@ export async function getRelatedProducts(
     ) min_active ON TRUE
     WHERE p.status = 'ACTIVE'
       AND p.slug != ${slug}
+    ORDER BY
+      -- 0 = featured category match, 1 = other category match, 2 = fallback.
+      -- A bare CASE expression (not a column alias) so it is legal in ORDER BY.
+      (
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM product_categories pc
+            WHERE pc.product_id = p.id
+              AND pc.category_id IN (
+                SELECT pc2.category_id
+                FROM product_categories pc2
+                JOIN products p2 ON p2.id = pc2.product_id
+                WHERE p2.slug = ${slug}
+              )
+          ) THEN (CASE WHEN p.is_featured THEN 0 ELSE 1 END)
+          ELSE 2
+        END
+      ) ASC,
+      p.created_at DESC,
+      -- Deterministic tiebreaker so equal created_at values render in a
+      -- stable order across ISR regenerations (previously Postgres-arbitrary).
+      p.id ASC
+    LIMIT ${limit}
+  `);
+
+  return rows.map(mapProductRow);
+});
+
+/**
+ * Slugs of every shippable product (ACTIVE, with at least one active variant).
+ *
+ * Mirrors the inner `JOIN LATERAL` in `getProductBySlug`, which drops products
+ * with no active variant — so we never prerender a page that would 404.
+ * Feeds `generateStaticParams` on the product route.
+ */
+export async function getActiveProductSlugs(): Promise<string[]> {
+  const rows = await rawQuery<{ slug: string }>(sql`
+    SELECT p.slug
+    FROM products p
+    WHERE p.status = 'ACTIVE'
       AND EXISTS (
         SELECT 1
-        FROM product_categories pc
-        WHERE pc.product_id = p.id
-          AND pc.category_id IN (
-            SELECT pc2.category_id
-            FROM product_categories pc2
-            JOIN products p2 ON p2.id = pc2.product_id
-            WHERE p2.slug = ${slug}
-          )
-      )
-    ORDER BY p.is_featured DESC, p.created_at DESC
-    LIMIT ${limit}
-  `);
-
-  if (categoryFiltered.length >= limit) {
-    return categoryFiltered.map(mapProductRow);
-  }
-
-  // Fallback: fill up with the newest active products excluding the current one
-  const filler = await rawQuery<ProductRow>(sql`
-    SELECT
-      p.id,
-      p.slug,
-      p.name,
-      p.short_description,
-      p.details,
-      p.story,
-      p.material,
-      p.fit,
-      p.care_instructions,
-      (
-        SELECT json_agg(
-          json_build_object('slug', c.slug, 'name', c.name, 'parent_slug', parent.slug)
-          ORDER BY c.slug
-        )
-        FROM product_categories pc
-        JOIN categories c ON c.id = pc.category_id
-        LEFT JOIN categories parent ON parent.id = c.parent_id
-        WHERE pc.product_id = p.id
-      ) AS categories,
-      min_active.price AS price,
-      min_active.currency AS currency,
-      min_active.compare_at_price AS compare_at_price,
-      (
-        SELECT json_agg(
-          json_build_object('name', c.name, 'hex', c.hex)
-          ORDER BY c.name
-        )
-        FROM (
-          SELECT DISTINCT ON (v.color) v.color AS name, v.color_hex AS hex
-          FROM product_variants v
-          WHERE v.product_id = p.id AND v.is_active
-        ) c
-      ) AS colors,
-      (
-        SELECT json_agg(
-          json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
-          ORDER BY s.size
-        )
-        FROM (
-          SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
-          FROM product_variants v
-          WHERE v.product_id = p.id AND v.is_active
-          GROUP BY v.size
-        ) s
-      ) AS sizes,
-      (
-        SELECT COALESCE(SUM(v.stock_quantity), 0)
         FROM product_variants v
-        WHERE v.product_id = p.id AND v.is_active
-      ) AS total_stock,
-      (
-        SELECT json_agg(
-          json_build_object(
-            'id', pi.id,
-            'public_id', pi.public_id,
-            'alt_text', pi.alt_text,
-            'is_primary', pi.is_primary
-          ) ORDER BY pi.is_primary DESC, pi.sort_order ASC
-        )
-        FROM product_images pi
-        WHERE pi.product_id = p.id
-      ) AS images
-    FROM products p
-    JOIN LATERAL (
-      SELECT v.price, v.currency, v.compare_at_price
-      FROM product_variants v
-      WHERE v.product_id = p.id AND v.is_active
-      ORDER BY v.price ASC
-      LIMIT 1
-    ) min_active ON TRUE
-    WHERE p.status = 'ACTIVE' AND p.slug != ${slug}
+        WHERE v.product_id = p.id
+          AND v.is_active
+      )
     ORDER BY p.created_at DESC
-    LIMIT ${limit}
   `);
-
-  const byId = new Map<string, ProductRow>();
-  [...categoryFiltered, ...filler].forEach((row) => byId.set(row.id, row));
-  return [...byId.values()].slice(0, limit).map(mapProductRow);
+  return rows.map((row) => row.slug);
 }
 
 /** Fetch every category with its parent link (for nav / filters). */

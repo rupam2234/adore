@@ -1,4 +1,5 @@
 import { and, count, desc, eq, notInArray } from "drizzle-orm";
+import { cache } from "react";
 import { db, productReviews, products } from "./db";
 import { orders, orderItems, customers } from "./schema";
 import { EMPTY_SUMMARY } from "./review-format";
@@ -39,7 +40,7 @@ function mapReviewRow(row: {
 }
 
 /** Average rating, total count and per-star distribution (approved only). */
-export async function getReviewSummary(
+export const getReviewSummary = cache(async function getReviewSummary(
   productId: string,
 ): Promise<ReviewSummary> {
   const rows = await db
@@ -68,13 +69,13 @@ export async function getReviewSummary(
     if (rating >= 1 && rating <= 5) distribution[rating] = n;
     totalReviews += n;
     total += rating * n;
-  }
+    }
   return {
     average: totalReviews > 0 ? Math.round((total / totalReviews) * 10) / 10 : 0,
     count: totalReviews,
     distribution,
   };
-}
+});
 
 export type ReviewSort = "recent" | "helpful";
 

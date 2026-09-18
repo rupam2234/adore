@@ -72,6 +72,12 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({ user }, { status: 201 });
     response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
     response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);
+    // Client-readable login hint so guests can skip /api/auth/me entirely.
+    response.cookies.set(
+      cookies.loggedIn.name,
+      cookies.loggedIn.value,
+      cookies.loggedIn.options,
+    );
     return response;
   } catch (err) {
     if (err instanceof Error && err.message.includes("duplicate key")) {

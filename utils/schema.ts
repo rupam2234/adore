@@ -12,6 +12,7 @@
  */
 import {
     boolean,
+    index,
     integer,
     jsonb,
     numeric,
@@ -79,7 +80,15 @@ export const productVariants = pgTable(
         createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     },
-    (t) => [uniqueIndex("product_variants_product_color_size_key").on(t.productId, t.color, t.size)],
+    (t) => [
+        uniqueIndex("product_variants_product_color_size_key").on(t.productId, t.color, t.size),
+        // Every product-page/listing subquery reads `WHERE product_id = ? AND
+        // is_active` (colors, sizes, variants, total_stock and the min-price
+        // LATERAL). `price` as the 3rd column lets the LATERAL's
+        // `ORDER BY price ASC LIMIT 1` be satisfied by the index order, which
+        // removes both the Sort and the `is_active` Filter node.
+        index("idx_product_variants_product_active").on(t.productId, t.isActive, t.price),
+    ],
 );
 
 export const categories = pgTable("categories", {
@@ -95,17 +104,26 @@ export const productCategories = pgTable("product_categories", {
     categoryId: text("category_id").notNull(),
 });
 
-export const productImages = pgTable("product_images", {
-    id: text("id").primaryKey().$defaultFn(randomId),
-    productId: text("product_id").notNull(),
-    publicId: text("public_id").notNull(),
-    secureUrl: text("secure_url"),
-    altText: text("alt_text"),
-    width: integer("width"),
-    height: integer("height"),
-    sortOrder: integer("sort_order").notNull().default(0),
-    isPrimary: boolean("is_primary").notNull().default(false),
-});
+export const productImages = pgTable(
+    "product_images",
+    {
+        id: text("id").primaryKey().$defaultFn(randomId),
+        productId: text("product_id").notNull(),
+        publicId: text("public_id").notNull(),
+        secureUrl: text("secure_url"),
+        altText: text("alt_text"),
+        width: integer("width"),
+        height: integer("height"),
+        sortOrder: integer("sort_order").notNull().default(0),
+        isPrimary: boolean("is_primary").notNull().default(false),
+    },
+    (t) => [
+        // The images aggregate is resolved per product on every product page
+        // and every listing card. Without this the planner has no choice but a
+        // seq scan on product_images (the largest of the product tables).
+        index("idx_product_images_product_id").on(t.productId),
+    ],
+);
 
 export const productReviews = pgTable("product_reviews", {
     id: text("id").primaryKey().$defaultFn(randomId),

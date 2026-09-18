@@ -2,6 +2,11 @@ import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { and, eq, gt } from "drizzle-orm";
 import { db, sessions, users } from "./db";
+import {
+  ACCESS_COOKIE_NAME,
+  REFRESH_COOKIE_NAME,
+  LOGIN_HINT_COOKIE_NAME,
+} from "./auth-cookies";
 
 const secretKey = process.env.JWT_SECRET ?? "dev-secret-do-not-use-in-prod";
 const refreshSecretKey = process.env.JWT_REFRESH_SECRET ?? `${secretKey}-refresh`;
@@ -10,10 +15,10 @@ const encoder = new TextEncoder();
 const JWT_SECRET = encoder.encode(secretKey);
 const JWT_REFRESH_SECRET = encoder.encode(refreshSecretKey);
 
-console.log(`[auth] JWT_SECRET loaded: ${secretKey ? secretKey.substring(0, 4) + "..." : "NOT SET"}`);
-
-export const ACCESS_COOKIE_NAME = "adore_access_token";
-export const REFRESH_COOKIE_NAME = "adore_refresh_token";
+// Cookie names live in a LEAF module (no imports) so client components can read
+// them without dragging bcryptjs / drizzle / the Neon client into the browser
+// bundle. Re-exported here because server code imports them from "@/utils/auth".
+export { ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, LOGIN_HINT_COOKIE_NAME };
 
 export const ACCESS_EXPIRY = "15m";
 export const REFRESH_EXPIRY = "7d";
@@ -46,6 +51,20 @@ const refreshCookieOptions: {
   maxAge: 60 * 60 * 24 * 7,
 };
 
+const loginHintCookieOptions: {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: "lax" | "strict" | "none";
+  path: string;
+  maxAge: number;
+} = {
+  httpOnly: false, // must be readable by client JS
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
+  path: "/",
+  maxAge: 60 * 60 * 24 * 7,
+};
+
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 12);
 }
@@ -62,7 +81,6 @@ export interface TokenPayload {
 
 export async function signAccessToken(payload: TokenPayload): Promise<string | null> {
   if (!JWT_SECRET) return null;
-  console.log(`[signAccessToken] Signing...`);
   try {
     return await new SignJWT({ ...payload })
       .setProtectedHeader({ alg: "HS256" })
@@ -190,22 +208,51 @@ export function setAuthCookies(
 ): {
   access: { name: string; value: string; options: typeof accessCookieOptions };
   refresh: { name: string; value: string; options: typeof refreshCookieOptions };
+  loggedIn: { name: string; value: string; options: typeof loginHintCookieOptions };
 } {
   return {
     access: { name: ACCESS_COOKIE_NAME, value: accessToken, options: accessCookieOptions },
     refresh: { name: REFRESH_COOKIE_NAME, value: refreshToken, options: refreshCookieOptions },
+    loggedIn: { name: LOGIN_HINT_COOKIE_NAME, value: "1", options: loginHintCookieOptions },
   };
 }
 
 export function clearAuthCookies(): {
   access: { name: string; value: string; options: typeof accessCookieOptions };
   refresh: { name: string; value: string; options: typeof refreshCookieOptions };
+  loggedIn: { name: string; value: string; options: typeof loginHintCookieOptions };
 } {
   const eo = { ...accessCookieOptions, maxAge: 0 };
   const er = { ...refreshCookieOptions, maxAge: 0 };
   return {
     access: { name: ACCESS_COOKIE_NAME, value: "", options: eo },
     refresh: { name: REFRESH_COOKIE_NAME, value: "", options: er },
+    // Keep the hint (value "0" = confirmed signed out) rather than deleting it:
+    // an explicit "0" lets the client skip /api/auth/me without a speculative
+    // round-trip, whereas an absent cookie would mean "unknown" and force one.
+    loggedIn: {
+      name: LOGIN_HINT_COOKIE_NAME,
+      value: "0",
+      options: loginHintCookieOptions,
+    },
+  };
+}
+
+/**
+ * The login-hint cookie on its own — "1" signed in, "0" signed out.
+ *
+ * Used by /api/auth/me, the one route that learns the session state without
+ * issuing fresh tokens, so it can keep the client hint accurate.
+ */
+export function loginHintCookie(value: "0" | "1"): {
+  name: string;
+  value: string;
+  options: typeof loginHintCookieOptions;
+} {
+  return {
+    name: LOGIN_HINT_COOKIE_NAME,
+    value,
+    options: loginHintCookieOptions,
   };
 }
 

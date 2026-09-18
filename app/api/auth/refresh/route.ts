@@ -46,6 +46,12 @@ export async function POST(request: NextRequest) {
   const response = NextResponse.json({ ok: true }, { status: 200 });
   response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
   response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);
+  // Refresh keeps the session alive, so keep the client hint in sync too.
+  response.cookies.set(
+    cookies.loggedIn.name,
+    cookies.loggedIn.value,
+    cookies.loggedIn.options,
+  );
 
   return response;
 }

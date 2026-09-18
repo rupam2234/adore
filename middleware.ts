@@ -15,7 +15,6 @@ function isAdminPath(pathname: string): boolean {
 
 export default async function authMiddleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  console.log(`[middleware] Path: ${pathname}`);
 
   if (pathname === PUBLIC_ADMIN_PATH) {
     return NextResponse.next();
@@ -26,17 +25,14 @@ export default async function authMiddleware(request: NextRequest) {
   }
 
   if (!process.env.JWT_SECRET) {
-    console.log("[middleware] JWT_SECRET not set, allowing through");
     return NextResponse.next();
   }
 
   const cookie = request.cookies.get(ACCESS_COOKIE_NAME);
   const token = cookie?.value ?? null;
-  console.log(`[middleware] Cookie present: ${!!token}`);
   const payload = token ? await verifyAccessToken(token) : null;
 
   if (!payload) {
-    console.log("[middleware] No valid payload, redirecting to login");
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -45,8 +41,6 @@ export default async function authMiddleware(request: NextRequest) {
     url.search = `?next=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
-
-  console.log(`[middleware] User: ${payload.email} (${payload.role})`);
 
   if (isAdminPath(pathname) && payload.role !== "admin") {
     if (pathname.startsWith("/api/")) {
@@ -66,9 +60,8 @@ export const config = {
     "/admin",
     "/admin/:path*",
     "/api/admin/:path*",
-    "/api/auth/login",
-    "/api/auth/logout",
-    "/api/auth/refresh",
-    "/api/auth/me",
+    // NOTE: the /api/auth/* routes are deliberately NOT matched. The guard
+    // above lets them straight through, so matching them only cost a
+    // middleware invocation (and a log line) on every /api/auth/me call.
   ],
 };

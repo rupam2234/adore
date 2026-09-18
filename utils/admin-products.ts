@@ -1,4 +1,5 @@
 import { and, count, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
 import {
   db,
   rawQuery,
@@ -46,6 +47,27 @@ export async function uniqueSlug(
     if (rows.length === 0) return candidate;
   }
   return `${root}-${Date.now()}`;
+}
+
+/**
+ * Best-effort ISR cache invalidation for storefront pages that could surface a
+ * product: the product detail page, the homepage (latest + featured), and the
+ * shop listing. Errors are swallowed so an admin write is never blocked by
+ * cache revalidation — the worst case is one extra `revalidate` window of stale
+ * data, which is preferable to a 500 on an admin action.
+ */
+function revalidateStorefront(slug: string): void {
+  try {
+    revalidatePath(`/products/${slug}`);
+    revalidatePath("/");
+    revalidatePath("/shop");
+    // Category listings live at /shop/<category> and are ISR-cached by
+    // app/shop/layout.tsx. A product edit can add or remove it from any of
+    // them, so invalidate every instance of the dynamic segment.
+    revalidatePath("/shop/[slug]", "page");
+  } catch {
+    // Cache revalidation is best-effort.
+  }
 }
 
 /** Create a DRAFT product with its variants + categories. Returns id + slug. */
@@ -198,6 +220,8 @@ export async function updateProduct(
     if (!activation.ok) return activation;
   }
 
+  // Revalidate the storefront so shoppers see the update immediately.
+  revalidateStorefront(slug);
   return { ok: true, slug };
 }
 
@@ -233,10 +257,12 @@ export async function setStatus(
       return { ok: false, error: "Cannot activate: upload at least one image first." };
   }
 
-  await db
+  const rows = await db
     .update(products)
     .set({ status, updatedAt: new Date() })
-    .where(eq(products.id, productId));
+    .where(eq(products.id, productId))
+    .returning({ slug: products.slug });
+  if (rows[0]?.slug) revalidateStorefront(rows[0].slug);
   return { ok: true };
 }
 
@@ -246,8 +272,12 @@ export async function archiveProduct(productId: string): Promise<boolean> {
     .update(products)
     .set({ status: "ARCHIVED", updatedAt: new Date() })
     .where(eq(products.id, productId))
-    .returning({ id: products.id });
-  return rows.length > 0;
+    .returning({ slug: products.slug });
+  if (rows.length === 0) return false;
+  // Product is now hidden (storefront only shows ACTIVE) — bust its page and
+  // the listing pages that may have shown it so it 404's immediately.
+  revalidateStorefront(rows[0].slug);
+  return true;
 }
 
 /** List every product (all statuses) with light aggregates for the admin table. */
@@ -395,8 +425,9 @@ export async function deleteProductImage(
   imageId: string,
 ): Promise<{ ok: true; publicId: string } | { ok: false; error: string }> {
   const rows = await db
-    .select({ id: productImages.id, publicId: productImages.publicId })
+    .select({ id: productImages.id, publicId: productImages.publicId, slug: products.slug })
     .from(productImages)
+    .innerJoin(products, eq(products.id, productImages.productId))
     .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)));
   if (rows.length === 0) return { ok: false, error: "Image not found" };
 
@@ -422,6 +453,7 @@ export async function deleteProductImage(
       ));
   }
 
+  if (rows[0]?.slug) revalidateStorefront(rows[0].slug);
   return { ok: true, publicId: rows[0].publicId };
 }
 
@@ -431,8 +463,9 @@ export async function setPrimaryImage(
   imageId: string,
 ): Promise<boolean> {
   const owned = await db
-    .select({ id: productImages.id })
+    .select({ id: productImages.id, slug: products.slug })
     .from(productImages)
+    .innerJoin(products, eq(products.id, productImages.productId))
     .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)));
   if (owned.length === 0) return false;
 
@@ -444,5 +477,8 @@ export async function setPrimaryImage(
     .update(productImages)
     .set({ isPrimary: true })
     .where(eq(productImages.id, imageId));
+
+  // The primary image drives product cards and the detail hero.
+  revalidateStorefront(owned[0].slug);
   return true;
 }
