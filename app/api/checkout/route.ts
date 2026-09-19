@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import { rawQuery, sql } from '@/utils/db';
 import { createCheckoutSession, CheckoutError } from '@/utils/checkout';
 import { ShippingUnavailableError } from '@/utils/shipping';
+import { releaseOrderReservations, clearPendingOrder } from '@/utils/reservations';
 
 /**
  * Step 1 of checkout: validate the address, verify the PIN is serviceable via
@@ -13,6 +15,48 @@ export async function POST(request: Request) {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // Release a reservation (called when Razorpay checkout is dismissed or fails)
+  if (body.action === 'releaseReservation') {
+    const orderId = typeof body.orderId === 'string' ? body.orderId : undefined;
+    if (!orderId) {
+      return NextResponse.json(
+        { error: 'orderId is required' },
+        { status: 400 }
+      );
+    }
+    try {
+      await releaseOrderReservations(orderId);
+      return NextResponse.json({ ok: true });
+    } catch (err) {
+      console.error('[checkout] release reservation failed:', err);
+      return NextResponse.json(
+        { error: 'Could not release reservation' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Retry checkout: release old reservation, delete old pending order, redirect
+  if (body.action === 'retryCheckout') {
+    const orderId = typeof body.orderId === 'string' ? body.orderId : undefined;
+    if (!orderId) {
+      return NextResponse.json(
+        { error: 'orderId is required' },
+        { status: 400 }
+      );
+    }
+    try {
+      await clearPendingOrder(orderId);
+      return NextResponse.json({ ok: true, redirect: '/checkout' });
+    } catch (err) {
+      console.error('[checkout] retry checkout failed:', err);
+      return NextResponse.json(
+        { error: 'Could not retry checkout' },
+        { status: 500 }
+      );
+    }
   }
 
   try {

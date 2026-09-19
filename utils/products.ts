@@ -6,7 +6,7 @@ import {
   type CategoryRow,
   type CategorySlug,
 } from './categories';
-import { normalizeCareInstructions } from './product-format';
+import { normalizeCareInstructions, sortSizes } from './product-format';
 
 export type { CategoryRow, CategorySlug, ProductCardData, ProductImage };
 
@@ -272,7 +272,7 @@ export async function getProductsForSection(
       (
         SELECT json_agg(
           json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
-          ORDER BY s.size
+          ORDER BY CASE s.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
         )
         FROM (
           SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
@@ -291,7 +291,7 @@ export async function getProductsForSection(
             'price', v.price,
             'compare_at_price', v.compare_at_price,
             'stock', v.stock_quantity
-          ) ORDER BY v.color, v.size
+          ) ORDER BY v.color, CASE v.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
         )
         FROM product_variants v
         WHERE v.product_id = p.id AND v.is_active
@@ -369,7 +369,7 @@ export async function getFilterFacets(categorySlug?: string): Promise<{
     FROM product_variants v
     JOIN products p ON p.id = v.product_id
     WHERE v.is_active AND p.status = 'ACTIVE' AND ${categoryFilter}
-    ORDER BY v.color, v.size
+    ORDER BY v.color, CASE v.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
   `);
 
   const colorMap = new Map<string, string | null>();
@@ -381,7 +381,7 @@ export async function getFilterFacets(categorySlug?: string): Promise<{
 
   return {
     colors: [...colorMap].map(([name, hex]) => ({ name, hex })),
-    sizes: [...sizeSet].sort(),
+    sizes: sortSizes([...sizeSet]),
   };
 }
 
@@ -430,7 +430,7 @@ export const getProductBySlug = cache(async function getProductBySlug(
       (
         SELECT json_agg(
           json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
-          ORDER BY s.size
+          ORDER BY CASE s.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
         )
         FROM (
           SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
@@ -449,7 +449,7 @@ export const getProductBySlug = cache(async function getProductBySlug(
             'price', v.price,
             'compare_at_price', v.compare_at_price,
             'stock', v.stock_quantity
-          ) ORDER BY v.color, v.size
+          ) ORDER BY v.color, CASE v.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
         )
         FROM product_variants v
         WHERE v.product_id = p.id AND v.is_active
@@ -542,7 +542,7 @@ export const getRelatedProducts = cache(async function getRelatedProducts(
       (
         SELECT json_agg(
           json_build_object('size', s.size, 'stock', s.stock, 'price', s.price, 'compare_at_price', s.compare_at_price)
-          ORDER BY s.size
+          ORDER BY CASE s.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
         )
         FROM (
           SELECT v.size, SUM(v.stock_quantity) AS stock, MIN(v.price) AS price, (array_agg(v.compare_at_price ORDER BY v.price ASC))[1] AS compare_at_price
@@ -561,7 +561,7 @@ export const getRelatedProducts = cache(async function getRelatedProducts(
             'price', v.price,
             'compare_at_price', v.compare_at_price,
             'stock', v.stock_quantity
-          ) ORDER BY v.color, v.size
+          ) ORDER BY v.color, CASE v.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
         )
         FROM product_variants v
         WHERE v.product_id = p.id AND v.is_active
@@ -660,3 +660,4 @@ export async function getCategories(): Promise<CategoryRow[]> {
   `);
   return rows;
 }
+

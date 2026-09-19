@@ -362,7 +362,10 @@ export async function createCheckoutSession(
       },
     };
   } catch (err) {
-    // Never leave a half-created order behind if Razorpay fails.
+    // The order + items were created above; `reserveCartItems` already rolled back
+    // any partial stock claim on failure, so here we just need to delete the
+    // half-created order. If Razorpay itself failed after a successful reserve,
+    // `releaseOrderReservations` restores the stock.
     await releaseOrderReservations(orderId);
     await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
     await db.delete(orders).where(eq(orders.id, orderId));

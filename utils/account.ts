@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import { db, rawQuery, customerAddresses, customers, orders, orderItems, productVariants } from './db';
+import { db, rawQuery, customerAddresses, customers, orders, orderItems } from './db';
 import { finalizeReservations } from './reservations';
 
 export type CustomerAddress = {
@@ -538,31 +538,26 @@ export async function getOrderDetail(
  * Check if all items in a pending order are still available.
  */
 export async function checkOrderAvailability(orderId: string): Promise<ItemAvailability[]> {
-  const orderRows = await db
-    .select()
-    .from(orderItems)
-    .where(eq(orderItems.orderId, orderId));
+  const rows = await rawQuery<{
+    variant_id: string;
+    stock_quantity: number;
+    quantity: number;
+  }>(sql`
+    SELECT
+      oi.variant_id,
+      v.stock_quantity,
+      oi.quantity
+    FROM order_items oi
+    JOIN product_variants v ON v.id = oi.variant_id
+    WHERE oi.order_id = ${orderId}
+  `);
 
-  const availability: ItemAvailability[] = [];
-
-  for (const item of orderRows) {
-    const variantRows = await db
-      .select()
-      .from(productVariants)
-      .where(eq(productVariants.id, item.variantId))
-      .limit(1);
-
-    if (variantRows[0]) {
-      availability.push({
-        variantId: item.variantId,
-        available: variantRows[0].stockQuantity,
-        required: item.quantity,
-        inStock: variantRows[0].stockQuantity >= item.quantity,
-      });
-    }
-  }
-
-  return availability;
+  return rows.map(r => ({
+    variantId: r.variant_id,
+    available: r.stock_quantity,
+    required: r.quantity,
+    inStock: r.stock_quantity >= r.quantity,
+  }));
 }
 
 

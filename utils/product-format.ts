@@ -1,5 +1,26 @@
 /** Shared product types + pure helpers — safe to import in client components. */
 
+/** Clothing size ordering (XS → S → M → L → XL → XXL → ...). */
+const SIZE_ORDER: Record<string, number> = {
+  XS: 0,
+  S: 1,
+  M: 2,
+  L: 3,
+  XL: 4,
+  XXL: 5,
+};
+
+/** Sort sizes in clothing order: XS → S → M → L → XL → XXL → ...
+ * Unknown sizes sort after known ones, alphabetically. */
+export function sortSizes(sizes: string[]): string[] {
+  return [...sizes].sort((a, b) => {
+    const ai = SIZE_ORDER[a] ?? 999;
+    const bi = SIZE_ORDER[b] ?? 999;
+    if (ai !== bi) return ai - bi;
+    return a.localeCompare(b);
+  });
+}
+
 export type ProductImage = {
   id: string;
   url: string;

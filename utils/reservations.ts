@@ -19,6 +19,7 @@ import { rawQuery, sql } from './db';
  */
 
 export const RESERVATION_TTL_MINUTES = 10;
+const _FAILED_PAYMENT_TTL_MINUTES = 2;
 
 export type ReservationItem = {
   variantId: string;
@@ -75,10 +76,14 @@ export async function sweepReservations(force = false): Promise<void> {
     FROM expired e
     WHERE v.id = e.variant_id
   `);
+  // Clean up reservations for cancelled/refunded orders (stock already sold,
+  // but the row was never deleted). This prevents the row from being picked
+  // up by future sweeps that only look at PENDING orders.
   await rawQuery(sql`
     DELETE FROM stock_reservations r
     USING orders o
-    WHERE r.order_id = o.id AND o.status <> 'PENDING'
+    WHERE r.order_id = o.id
+      AND o.status NOT IN ('PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED')
   `);
 }
 
@@ -118,8 +123,13 @@ export async function reserveCartItems(
 
   // Claim the items. One conditional UPDATE per variant is atomic in Postgres:
   // two simultaneous checkouts for the last unit cannot both succeed.
+  // Track what we've already decremented so a partial failure rolls back cleanly
+  // (reservation rows are inserted *after* the loop, so
+  // `releaseOrderReservations` can't help on mid-loop failure).
+  const claimed: { variantId: string; quantity: number }[] = [];
+
   for (const item of items) {
-    const claimed = await rawQuery<{ id: string }>(sql`
+    const claimedRows = await rawQuery<{ id: string }>(sql`
       UPDATE product_variants
       SET stock_quantity = stock_quantity - ${item.quantity},
           updated_at = now()
@@ -128,9 +138,16 @@ export async function reserveCartItems(
         AND stock_quantity >= ${item.quantity}
       RETURNING id
     `);
-    if (claimed.length === 0) {
-      // Someone got it first — undo what this order already claimed.
-      await releaseOrderReservations(orderId);
+    if (claimedRows.length === 0) {
+      // Roll back every variant already claimed in this loop.
+      for (const c of claimed) {
+        await rawQuery(sql`
+          UPDATE product_variants
+          SET stock_quantity = stock_quantity + ${c.quantity},
+              updated_at = now()
+          WHERE id = ${c.variantId}
+        `);
+      }
       const rows = await rawQuery<{ stock: number }>(sql`
         SELECT stock_quantity AS stock
         FROM product_variants WHERE id = ${item.variantId}
@@ -144,6 +161,7 @@ export async function reserveCartItems(
         available
       );
     }
+    claimed.push({ variantId: item.variantId, quantity: item.quantity });
   }
 
   await rawQuery(sql`
@@ -200,5 +218,26 @@ export async function finalizeReservations(orderId: string): Promise<void> {
   `);
   await rawQuery(sql`
     DELETE FROM stock_reservations WHERE order_id = ${orderId}
+  `);
+}
+
+/** One-shot teardown for a PENDING order — used by both the API route and
+ * the server action so the cleanup logic lives in one place. */
+export async function clearPendingOrder(orderId: string): Promise<void> {
+  // 1. Release the reservation → stock returns immediately
+  await releaseOrderReservations(orderId);
+
+  // 2. Delete the order + its line items
+  await rawQuery(sql`DELETE FROM orders WHERE id = ${orderId}`);
+  await rawQuery(sql`DELETE FROM order_items WHERE order_id = ${orderId}`);
+
+  // 3. Delete cart items linked to this reservation so the user gets a fresh cart
+  await rawQuery(sql`
+    WITH old_cart AS (
+      SELECT DISTINCT r.cart_id
+      FROM stock_reservations r
+      WHERE r.order_id = ${orderId}
+    )
+    DELETE FROM cart_items WHERE cart_id IN (SELECT cart_id FROM old_cart)
   `);
 }

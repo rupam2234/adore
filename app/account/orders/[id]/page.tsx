@@ -1,10 +1,12 @@
 import { requireAccountPage } from '@/utils/account-session';
-import { ensureCustomerForUserId, getOrderDetail } from '@/utils/account';
+import { ensureCustomerForUserId, getOrderDetail, checkOrderAvailability } from '@/utils/account';
 import { formatPrice } from '@/utils/product-format';
 import { formatDistanceToNow } from 'date-fns';
 import { enIN } from 'date-fns/locale';
 
 import CopyableOrderNumber from '@/components/account/copyable-order-number';
+import Link from 'next/link';
+import { retryCheckout } from './actions';
 
 export const metadata = {
   title: 'Order Details',
@@ -35,17 +37,20 @@ export default async function OrderDetailPage({
     return (
       <section className="rounded-2xl border border-dashed border-[#2B2620]/20 bg-white px-6 py-16 text-center">
         <h2 className="font-serif text-xl">Order not found</h2>
-        <a
+        <Link
           href="/account/orders"
           className="mt-6 inline-block rounded-full bg-[#2B2620] px-6 py-2.5 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
         >
           Back to Orders
-        </a>
+        </Link>
       </section>
     );
   }
 
   const isPending = order.status === 'PENDING';
+  const isStockAvailable =
+    isPending &&
+    (await checkOrderAvailability(id)).every(a => a.inStock);
 
   return (
     <section className="space-y-6">
@@ -61,10 +66,31 @@ export default async function OrderDetailPage({
       </div>
 
       {isPending && (
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-sm text-amber-800">
-          Payment for this order was not completed, so it hasn't been
-          confirmed. Please start a new checkout — your bag is still saved.
-        </p>
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-4 text-sm">
+          {isStockAvailable ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-amber-800">
+                Payment for this order wasn't completed, but your items are still
+                available. Want to try again?
+              </p>
+              <form action={retryCheckout} className="flex justify-end">
+                <input type="hidden" name="orderId" value={order.id} />
+                <button
+                  type="submit"
+                  className="inline-flex items-center justify-center rounded-full bg-[#2B2620] px-6 py-2.5 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
+                >
+                  Retry Checkout
+                </button>
+              </form>
+            </div>
+          ) : (
+            <p className="text-amber-800">
+              Payment for this order wasn't completed. Unfortunately, not all items
+              are available anymore — stock ran out while your payment was pending.
+              Please browse the store for alternatives.
+            </p>
+          )}
+        </div>
       )}
 
       <article className="overflow-hidden rounded-2xl border border-[#2B2620]/10 bg-white">
@@ -155,12 +181,12 @@ export default async function OrderDetailPage({
         </article>
       )}
 
-      <a
+      <Link
         href="/account/orders"
         className="inline-block rounded-full bg-[#2B2620] px-6 py-2.5 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
       >
         Back to Orders
-      </a>
+      </Link>
     </section>
   );
 }

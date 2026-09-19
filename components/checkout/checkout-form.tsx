@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useCart } from '@/components/cart/cart-provider';
 import { formatPrice } from '@/utils/product-format';
 import {
@@ -140,6 +140,9 @@ export default function CheckoutForm({
   // The PIN was verified in the bag — lock it here (no re-entry) until the
   // customer taps "Change".
   const [pinLocked, setPinLocked] = useState(false);
+  // Guard against releasing the same reservation twice (e.g. payment.failed
+  // followed by modal ondismiss firing in sequence).
+  const releasedRef = useRef<Set<string>>(new Set());
 
   const usingSaved = Boolean(member) && addressChoice !== 'new';
   const saved = addresses.find(a => a.id === addressChoice) ?? null;
@@ -220,6 +223,23 @@ export default function CheckoutForm({
     setPinLocked(true);
     void checkPin(saved);
   }, []);
+
+  /**
+   * Release a stock reservation via the server (Razorpay checkout dismissed or
+   * payment failed). The server-only `releaseOrderReservations` cannot be called
+   * directly from a 'use client' component — this routes through the checkout API.
+   */
+  const releaseReservation = async (orderId: string) => {
+    try {
+      await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'releaseReservation', orderId }),
+      });
+    } catch {
+      // Best-effort: reservation has a 10-min TTL; sweep will clean up eventually.
+    }
+  };
 
   /** Razorpay Checkout success → verify server-side, then show the receipt. */
   const confirmPayment = async (response: RazorpayHandlerResponse) => {
@@ -330,6 +350,10 @@ export default function CheckoutForm({
             setNotice(
               "Payment cancelled — your bag is saved. Try again whenever you're ready."
             );
+            // Release the reservation so stock returns immediately
+            if (session.razorpayOrderId) {
+              releaseReservation(session.razorpayOrderId);
+            }
           },
         },
         handler: (response: RazorpayHandlerResponse) => {
@@ -344,6 +368,10 @@ export default function CheckoutForm({
           description ?? "That payment didn't go through. Please try again."
         );
         setBusy(false);
+        // Release the reservation so stock returns immediately
+        if (session.razorpayOrderId) {
+          releaseReservation(session.razorpayOrderId);
+        }
       });
 
       checkout.open();

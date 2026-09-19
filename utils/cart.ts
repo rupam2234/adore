@@ -3,7 +3,7 @@ import { rawQuery, sql } from './db';
 import { getPublicUrl } from './cloudinary';
 import { getAttachedPromo, type AppliedPromo } from './promo';
 import { computeDiscount } from './promo-format';
-import { sweepReservations } from './reservations';
+import { sweepReservations, releaseOrderReservations } from './reservations';
 import { getSessionUserId } from './request-user';
 
 export const CART_COOKIE = 'adore_cart';
@@ -159,6 +159,12 @@ async function mergeGuestItems(
   userCartId: string,
   guestCartId: string
 ): Promise<void> {
+  // Before the guest cart is deleted, clean up any PENDING order created from it.
+  // A guest may have started checkout before logging in; if so, the pending order's
+  // reservations reference this guest cart and must be released here or it survives
+  // as an orphan with no cart attached.
+  await cleanUpPendingOrder(guestCartId);
+
   await rawQuery(sql`
     WITH merged AS (
       INSERT INTO cart_items (id, cart_id, variant_id, quantity)
@@ -375,10 +381,18 @@ export async function removeCartItem(
   await rawQuery(
     sql`DELETE FROM cart_items WHERE id = ${itemId}::uuid AND cart_id = ${cartId}::uuid`
   );
+
+  // Clean up any PENDING order that was created from this cart.
+  // A pending order is created from the cart at checkout start; if the cart
+  // changes afterward (item removed), the pending order no longer matches and
+  // must be removed immediately — not just when the cart becomes empty.
+  await cleanUpPendingOrder(cartId);
 }
 
 export async function clearCart(cartId: string): Promise<void> {
   await rawQuery(sql`DELETE FROM cart_items WHERE cart_id = ${cartId}`);
+  // Clear any PENDING order that was created from this cart.
+  await cleanUpPendingOrder(cartId);
 }
 
 export class CartError extends Error {
@@ -386,5 +400,44 @@ export class CartError extends Error {
   constructor(message: string, status = 400) {
     super(message);
     this.status = status;
+  }
+}
+
+/**
+ * Clean up any PENDING orders that were created from this cart.
+ * Called after removeCartItem or clearCart — whenever the cart changes, any
+ * PENDING order created from it is no longer valid (its items no longer match
+ * the cart), so it must be removed immediately to prevent orphaned/stale orders.
+ * Stock is released back to the pool via releaseOrderReservations.
+ */
+async function cleanUpPendingOrder(cartId: string): Promise<void> {
+  try {
+    // Find PENDING orders that have reservations linked to this cart.
+    // The cart_id is stored in stock_reservations, not orders directly.
+    const orders = await rawQuery<{ order_id: string }>(sql`
+      SELECT DISTINCT o.id AS order_id
+      FROM stock_reservations r
+      JOIN orders o ON o.id = r.order_id
+      WHERE r.cart_id = ${cartId}
+        AND o.status = 'PENDING'
+    `);
+
+    if (orders.length === 0) {
+      return; // No PENDING order for this cart.
+    }
+
+    // Delete the orders.
+    await rawQuery(sql`
+      DELETE FROM orders
+      WHERE id = ANY(${orders.map(o => o.order_id)})
+    `);
+
+    // Release their reservations.
+    for (const o of orders) {
+      await releaseOrderReservations(o.order_id);
+    }
+  } catch (err) {
+    console.error('[cart] failed to clean up PENDING order:', err);
+    // Don't throw — a cleanup failure shouldn't break cart operations.
   }
 }
