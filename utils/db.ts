@@ -32,8 +32,23 @@ export const pool = client;
 export async function rawQuery<T = Record<string, unknown>>(
   query: SQL
 ): Promise<T[]> {
-  const result = await db.execute(query);
-  return (result.rows ?? []) as T[];
+  try {
+    const result = await db.execute(query);
+    return (result.rows ?? []) as T[];
+  } catch (error) {
+    // Drizzle wraps driver failures in DrizzleQueryError, whose own message is
+    // only the SQL text — the real cause (Postgres message + SQLSTATE) lives in
+    // `.cause`. Re-throw with that detail so failures aren't opaque at the call
+    // site / in the Next.js error overlay.
+    const cause = error instanceof Error ? error.cause : undefined;
+    if (cause instanceof Error) {
+      const code = (cause as Error & { code?: string }).code;
+      throw new Error(`${cause.message}${code ? ` [${code}]` : ''}`, {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }
 
 // Re-export so callers can build SQL fragments without importing drizzle-orm.

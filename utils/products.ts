@@ -360,16 +360,24 @@ export async function getFilterFacets(categorySlug?: string): Promise<{
             )}))`
     : sql`TRUE`;
 
+  // Postgres rejects `SELECT DISTINCT` when an ORDER BY expression is missing
+  // from the select list (42P10), so the size-rank key is projected as
+  // `size_rank` and referenced by its output name in ORDER BY.
   const rows = await rawQuery<{
     color: string;
     color_hex: string | null;
     size: string;
+    size_rank: number;
   }>(sql`
-    SELECT DISTINCT v.color, v.color_hex, v.size
+    SELECT DISTINCT
+      v.color,
+      v.color_hex,
+      v.size,
+      CASE v.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END AS size_rank
     FROM product_variants v
     JOIN products p ON p.id = v.product_id
     WHERE v.is_active AND p.status = 'ACTIVE' AND ${categoryFilter}
-    ORDER BY v.color, CASE v.size WHEN 'XS' THEN 1 WHEN 'S' THEN 2 WHEN 'M' THEN 3 WHEN 'L' THEN 4 WHEN 'XL' THEN 5 WHEN 'XXL' THEN 6 WHEN 'XXXL' THEN 7 ELSE 99 END
+    ORDER BY v.color, size_rank
   `);
 
   const colorMap = new Map<string, string | null>();
