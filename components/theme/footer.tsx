@@ -1,43 +1,43 @@
-import Link from "next/link";
-import { CATEGORY_TREE } from "@/utils/categories";
+import Link from 'next/link';
+import { CATEGORY_TREE } from '@/utils/categories';
 
 /** Footer link columns — content only, rendering is shared below. */
 const FOOTER_COLUMNS = [
   {
-    title: "Shop",
-    links: CATEGORY_TREE.map((cat) => ({
+    title: 'Shop',
+    links: CATEGORY_TREE.map(cat => ({
       label: cat.name,
       href: `/shop/${cat.slug}`,
     })),
   },
   {
-    title: "Help",
+    title: 'Help',
     links: [
-      { label: "Shipping", href: "/shipping" },
-      { label: "Returns & exchanges", href: "/returns" },
-      { label: "Size guide", href: "/size-guide" },
-      { label: "Contact us", href: "/contact" },
+      { label: 'Shipping', href: '/shipping' },
+      { label: 'Returns & exchanges', href: '/returns' },
+      { label: 'Size guide', href: '/size-guide' },
+      { label: 'Contact us', href: '/contact' },
     ],
   },
   {
-    title: "Company",
+    title: 'Company',
     links: [
-      { label: "Our story", href: "/#how-we-make-it" },
-      { label: "Sustainability", href: "/sustainability" },
-      { label: "Journal", href: "/journal" },
+      { label: 'Our story', href: '/#how-we-make-it' },
+      { label: 'Sustainability', href: '/sustainability' },
+      { label: 'Journal', href: '/journal' },
     ],
   },
 ] as const;
 
 const SOCIAL_LINKS = [
-  { label: "Instagram", href: "https://instagram.com" },
-  { label: "Pinterest", href: "https://pinterest.com" },
-  { label: "Facebook", href: "https://facebook.com" },
+  { label: 'Instagram', href: 'https://instagram.com' },
+  { label: 'Pinterest', href: 'https://pinterest.com' },
+  { label: 'Facebook', href: 'https://facebook.com' },
 ] as const;
 
 const LEGAL_LINKS = [
-  { label: "Privacy policy", href: "/privacy" },
-  { label: "Terms of service", href: "/terms" },
+  { label: 'Privacy policy', href: '/privacy' },
+  { label: 'Terms of service', href: '/terms' },
 ] as const;
 
 /**
@@ -119,4 +119,3 @@ export default function Footer() {
     </footer>
   );
 }
-

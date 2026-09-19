@@ -1,7 +1,7 @@
-import { v2 as cloudinary } from "cloudinary";
+import { v2 as cloudinary } from 'cloudinary';
 
 cloudinary.config({
-    secure: true,
+  secure: true,
 });
 
 /**
@@ -24,9 +24,9 @@ cloudinary.config({
  *   });
  */
 const getPublicUrl = (publicId: string) => {
-    return cloudinary.url(publicId, {
-        secure: true,
-    });
+  return cloudinary.url(publicId, {
+    secure: true,
+  });
 };
 
 export { getPublicUrl, cloudinary };

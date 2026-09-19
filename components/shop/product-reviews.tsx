@@ -1,14 +1,11 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  type ProductReview,
-  type ReviewSummary,
-} from "@/utils/review-format";
-import { useAuthUser } from "@/components/auth/use-auth-user";
-import { Stars } from "./stars";
-import { ReviewForm } from "./review-form";
-import { ReviewListItem } from "./review-list";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ProductReview, type ReviewSummary } from '@/utils/review-format';
+import { useAuthUser } from '@/components/auth/use-auth-user';
+import { Stars } from './stars';
+import { ReviewForm } from './review-form';
+import { ReviewListItem } from './review-list';
 
 type Props = {
   slug: string;
@@ -32,7 +29,7 @@ export default function ProductReviews({
   // (no DB) and fetches the profile on `/api/auth/me` on demand.
   const { user } = useAuthUser();
   const authorName = user
-    ? user.name?.trim() || user.email.split("@")[0]
+    ? user.name?.trim() || user.email.split('@')[0]
     : null;
 
   const [summary, setSummary] = useState(initialSummary);
@@ -40,9 +37,9 @@ export default function ProductReviews({
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(
-    Math.max(1, Math.ceil(initialTotal / PAGE_SIZE)),
+    Math.max(1, Math.ceil(initialTotal / PAGE_SIZE))
   );
-  const [sort, setSort] = useState<"recent" | "helpful">("recent");
+  const [sort, setSort] = useState<'recent' | 'helpful'>('recent');
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -52,7 +49,7 @@ export default function ProductReviews({
   const fetchSummary = useCallback(async () => {
     try {
       const res = await fetch(
-        `/api/products/${slug}/reviews?page=1&limit=1&sort=recent`,
+        `/api/products/${slug}/reviews?page=1&limit=1&sort=recent`
       );
       if (!res.ok) return;
       const data = await res.json();
@@ -65,21 +62,21 @@ export default function ProductReviews({
   }, [slug]);
 
   const fetchPage = useCallback(
-    async (p: number, s: "recent" | "helpful", append: boolean) => {
+    async (p: number, s: 'recent' | 'helpful', append: boolean) => {
       setLoading(true);
       setLoadError(false);
       try {
         const res = await fetch(
-          `/api/products/${slug}/reviews?page=${p}&limit=${PAGE_SIZE}&sort=${s}`,
+          `/api/products/${slug}/reviews?page=${p}&limit=${PAGE_SIZE}&sort=${s}`
         );
-        if (!res.ok) throw new Error("load failed");
+        if (!res.ok) throw new Error('load failed');
         const data = await res.json();
         setSummary(data.summary);
         setTotal(data.total);
         setTotalPages(data.totalPages);
         setPage(data.page);
-        setReviews((prev) =>
-          append ? [...prev, ...data.reviews] : data.reviews,
+        setReviews(prev =>
+          append ? [...prev, ...data.reviews] : data.reviews
         );
       } catch {
         setLoadError(true);
@@ -87,7 +84,7 @@ export default function ProductReviews({
         setLoading(false);
       }
     },
-    [slug],
+    [slug]
   );
 
   const firstRender = useRef(true);
@@ -102,31 +99,31 @@ export default function ProductReviews({
   const openForm = () => {
     setFormOpen(true);
     requestAnimationFrame(() =>
-      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     );
   };
 
   const handlePosted = useCallback(
     (review: ProductReview) => {
-      setSort("recent");
-      setReviews((prev) => [review, ...prev]);
-      setTotal((t) => t + 1);
+      setSort('recent');
+      setReviews(prev => [review, ...prev]);
+      setTotal(t => t + 1);
       fetchSummary();
     },
-    [fetchSummary],
+    [fetchSummary]
   );
 
   const markHelpful = async (id: string) => {
     if (helpfulClicked.has(id)) return;
-    setHelpfulClicked((prev) => new Set(prev).add(id));
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, helpfulCount: r.helpfulCount + 1 } : r,
-      ),
+    setHelpfulClicked(prev => new Set(prev).add(id));
+    setReviews(prev =>
+      prev.map(r =>
+        r.id === id ? { ...r, helpfulCount: r.helpfulCount + 1 } : r
+      )
     );
     try {
       await fetch(`/api/products/${slug}/reviews/${id}/helpful`, {
-        method: "POST",
+        method: 'POST',
       });
     } catch {
       // optimistic — keep the +1 anyway
@@ -140,15 +137,18 @@ export default function ProductReviews({
         <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-4">
           {summary.count > 0 ? (
             <>
-              <p className="font-serif text-5xl">{summary.average.toFixed(1)}</p>
+              <p className="font-serif text-5xl">
+                {summary.average.toFixed(1)}
+              </p>
               <div>
                 <Stars value={summary.average} />
                 <p className="mt-1 text-sm text-[#2B2620]/60">
-                  Based on {summary.count} review{summary.count === 1 ? "" : "s"}
+                  Based on {summary.count} review
+                  {summary.count === 1 ? '' : 's'}
                 </p>
               </div>
               <div className="flex min-w-52 flex-1 flex-col gap-1 sm:max-w-xs">
-                {([5, 4, 3, 2, 1] as const).map((star) => {
+                {([5, 4, 3, 2, 1] as const).map(star => {
                   const n = summary.distribution[star];
                   const pct = summary.count > 0 ? (n / summary.count) * 100 : 0;
                   return (
@@ -203,7 +203,7 @@ export default function ProductReviews({
                 </p>
                 <a
                   href={`/login?next=${encodeURIComponent(
-                    `/products/${slug}`,
+                    `/products/${slug}`
                   )}`}
                   className="mt-4 inline-block cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
                 >
@@ -217,14 +217,14 @@ export default function ProductReviews({
           <div className="mt-8">
             <div className="flex items-center justify-between">
               <p className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-                {total} review{total === 1 ? "" : "s"}
+                {total} review{total === 1 ? '' : 's'}
               </p>
               <label className="flex items-center gap-2 text-xs text-[#2B2620]/60">
                 Sort
                 <select
                   value={sort}
-                  onChange={(e) =>
-                    setSort(e.target.value as "recent" | "helpful")
+                  onChange={e =>
+                    setSort(e.target.value as 'recent' | 'helpful')
                   }
                   className="cursor-pointer border border-[#2B2620]/20 bg-transparent px-2 py-1.5 text-xs outline-none"
                 >
@@ -234,7 +234,7 @@ export default function ProductReviews({
               </label>
             </div>
             <ul className="mt-4 flex flex-col divide-y divide-[#2B2620]/10">
-              {reviews.map((r) => (
+              {reviews.map(r => (
                 <ReviewListItem
                   key={r.id}
                   review={r}
@@ -245,7 +245,7 @@ export default function ProductReviews({
             </ul>
             {loadError && (
               <p role="alert" className="mt-2 text-sm text-[#A45A4B]">
-                Couldn&apos;t load reviews.{" "}
+                Couldn&apos;t load reviews.{' '}
                 <button
                   type="button"
                   onClick={() => fetchPage(page, sort, false)}
@@ -262,7 +262,7 @@ export default function ProductReviews({
                 disabled={loading}
                 className="mt-4 w-full cursor-pointer rounded-full border border-[#2B2620]/20 px-6 py-3 text-sm transition-colors hover:border-[#2B2620] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? "Loading…" : "Load more reviews"}
+                {loading ? 'Loading…' : 'Load more reviews'}
               </button>
             )}
           </div>

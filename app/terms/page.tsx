@@ -1,9 +1,9 @@
-import PageShell from "@/components/theme/page-shell";
+import PageShell from '@/components/theme/page-shell';
 
 export const metadata = {
-  title: "Terms & Conditions",
+  title: 'Terms & Conditions',
   description:
-    "Terms of service for shopping with Adore — orders, returns, and fraud prevention.",
+    'Terms of service for shopping with Adore — orders, returns, and fraud prevention.',
 };
 
 function Section({
@@ -46,10 +46,10 @@ export default function TermsPage() {
             change without notice, except for orders already confirmed.
           </li>
           <li>
-            An order is a request to buy. It becomes binding once we confirm
-            it. We may refuse or cancel an order if the product is out of
-            stock, if pricing information is wrong, or if we reasonably suspect
-            the order is fraudulent (see section 6).
+            An order is a request to buy. It becomes binding once we confirm it.
+            We may refuse or cancel an order if the product is out of stock, if
+            pricing information is wrong, or if we reasonably suspect the order
+            is fraudulent (see section 6).
           </li>
           <li>
             If we cancel a paid order, the payment authorisation is released or
@@ -65,14 +65,14 @@ export default function TermsPage() {
         </p>
         <ul className="list-disc space-y-2 pl-6">
           <li>
-            <strong>Window.</strong> Items may be returned or exchanged within
-            7 days of delivery, unless marked as a final-sale item on the
-            product page.
+            <strong>Window.</strong> Items may be returned or exchanged within 7
+            days of delivery, unless marked as a final-sale item on the product
+            page.
           </li>
           <li>
             <strong>Condition.</strong> Items must be unworn, unwashed,
-            unaltered, and free of perfume, makeup, or deodorant marks, with
-            all original tags and packaging intact. For hygiene reasons, items
+            unaltered, and free of perfume, makeup, or deodorant marks, with all
+            original tags and packaging intact. For hygiene reasons, items
             without hygiene strips or seals intact cannot be returned.
           </li>
           <li>
@@ -177,9 +177,9 @@ export default function TermsPage() {
       <Section title="7. Shipping">
         <p>
           Delivery estimates are provided in good faith but are not guaranteed.
-          Risk of loss passes to you on delivery to the address you provided.
-          If tracking shows delivery but you have not received your parcel,
-          contact us within 48 hours so we can investigate with the carrier.
+          Risk of loss passes to you on delivery to the address you provided. If
+          tracking shows delivery but you have not received your parcel, contact
+          us within 48 hours so we can investigate with the carrier.
         </p>
       </Section>
 
@@ -196,15 +196,14 @@ export default function TermsPage() {
           To the fullest extent permitted by law, Adore's liability for any
           claim relating to an order is limited to the amount you paid for the
           item(s) concerned. We are not liable for indirect or consequential
-          losses. Nothing in these terms limits your statutory consumer
-          rights.
+          losses. Nothing in these terms limits your statutory consumer rights.
         </p>
       </Section>
 
       <Section title="10. Changes & contact">
         <p>
           We may update these terms from time to time; the version on this page
-          at the time of your order applies. Questions? Reach us via the{" "}
+          at the time of your order applies. Questions? Reach us via the{' '}
           <a
             href="/contact"
             className="underline underline-offset-4 hover:text-[#5C6B4B]"

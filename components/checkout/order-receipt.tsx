@@ -1,22 +1,23 @@
-import Link from "next/link";
-import type { OrderConfirmation } from "@/utils/checkout";
-import { formatPrice } from "@/utils/product-format";
+import Link from 'next/link';
+import type { OrderConfirmation } from '@/utils/checkout';
+import { formatPrice } from '@/utils/product-format';
+import CopyableOrderNumber from '@/components/account/copyable-order-number';
 
 const STATUS_COPY: Record<string, string> = {
-  CONFIRMED: "Payment received · preparing your parcel",
-  PROCESSING: "Payment received · preparing your parcel",
-  SHIPPED: "On its way",
-  DELIVERED: "Delivered",
-  PENDING: "Awaiting payment confirmation",
+  CONFIRMED: 'Payment received · preparing your parcel',
+  PROCESSING: 'Payment received · preparing your parcel',
+  SHIPPED: 'On its way',
+  DELIVERED: 'Delivered',
+  PENDING: 'Awaiting payment confirmation',
 };
 
 function formatDate(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   });
 }
 
@@ -34,11 +35,13 @@ export default function OrderReceipt({
   if (!confirmation) {
     return (
       <section className="rounded-2xl border border-[#2B2620]/10 bg-white p-8 text-center">
-        <h1 className="font-serif text-2xl">Order {orderNumber}</h1>
+        <h1 className="font-roboto text-sm font-medium tracking-wide">
+          <CopyableOrderNumber orderNumber={orderNumber} />
+        </h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-[#2B2620]/60">
           We have your order, but couldn&apos;t load the receipt just now. Keep
-          this order number handy and write to us if anything looks off — we&apos;ll
-          sort it out.
+          this order number handy and write to us if anything looks off —
+          we&apos;ll sort it out.
         </p>
         <Link
           href="/shop"
@@ -92,15 +95,15 @@ export default function OrderReceipt({
             <dd className="mt-1 text-[#2B2620]/70">
               {confirmation.shiprocketOrderId
                 ? `Booked with our courier partner (#${confirmation.shiprocketOrderId})`
-                : "Being booked with our courier partner"}
+                : 'Being booked with our courier partner'}
             </dd>
           </div>
         </dl>
 
         {confirmation.shiprocketError && (
           <p className="mt-4 rounded-lg bg-[#E7DFCB]/60 px-3 py-2 text-xs text-[#2B2620]/70">
-            Your order is safe and paid. Courier booking is retrying on our side —
-            no action needed.
+            Your order is safe and paid. Courier booking is retrying on our side
+            — no action needed.
           </p>
         )}
       </section>
@@ -134,7 +137,11 @@ export default function OrderReceipt({
             <div className="flex justify-between text-[#5C6B4B]">
               <dt>Discount</dt>
               <dd>
-                −{formatPrice(confirmation.discountAmount, confirmation.currency)}
+                −
+                {formatPrice(
+                  confirmation.discountAmount,
+                  confirmation.currency
+                )}
               </dd>
             </div>
           )}
@@ -142,8 +149,11 @@ export default function OrderReceipt({
             <dt className="text-[#2B2620]/60">Shipping</dt>
             <dd>
               {Number(confirmation.shippingAmount) === 0
-                ? "Free"
-                : formatPrice(confirmation.shippingAmount, confirmation.currency)}
+                ? 'Free'
+                : formatPrice(
+                    confirmation.shippingAmount,
+                    confirmation.currency
+                  )}
             </dd>
           </div>
           <div className="flex justify-between border-t border-[#2B2620]/10 pt-3 font-medium">
@@ -161,7 +171,7 @@ export default function OrderReceipt({
           <p className="mt-3 text-sm font-medium">{address.fullName}</p>
           <p className="mt-1 text-sm text-[#2B2620]/70">
             {address.addressLine1}
-            {address.addressLine2 ? `, ${address.addressLine2}` : ""},{" "}
+            {address.addressLine2 ? `, ${address.addressLine2}` : ''},{' '}
             {address.city}, {address.state} {address.postalCode}
           </p>
           {address.phone && (

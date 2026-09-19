@@ -1,11 +1,11 @@
 /** Client-safe review types + pure helpers — no DB imports, safe for "use client". */
 
-export type FitFeedback = "runs_small" | "true_to_size" | "runs_large";
+export type FitFeedback = 'runs_small' | 'true_to_size' | 'runs_large';
 
 export const FIT_LABELS: Record<FitFeedback, string> = {
-  runs_small: "Runs small",
-  true_to_size: "True to size",
-  runs_large: "Runs large",
+  runs_small: 'Runs small',
+  true_to_size: 'True to size',
+  runs_large: 'Runs large',
 };
 
 export type ProductReview = {
@@ -35,10 +35,10 @@ export const EMPTY_SUMMARY: ReviewSummary = {
 /** e.g. "12 Sep 2026" */
 export function formatReviewDate(iso: string): string {
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
   }).format(d);
 }

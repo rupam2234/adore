@@ -1,20 +1,20 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter } from 'next/navigation';
+import { useState, type FormEvent } from 'react';
 
 /**
  * Header search: pill-shaped input that submits to /shop?q=…
  * Reused in the desktop bar and at the top of the mobile menu.
  */
-export default function SearchBar({ className = "" }: { className?: string }) {
+export default function SearchBar({ className = '' }: { className?: string }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const q = query.trim();
-    router.push(q ? `/shop?q=${encodeURIComponent(q)}` : "/shop");
+    router.push(q ? `/shop?q=${encodeURIComponent(q)}` : '/shop');
   };
 
   return (
@@ -40,7 +40,7 @@ export default function SearchBar({ className = "" }: { className?: string }) {
         <input
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={e => setQuery(e.target.value)}
           placeholder="Search dresses, kurtis…"
           aria-label="Search products"
           className="w-full bg-transparent text-sm text-[#2B2620] placeholder:text-[#2B2620]/40 focus:outline-none"

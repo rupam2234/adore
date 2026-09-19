@@ -1,24 +1,24 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import {
   CART_COOKIE,
-  CART_MAX_AGE,
+  cartCookieOptions,
   addCartItem,
   resolveCartId,
   getCartDetail,
   CartError,
-} from "@/utils/cart";
-import { rawQuery, sql } from "@/utils/db";
-import { getSessionUserId } from "@/utils/request-user";
-import { revalidateAttachedPromo } from "@/utils/promo";
+} from '@/utils/cart';
+import { rawQuery, sql } from '@/utils/db';
+import { getSessionUserId } from '@/utils/request-user';
+import { revalidateAttachedPromo } from '@/utils/promo';
 
 /**
  * Resolve the active cart (account cart first, cookie fallback) or create a
- * fresh anonymous cart. Returns the cartId plus the token to persist in the
- * cookie when a new cart was created.
+ * fresh cart. Returns the cartId plus the token to persist in the cookie when
+ * a new cart was created.
  */
 async function getOrCreateCartId(
-  userId: string | null,
+  userId: string | null
 ): Promise<{ cartId: string; token?: string }> {
   const cookieStore = await cookies();
   const token = cookieStore.get(CART_COOKIE)?.value;
@@ -27,28 +27,28 @@ async function getOrCreateCartId(
   if (existing) return { cartId: existing };
 
   const newToken = crypto.randomUUID();
+  // Logged-in shoppers get a cart bound to their account immediately, so the
+  // bag follows them across devices from the very first item.
   const rows = await rawQuery<{ id: string }>(
-    sql`INSERT INTO carts (id, token) VALUES (gen_random_uuid(), ${newToken})
+    sql`INSERT INTO carts (id, token, user_id)
+        VALUES (gen_random_uuid(), ${newToken}, ${userId})
         ON CONFLICT (token) DO UPDATE SET updated_at = now()
-        RETURNING id`,
+        RETURNING id`
   );
-  cookieStore.set(CART_COOKIE, newToken, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: CART_MAX_AGE,
-    path: "/",
-  });
+  cookieStore.set(CART_COOKIE, newToken, cartCookieOptions());
   return { cartId: rows[0]!.id, token: newToken };
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const variantId = typeof body?.variantId === "string" ? body.variantId : "";
+    const variantId = typeof body?.variantId === 'string' ? body.variantId : '';
     const quantity = Number(body?.quantity) || 1;
     if (!variantId) {
-      return NextResponse.json({ error: "variantId is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: 'variantId is required' },
+        { status: 400 }
+      );
     }
     const userId = await getSessionUserId();
     const { cartId } = await getOrCreateCartId(userId);
@@ -57,8 +57,14 @@ export async function POST(request: Request) {
     return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {
     if (error instanceof CartError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
     }
-    return NextResponse.json({ error: "Could not add to cart" }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Could not add to cart' },
+      { status: 500 }
+    );
   }
 }

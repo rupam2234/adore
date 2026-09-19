@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { useCart } from "@/components/cart/cart-provider";
-import { formatPrice } from "@/utils/product-format";
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { useCart } from '@/components/cart/cart-provider';
+import { formatPrice } from '@/utils/product-format';
 import {
   computeCheckoutTotals,
   FREE_SHIPPING_THRESHOLD,
   SHIPPING_FLAT,
-} from "@/utils/checkout-format";
-import { PIN_STORAGE_KEY } from "@/components/shop/pin-checker";
+} from '@/utils/checkout-format';
+import { PIN_STORAGE_KEY } from '@/components/shop/pin-checker';
 
 /** Saved account address handed down from the server page. */
 export type CheckoutAddressOption = {
@@ -55,37 +55,37 @@ declare global {
 }
 
 const EMPTY_FORM = {
-  fullName: "",
-  phone: "",
-  addressLine1: "",
-  addressLine2: "",
-  city: "",
-  state: "",
-  postalCode: "",
+  fullName: '',
+  phone: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  postalCode: '',
 };
 
 type AddressForm = typeof EMPTY_FORM;
-type FieldErrors = Partial<Record<keyof AddressForm | "email", string>>;
+type FieldErrors = Partial<Record<keyof AddressForm | 'email', string>>;
 
 type PinState =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "ok"; eta: string | null; cod: boolean | null }
-  | { kind: "bad"; message: string };
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'ok'; eta: string | null; cod: boolean | null }
+  | { kind: 'bad'; message: string };
 
-const RAZORPAY_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
+const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
 
 /** Inject Checkout.js once, resolve when `window.Razorpay` is ready. */
 function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (typeof window === "undefined") return resolve(false);
+  return new Promise(resolve => {
+    if (typeof window === 'undefined') return resolve(false);
     if (window.Razorpay) return resolve(true);
     const existing = document.querySelector<HTMLScriptElement>(
-      `script[src="${RAZORPAY_SCRIPT}"]`,
+      `script[src="${RAZORPAY_SCRIPT}"]`
     );
-    const script = existing ?? document.createElement("script");
-    script.addEventListener("load", () => resolve(Boolean(window.Razorpay)));
-    script.addEventListener("error", () => resolve(false));
+    const script = existing ?? document.createElement('script');
+    script.addEventListener('load', () => resolve(Boolean(window.Razorpay)));
+    script.addEventListener('error', () => resolve(false));
     if (!existing) {
       script.src = RAZORPAY_SCRIPT;
       script.async = true;
@@ -100,22 +100,22 @@ function validateForm(form: AddressForm): FieldErrors {
   if (form.fullName.trim().length < 2)
     errors.fullName = "Enter the recipient's full name.";
   if (!/^[\d\s+-]{10,15}$/.test(form.phone.trim()))
-    errors.phone = "Enter a valid 10-digit phone number.";
+    errors.phone = 'Enter a valid 10-digit phone number.';
   if (!form.addressLine1.trim())
-    errors.addressLine1 = "Address line 1 is required.";
-  if (!form.city.trim()) errors.city = "City is required.";
-  if (!form.state.trim()) errors.state = "State is required.";
+    errors.addressLine1 = 'Address line 1 is required.';
+  if (!form.city.trim()) errors.city = 'City is required.';
+  if (!form.state.trim()) errors.state = 'State is required.';
   if (!/^\d{6}$/.test(form.postalCode.trim()))
-    errors.postalCode = "Enter a valid 6-digit PIN code.";
+    errors.postalCode = 'Enter a valid 6-digit PIN code.';
   return errors;
 }
 
 function etaLine(pin: PinState): string | null {
-  if (pin.kind !== "ok") return null;
+  if (pin.kind !== 'ok') return null;
   const parts: string[] = [`Delivery to this PIN is available`];
   if (pin.eta) parts.push(pin.eta);
-  parts.push(pin.cod ? "Cash on Delivery available" : "Prepaid only");
-  return parts.join(" · ");
+  parts.push(pin.cod ? 'Cash on Delivery available' : 'Prepaid only');
+  return parts.join(' · ');
 }
 export default function CheckoutForm({
   member,
@@ -126,37 +126,37 @@ export default function CheckoutForm({
 }) {
   const { cart, loading } = useCart();
   const [form, setForm] = useState<AddressForm>(EMPTY_FORM);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [pin, setPin] = useState<PinState>({ kind: "idle" });
+  const [pin, setPin] = useState<PinState>({ kind: 'idle' });
   // Members: which saved address to ship to ("new" = enter one now).
   const [addressChoice, setAddressChoice] = useState<string>(
-    addresses[0]?.id ?? "new",
+    addresses[0]?.id ?? 'new'
   );
   const [saveAddress, setSaveAddress] = useState(false);
   // The PIN was verified in the bag — lock it here (no re-entry) until the
   // customer taps "Change".
   const [pinLocked, setPinLocked] = useState(false);
 
-  const usingSaved = Boolean(member) && addressChoice !== "new";
-  const saved = addresses.find((a) => a.id === addressChoice) ?? null;
+  const usingSaved = Boolean(member) && addressChoice !== 'new';
+  const saved = addresses.find(a => a.id === addressChoice) ?? null;
 
-  const currency = cart.currency ?? "INR";
+  const currency = cart.currency ?? 'INR';
   const totals = useMemo(
     () =>
       computeCheckoutTotals(
         Number(cart.subtotal || 0),
-        Number(cart.discount || 0),
+        Number(cart.discount || 0)
       ),
-    [cart.subtotal, cart.discount],
+    [cart.subtotal, cart.discount]
   );
   const freeShippingGap = FREE_SHIPPING_THRESHOLD - Number(cart.subtotal || 0);
   const update = (key: keyof AddressForm, value: string) => {
-    setForm((f) => ({ ...f, [key]: value }));
-    if (fieldErrors[key]) setFieldErrors((e) => ({ ...e, [key]: undefined }));
+    setForm(f => ({ ...f, [key]: value }));
+    if (fieldErrors[key]) setFieldErrors(e => ({ ...e, [key]: undefined }));
   };
 
   /** Shiprocket serviceability look-up (same PIN cache the PinChecker uses). */
@@ -164,18 +164,18 @@ export default function CheckoutForm({
   const checkPin = async (rawPin: string): Promise<PinState> => {
     const value = rawPin.trim();
     if (!/^\d{6}$/.test(value)) {
-      setPin({ kind: "idle" });
-      return { kind: "idle" };
+      setPin({ kind: 'idle' });
+      return { kind: 'idle' };
     }
-    setPin({ kind: "checking" });
+    setPin({ kind: 'checking' });
     try {
       const res = await fetch(`/api/shipping/pin?pin=${value}`, {
-        cache: "no-store",
+        cache: 'no-store',
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const bad: PinState = {
-          kind: "bad",
+          kind: 'bad',
           message: data?.error ?? "Couldn't verify this PIN right now.",
         };
         setPin(bad);
@@ -183,7 +183,7 @@ export default function CheckoutForm({
       }
       if (!data.serviceable) {
         const bad: PinState = {
-          kind: "bad",
+          kind: 'bad',
           message: `We don't deliver to ${value} yet. We're expanding to new PIN codes soon.`,
         };
         setPin(bad);
@@ -197,12 +197,12 @@ export default function CheckoutForm({
         : data.etaDays
           ? `in ${data.etaDays} days`
           : null;
-      const ok: PinState = { kind: "ok", eta, cod: data.cod ?? null };
+      const ok: PinState = { kind: 'ok', eta, cod: data.cod ?? null };
       setPin(ok);
       return ok;
     } catch {
       const bad: PinState = {
-        kind: "bad",
+        kind: 'bad',
         message: "Couldn't verify this PIN right now.",
       };
       setPin(bad);
@@ -216,7 +216,7 @@ export default function CheckoutForm({
     const saved = localStorage.getItem(PIN_STORAGE_KEY);
     if (!saved || !/^\d{6}$/.test(saved)) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setForm((f) => (f.postalCode ? f : { ...f, postalCode: saved }));
+    setForm(f => (f.postalCode ? f : { ...f, postalCode: saved }));
     setPinLocked(true);
     void checkPin(saved);
   }, []);
@@ -224,26 +224,26 @@ export default function CheckoutForm({
   /** Razorpay Checkout success → verify server-side, then show the receipt. */
   const confirmPayment = async (response: RazorpayHandlerResponse) => {
     try {
-      const res = await fetch("/api/checkout/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/checkout/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(response),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(
           data?.error ??
-            "We couldn't confirm that payment. Please contact support.",
+            "We couldn't confirm that payment. Please contact support."
         );
         setBusy(false);
         return;
       }
       // The verify route set the order cookie; hard-nav so the server-rendered
       // receipt loads fresh (no stale client cache).
-      window.location.href = "/checkout/success";
+      window.location.href = '/checkout/success';
     } catch {
       setError(
-        "We couldn't confirm that payment. Please contact support before paying again.",
+        "We couldn't confirm that payment. Please contact support before paying again."
       );
       setBusy(false);
     }
@@ -261,18 +261,18 @@ export default function CheckoutForm({
       }
       setFieldErrors(errors);
       if (Object.keys(errors).length > 0) return;
-      if (pin.kind === "bad") {
+      if (pin.kind === 'bad') {
         setError(pin.message);
         return;
       }
       // PIN is re-verified server-side before any charge; this is just a hint.
-      if (pin.kind !== "ok") {
+      if (pin.kind !== 'ok') {
         const result = await checkPin(form.postalCode);
-        if (result.kind !== "ok") {
+        if (result.kind !== 'ok') {
           setError(
-            result.kind === "bad"
+            result.kind === 'bad'
               ? result.message
-              : "Please verify your delivery PIN before continuing.",
+              : 'Please verify your delivery PIN before continuing.'
           );
           return;
         }
@@ -280,9 +280,9 @@ export default function CheckoutForm({
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           usingSaved
             ? { addressId: addressChoice }
@@ -290,7 +290,7 @@ export default function CheckoutForm({
                 address: form,
                 email: email.trim() || undefined,
                 saveAddress: Boolean(member) && saveAddress,
-              },
+              }
         ),
       });
       const session = (await res
@@ -300,7 +300,7 @@ export default function CheckoutForm({
       };
       if (!res.ok || !session.razorpayOrderId || !session.razorpayKeyId) {
         setError(
-          session.error ?? "Could not start checkout. Please try again.",
+          session.error ?? 'Could not start checkout. Please try again.'
         );
         setBusy(false);
         return;
@@ -309,7 +309,7 @@ export default function CheckoutForm({
       const ready = await loadRazorpayScript();
       if (!ready || !window.Razorpay) {
         setError(
-          "Could not load the payment window. Please check your connection and try again.",
+          'Could not load the payment window. Please check your connection and try again.'
         );
         setBusy(false);
         return;
@@ -319,16 +319,16 @@ export default function CheckoutForm({
         key: session.razorpayKeyId,
         amount: session.amount,
         currency: session.currency,
-        name: "Adore",
+        name: 'Adore',
         description: `Order ${session.orderNumber}`,
         order_id: session.razorpayOrderId,
         prefill: session.prefill,
-        theme: { color: "#2B2620" },
+        theme: { color: '#2B2620' },
         modal: {
           ondismiss: () => {
             setBusy(false);
             setNotice(
-              "Payment cancelled — your bag is saved. Try again whenever you're ready.",
+              "Payment cancelled — your bag is saved. Try again whenever you're ready."
             );
           },
         },
@@ -337,18 +337,18 @@ export default function CheckoutForm({
         },
       });
 
-      checkout.on("payment.failed", (payload: unknown) => {
+      checkout.on('payment.failed', (payload: unknown) => {
         const description = (payload as { error?: { description?: string } })
           ?.error?.description;
         setError(
-          description ?? "That payment didn't go through. Please try again.",
+          description ?? "That payment didn't go through. Please try again."
         );
         setBusy(false);
       });
 
       checkout.open();
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError('Something went wrong. Please try again.');
       setBusy(false);
     }
   };
@@ -372,7 +372,7 @@ export default function CheckoutForm({
   return (
     <div className="grid gap-10 lg:grid-cols-[1fr_20rem] lg:items-start">
       <form
-        onSubmit={(e) => {
+        onSubmit={e => {
           e.preventDefault();
           void pay();
         }}
@@ -401,13 +401,13 @@ export default function CheckoutForm({
 
           {member && addresses.length > 0 && (
             <ul className="mt-5 space-y-3">
-              {addresses.map((option) => (
+              {addresses.map(option => (
                 <li key={option.id}>
                   <label
                     className={`flex cursor-pointer gap-3 rounded-xl border p-4 text-sm transition-colors ${
                       addressChoice === option.id
-                        ? "border-[#2B2620] bg-[#F3EFE6]"
-                        : "border-[#2B2620]/15 hover:border-[#2B2620]/40"
+                        ? 'border-[#2B2620] bg-[#F3EFE6]'
+                        : 'border-[#2B2620]/15 hover:border-[#2B2620]/40'
                     }`}
                   >
                     <input
@@ -433,7 +433,7 @@ export default function CheckoutForm({
                         {option.addressLine1}
                         {option.addressLine2
                           ? `, ${option.addressLine2}`
-                          : ""}, {option.city}, {option.state}{" "}
+                          : ''}, {option.city}, {option.state}{' '}
                         {option.postalCode}
                       </span>
                       {option.phone && (
@@ -448,17 +448,17 @@ export default function CheckoutForm({
               <li>
                 <label
                   className={`flex cursor-pointer items-center gap-3 rounded-xl border p-4 text-sm transition-colors ${
-                    addressChoice === "new"
-                      ? "border-[#2B2620] bg-[#F3EFE6]"
-                      : "border-[#2B2620]/15 hover:border-[#2B2620]/40"
+                    addressChoice === 'new'
+                      ? 'border-[#2B2620] bg-[#F3EFE6]'
+                      : 'border-[#2B2620]/15 hover:border-[#2B2620]/40'
                   }`}
                 >
                   <input
                     type="radio"
                     name="addressChoice"
                     value="new"
-                    checked={addressChoice === "new"}
-                    onChange={() => setAddressChoice("new")}
+                    checked={addressChoice === 'new'}
+                    onChange={() => setAddressChoice('new')}
                     className="accent-[#2B2620]"
                   />
                   <span>Deliver to a new address</span>
@@ -476,13 +476,13 @@ export default function CheckoutForm({
           {!member && (
             <p className="mt-4 rounded-lg bg-[#E7DFCB]/50 px-3 py-2.5 text-xs text-[#2B2620]/60">
               Checking out as a guest? No account needed. Add an email below for
-              delivery updates, or{" "}
+              delivery updates, or{' '}
               <Link
                 href="/login?next=%2Fcheckout"
                 className="font-medium underline underline-offset-2"
               >
                 log in
-              </Link>{" "}
+              </Link>{' '}
               to use your saved addresses.
             </p>
           )}
@@ -490,13 +490,13 @@ export default function CheckoutForm({
           {usingSaved && saved ? (
             <div className="mt-5 rounded-xl border border-[#2B2620]/10 bg-[#FAF8F3] p-4 text-sm">
               <p className="font-medium">
-                {saved.fullName || member?.name || "Recipient"}
+                {saved.fullName || member?.name || 'Recipient'}
               </p>
               <p className="mt-1 text-[#2B2620]/60">
                 {saved.addressLine1}
-                {saved.addressLine2 ? `, ${saved.addressLine2}` : ""},{" "}
-                {saved.city}, {saved.state} {saved.postalCode},{" "}
-                {saved.country || "India"}
+                {saved.addressLine2 ? `, ${saved.addressLine2}` : ''},{' '}
+                {saved.city}, {saved.state} {saved.postalCode},{' '}
+                {saved.country || 'India'}
               </p>
               {saved.phone && (
                 <p className="mt-1 text-xs text-[#2B2620]/50">{saved.phone}</p>
@@ -510,15 +510,15 @@ export default function CheckoutForm({
                 onChange={update}
                 pinLocked={pinLocked}
                 onUnlockPin={() => setPinLocked(false)}
-                onPinBlur={(value) => void checkPin(value)}
+                onPinBlur={value => void checkPin(value)}
                 pinNote={
-                  pin.kind === "checking" ? (
+                  pin.kind === 'checking' ? (
                     <span className="text-[#2B2620]/50">
                       Checking delivery to {form.postalCode}…
                     </span>
-                  ) : pin.kind === "ok" ? (
+                  ) : pin.kind === 'ok' ? (
                     <span className="text-[#5C6B4B]">✓ {etaLine(pin)}</span>
-                  ) : pin.kind === "bad" ? (
+                  ) : pin.kind === 'bad' ? (
                     <span className="text-[#A45A4B]">{pin.message}</span>
                   ) : null
                 }
@@ -535,7 +535,7 @@ export default function CheckoutForm({
                     type="email"
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={e => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     aria-invalid={!!fieldErrors.email}
                     className={inputClass(fieldErrors.email)}
@@ -553,7 +553,7 @@ export default function CheckoutForm({
                   <input
                     type="checkbox"
                     checked={saveAddress}
-                    onChange={(e) => setSaveAddress(e.target.checked)}
+                    onChange={e => setSaveAddress(e.target.checked)}
                     className="accent-[#2B2620]"
                   />
                   Save this address to my account
@@ -587,7 +587,7 @@ export default function CheckoutForm({
             className="mt-6 w-full cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy
-              ? "Opening secure payment…"
+              ? 'Opening secure payment…'
               : `Pay ${formatPrice(String(totals.total), currency)}`}
           </button>
           <p className="mt-3 text-center text-xs text-[#2B2620]/50">
@@ -601,7 +601,7 @@ export default function CheckoutForm({
         <h2 className="font-serif text-xl">Order summary</h2>
 
         <ul className="mt-5 space-y-4">
-          {cart.items.map((item) => (
+          {cart.items.map(item => (
             <li key={item.id} className="flex gap-3 text-sm">
               {item.imageUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -620,7 +620,7 @@ export default function CheckoutForm({
               <p className="whitespace-nowrap">
                 {formatPrice(
                   String(Number(item.unitPrice) * item.quantity),
-                  currency,
+                  currency
                 )}
               </p>
             </li>
@@ -634,7 +634,7 @@ export default function CheckoutForm({
           </div>
           {Number(cart.discount) > 0 && (
             <div className="flex justify-between text-[#5C6B4B]">
-              <dt>Promo{cart.promo ? ` (${cart.promo.code})` : ""}</dt>
+              <dt>Promo{cart.promo ? ` (${cart.promo.code})` : ''}</dt>
               <dd>−{formatPrice(cart.discount, currency)}</dd>
             </div>
           )}
@@ -642,7 +642,7 @@ export default function CheckoutForm({
             <dt className="text-[#2B2620]/60">Shipping</dt>
             <dd>
               {totals.shipping === 0
-                ? "Free"
+                ? 'Free'
                 : formatPrice(String(totals.shipping), currency)}
             </dd>
           </div>
@@ -651,8 +651,8 @@ export default function CheckoutForm({
         {freeShippingGap > 0 && (
           <p className="mt-3 text-xs text-[#5C6B4B]">
             Add {formatPrice(String(freeShippingGap), currency)} more for free
-            shipping (orders over{" "}
-            {formatPrice(String(FREE_SHIPPING_THRESHOLD), currency)}, otherwise{" "}
+            shipping (orders over{' '}
+            {formatPrice(String(FREE_SHIPPING_THRESHOLD), currency)}, otherwise{' '}
             {formatPrice(String(SHIPPING_FLAT), currency)}).
           </p>
         )}
@@ -664,7 +664,7 @@ export default function CheckoutForm({
           </span>
         </div>
 
-        {pin.kind === "ok" && (
+        {pin.kind === 'ok' && (
           <p className="mt-4 rounded-lg bg-[#E7DFCB]/60 px-3 py-2 text-xs text-[#2B2620]/70">
             {etaLine(pin)}
           </p>
@@ -676,13 +676,13 @@ export default function CheckoutForm({
 
 /** Shared field primitives (matches the login/account form styling). */
 const LABEL_CLASS =
-  "mb-1.5 block text-xs uppercase tracking-[0.15em] text-[#2B2620]/60";
+  'mb-1.5 block text-xs uppercase tracking-[0.15em] text-[#2B2620]/60';
 
 function inputClass(invalid?: string | boolean) {
   return `w-full rounded-lg border bg-white px-4 py-3 text-sm transition-colors placeholder:text-[#2B2620]/30 focus:outline-none ${
     invalid
-      ? "border-[#A45A4B] focus:border-[#A45A4B]"
-      : "border-[#2B2620]/20 focus:border-[#2B2620]"
+      ? 'border-[#A45A4B] focus:border-[#A45A4B]'
+      : 'border-[#2B2620]/20 focus:border-[#2B2620]'
   }`;
 }
 
@@ -690,51 +690,51 @@ function inputClass(invalid?: string | boolean) {
 function formatDateOnly(value: string): string | null {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("en-IN", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
+  return date.toLocaleDateString('en-IN', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
   });
 }
 
 /** Indian states + UTs — a datalist, so any typed value still works. */
 const INDIAN_STATES = [
-  "Andaman and Nicobar Islands",
-  "Andhra Pradesh",
-  "Arunachal Pradesh",
-  "Assam",
-  "Bihar",
-  "Chandigarh",
-  "Chhattisgarh",
-  "Dadra and Nagar Haveli and Daman and Diu",
-  "Delhi",
-  "Goa",
-  "Gujarat",
-  "Haryana",
-  "Himachal Pradesh",
-  "Jammu and Kashmir",
-  "Jharkhand",
-  "Karnataka",
-  "Kerala",
-  "Ladakh",
-  "Lakshadweep",
-  "Madhya Pradesh",
-  "Maharashtra",
-  "Manipur",
-  "Meghalaya",
-  "Mizoram",
-  "Nagaland",
-  "Odisha",
-  "Puducherry",
-  "Punjab",
-  "Rajasthan",
-  "Sikkim",
-  "Tamil Nadu",
-  "Telangana",
-  "Tripura",
-  "Uttar Pradesh",
-  "Uttarakhand",
-  "West Bengal",
+  'Andaman and Nicobar Islands',
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chandigarh',
+  'Chhattisgarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jammu and Kashmir',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Ladakh',
+  'Lakshadweep',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Puducherry',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
 ];
 /**
  * Address inputs shared by guests and by members entering a new address. The
@@ -770,7 +770,7 @@ function AddressFields({
           name="name"
           autoComplete="name"
           value={form.fullName}
-          onChange={(e) => onChange("fullName", e.target.value)}
+          onChange={e => onChange('fullName', e.target.value)}
           placeholder="As it should appear on the parcel"
           aria-invalid={!!errors.fullName}
           className={inputClass(errors.fullName)}
@@ -791,7 +791,7 @@ function AddressFields({
           inputMode="tel"
           autoComplete="tel"
           value={form.phone}
-          onChange={(e) => onChange("phone", e.target.value)}
+          onChange={e => onChange('phone', e.target.value)}
           placeholder="98765 43210"
           aria-invalid={!!errors.phone}
           className={inputClass(errors.phone)}
@@ -811,10 +811,10 @@ function AddressFields({
             data-testid="locked-pin"
           >
             <span>
-              <span className="text-[#5C6B4B]">✓</span> Delivering to{" "}
+              <span className="text-[#5C6B4B]">✓</span> Delivering to{' '}
               <span className="font-medium tracking-widest">
                 {form.postalCode}
-              </span>{" "}
+              </span>{' '}
               <span className="text-[#2B2620]/50">(verified in your bag)</span>
             </span>
             <button
@@ -833,10 +833,10 @@ function AddressFields({
             autoComplete="postal-code"
             maxLength={6}
             value={form.postalCode}
-            onChange={(e) =>
-              onChange("postalCode", e.target.value.replace(/\D/g, ""))
+            onChange={e =>
+              onChange('postalCode', e.target.value.replace(/\D/g, ''))
             }
-            onBlur={(e) => onPinBlur(e.target.value)}
+            onBlur={e => onPinBlur(e.target.value)}
             placeholder="560001"
             aria-invalid={!!errors.postalCode}
             className={inputClass(errors.postalCode)}
@@ -857,7 +857,7 @@ function AddressFields({
           name="addressLine1"
           autoComplete="address-line1"
           value={form.addressLine1}
-          onChange={(e) => onChange("addressLine1", e.target.value)}
+          onChange={e => onChange('addressLine1', e.target.value)}
           placeholder="House / flat, building, street"
           aria-invalid={!!errors.addressLine1}
           className={inputClass(errors.addressLine1)}
@@ -876,7 +876,7 @@ function AddressFields({
           name="addressLine2"
           autoComplete="address-line2"
           value={form.addressLine2}
-          onChange={(e) => onChange("addressLine2", e.target.value)}
+          onChange={e => onChange('addressLine2', e.target.value)}
           placeholder="Area, landmark, apartment"
           className={inputClass()}
         />
@@ -891,7 +891,7 @@ function AddressFields({
           name="city"
           autoComplete="address-level2"
           value={form.city}
-          onChange={(e) => onChange("city", e.target.value)}
+          onChange={e => onChange('city', e.target.value)}
           aria-invalid={!!errors.city}
           className={inputClass(errors.city)}
         />
@@ -910,12 +910,12 @@ function AddressFields({
           list="co-states"
           autoComplete="address-level1"
           value={form.state}
-          onChange={(e) => onChange("state", e.target.value)}
+          onChange={e => onChange('state', e.target.value)}
           aria-invalid={!!errors.state}
           className={inputClass(errors.state)}
         />
         <datalist id="co-states">
-          {INDIAN_STATES.map((state) => (
+          {INDIAN_STATES.map(state => (
             <option key={state} value={state} />
           ))}
         </datalist>

@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { useState, type CSSProperties, type MouseEvent } from "react";
-import { formatPrice, type ProductCardData } from "@/utils/product-format";
-import { useCart } from "@/components/cart/cart-provider";
+import { useState, type CSSProperties, type MouseEvent } from 'react';
+import { formatPrice, type ProductCardData } from '@/utils/product-format';
+import { useCart } from '@/components/cart/cart-provider';
 
 /**
  * Product card for shop sections.
@@ -68,7 +68,7 @@ export default function ProductCard({ product }: { product: ProductCardData }) {
                 Size
               </span>
               {product.sizes.length > 0 ? (
-                product.sizes.map((s) => (
+                product.sizes.map(s => (
                   <span
                     key={s.size}
                     className="border border-[#2B2620]/20 px-1.5 py-0.5 text-[11px]"
@@ -132,18 +132,18 @@ function QuickViewModal({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const selectedVariant = selectedSize
-    ? (product.sizes.find((s) => s.size === selectedSize) ?? null)
+    ? (product.sizes.find(s => s.size === selectedSize) ?? null)
     : null;
   const quickVariants = product.variants ?? [];
   const matchedVariant =
     quickVariants.find(
-      (v) =>
+      v =>
         v.size === selectedSize &&
         (!selectedColor || v.color === selectedColor) &&
-        v.stock > 0,
+        v.stock > 0
     ) ??
     (selectedSize
-      ? quickVariants.find((v) => v.size === selectedSize && v.stock > 0)
+      ? quickVariants.find(v => v.size === selectedSize && v.stock > 0)
       : null);
   const displayPrice = selectedVariant?.price ?? product.price;
   const displayCompareAtPrice =
@@ -156,8 +156,8 @@ function QuickViewModal({
   const [zoomStyle, setZoomStyle] = useState<CSSProperties>({});
 
   const goPrev = () =>
-    setActiveIndex((i) => (i - 1 + images.length) % images.length);
-  const goNext = () => setActiveIndex((i) => (i + 1) % images.length);
+    setActiveIndex(i => (i - 1 + images.length) % images.length);
+  const goNext = () => setActiveIndex(i => (i + 1) % images.length);
 
   const activeImage = images[activeIndex] ?? null;
 
@@ -165,7 +165,7 @@ function QuickViewModal({
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setZoomStyle({ transformOrigin: `${x}% ${y}%`, transform: "scale(2)" });
+    setZoomStyle({ transformOrigin: `${x}% ${y}%`, transform: 'scale(2)' });
   };
 
   return (
@@ -178,7 +178,7 @@ function QuickViewModal({
     >
       <div
         className="grid max-h-[92dvh] w-full max-w-2xl grid-cols-1 gap-4 overflow-y-auto rounded-t-2xl bg-[#FAF8F3] p-4 sm:grid-cols-2 sm:gap-6 sm:rounded-none sm:p-8"
-        onClick={(e) => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
       >
         {/* Image slider + hover zoom */}
         <div className="flex flex-col gap-2">
@@ -228,13 +228,13 @@ function QuickViewModal({
                   aria-label={`View image ${i + 1}`}
                   className={`h-14 w-11 overflow-hidden border-2 cursor-pointer transition-colors ${
                     i === activeIndex
-                      ? "border-[#2B2620]"
-                      : "border-transparent opacity-60 hover:opacity-100"
+                      ? 'border-[#2B2620]'
+                      : 'border-transparent opacity-60 hover:opacity-100'
                   }`}
                 >
                   <img
                     src={img.url}
-                    alt={img.alt ?? ""}
+                    alt={img.alt ?? ''}
                     className="h-full w-full object-cover"
                   />
                 </button>
@@ -257,7 +257,7 @@ function QuickViewModal({
           </div>
           <p className="text-sm text-[#2B2620]/60">
             {displayCompareAtPrice &&
-             Number(displayCompareAtPrice) > Number(displayPrice) ? (
+            Number(displayCompareAtPrice) > Number(displayPrice) ? (
               <>
                 <span className="mr-2 text-[#2B2620]/40 line-through">
                   {formatPrice(displayCompareAtPrice, product.currency)}
@@ -279,7 +279,7 @@ function QuickViewModal({
                 Colour
               </p>
               <div className="flex flex-wrap gap-2">
-                {product.colors.map((color) => (
+                {product.colors.map(color => (
                   <button
                     key={color.name}
                     type="button"
@@ -288,14 +288,14 @@ function QuickViewModal({
                     aria-label={`Colour: ${color.name}`}
                     className={`cursor-pointer rounded-full border-2 p-0.5 transition-colors ${
                       selectedColor === color.name
-                        ? "border-[#2B2620]"
-                        : "border-transparent hover:border-[#2B2620]/40"
+                        ? 'border-[#2B2620]'
+                        : 'border-transparent hover:border-[#2B2620]/40'
                     }`}
                   >
                     <span
                       className="block h-6 w-6 rounded-full border border-[#2B2620]/10"
                       style={{
-                        backgroundColor: color.hex ?? "#E7DFCB",
+                        backgroundColor: color.hex ?? '#E7DFCB',
                       }}
                     />
                   </button>
@@ -312,7 +312,7 @@ function QuickViewModal({
             <div className="border-b border-[#2B2620]/10 pb-4">
               <button
                 type="button"
-                onClick={() => setDetailsOpen((open) => !open)}
+                onClick={() => setDetailsOpen(open => !open)}
                 aria-expanded={detailsOpen}
                 className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
               >
@@ -320,7 +320,7 @@ function QuickViewModal({
                 <span
                   aria-hidden="true"
                   className={`text-base leading-none transition-transform duration-300 ${
-                    detailsOpen ? "rotate-45" : ""
+                    detailsOpen ? 'rotate-45' : ''
                   }`}
                 >
                   +
@@ -328,11 +328,11 @@ function QuickViewModal({
               </button>
               <div
                 className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                  detailsOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  detailsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
                 }`}
               >
                 <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm">
-                  {product.details.map((line) => (
+                  {product.details.map(line => (
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
@@ -348,7 +348,7 @@ function QuickViewModal({
             <div className="border-b border-[#2B2620]/10 pb-4">
               <button
                 type="button"
-                onClick={() => setCareOpen((open) => !open)}
+                onClick={() => setCareOpen(open => !open)}
                 aria-expanded={careOpen}
                 className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
               >
@@ -356,7 +356,7 @@ function QuickViewModal({
                 <span
                   aria-hidden="true"
                   className={`text-base leading-none transition-transform duration-300 ${
-                    careOpen ? "rotate-45" : ""
+                    careOpen ? 'rotate-45' : ''
                   }`}
                 >
                   +
@@ -364,11 +364,11 @@ function QuickViewModal({
               </button>
               <div
                 className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                  careOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  careOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
                 }`}
               >
                 <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm text-[#2B2620]/70">
-                  {product.careInstructions.map((line) => (
+                  {product.careInstructions.map(line => (
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
@@ -381,7 +381,7 @@ function QuickViewModal({
             </p>
             <div className="flex flex-wrap gap-1.5">
               {product.sizes.length > 0 ? (
-                product.sizes.map((s) => (
+                product.sizes.map(s => (
                   <button
                     key={s.size}
                     type="button"
@@ -389,8 +389,8 @@ function QuickViewModal({
                     disabled={s.stock <= 0}
                     className={`cursor-pointer border px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                       selectedSize === s.size
-                        ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
-                        : "border-[#2B2620]/20 hover:border-[#2B2620]"
+                        ? 'border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]'
+                        : 'border-[#2B2620]/20 hover:border-[#2B2620]'
                     }`}
                   >
                     {s.size}
@@ -417,10 +417,10 @@ function QuickViewModal({
             disabled={!matchedVariant || adding}
           >
             {adding
-              ? "Adding…"
+              ? 'Adding…'
               : matchedVariant
                 ? `Add to bag — ${selectedSize}`
-                : "Select a size"}
+                : 'Select a size'}
           </button>
           {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}
         </div>

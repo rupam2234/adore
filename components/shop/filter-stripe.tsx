@@ -1,5 +1,5 @@
-import Link from "next/link";
-import type { ProductSort } from "@/utils/products";
+import Link from 'next/link';
+import type { ProductSort } from '@/utils/products';
 
 export type FilterStripeProps = {
   /** Category pills to render ("All" is added automatically). */
@@ -17,21 +17,25 @@ export type FilterStripeProps = {
 };
 
 const SORTS: { value: ProductSort; label: string }[] = [
-  { value: "featured", label: "Featured" },
-  { value: "newest", label: "Newest" },
-  { value: "price-asc", label: "Price ↑" },
-  { value: "price-desc", label: "Price ↓" },
+  { value: 'featured', label: 'Featured' },
+  { value: 'newest', label: 'Newest' },
+  { value: 'price-asc', label: 'Price ↑' },
+  { value: 'price-desc', label: 'Price ↓' },
 ];
 
 /** Builds an href preserving the current ?q / ?sort context. */
 function buildHref(
   basePath: string,
-  { sort, searchQuery, sortOverride }: { sort?: string; searchQuery?: string; sortOverride?: string },
+  {
+    sort,
+    searchQuery,
+    sortOverride,
+  }: { sort?: string; searchQuery?: string; sortOverride?: string }
 ) {
   const params = new URLSearchParams();
-  if (searchQuery) params.set("q", searchQuery);
-  if (sortOverride ?? (sort && sort !== "featured")) {
-    params.set("sort", sortOverride ?? sort!);
+  if (searchQuery) params.set('q', searchQuery);
+  if (sortOverride ?? (sort && sort !== 'featured')) {
+    params.set('sort', sortOverride ?? sort!);
   }
   const qs = params.toString();
   return qs ? `${basePath}?${qs}` : basePath;
@@ -45,15 +49,15 @@ export default function FilterStripe({
   categories,
   activeSlug,
   basePath,
-  sort = "featured",
+  sort = 'featured',
   searchQuery,
   showAllPill = true,
 }: FilterStripeProps) {
   const pill = (active: boolean) =>
     `rounded-full border px-4 py-1.5 text-xs transition-colors ${
       active
-        ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
-        : "border-[#2B2620]/20 text-[#2B2620] hover:border-[#2B2620]"
+        ? 'border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]'
+        : 'border-[#2B2620]/20 text-[#2B2620] hover:border-[#2B2620]'
     }`;
 
   return (
@@ -61,9 +65,9 @@ export default function FilterStripe({
       <nav aria-label="Filter by category" className="flex flex-wrap gap-2">
         {showAllPill && (
           <Link
-            href={buildHref("/shop", { sort, searchQuery })}
+            href={buildHref('/shop', { sort, searchQuery })}
             className={pill(!activeSlug)}
-            aria-current={!activeSlug ? "page" : undefined}
+            aria-current={!activeSlug ? 'page' : undefined}
           >
             All
           </Link>
@@ -73,7 +77,7 @@ export default function FilterStripe({
             key={slug}
             href={`/shop/${slug}`}
             className={pill(activeSlug === slug)}
-            aria-current={activeSlug === slug ? "page" : undefined}
+            aria-current={activeSlug === slug ? 'page' : undefined}
           >
             {name}
           </Link>
@@ -87,13 +91,17 @@ export default function FilterStripe({
         {SORTS.map(({ value, label }) => (
           <Link
             key={value}
-            href={buildHref(basePath, { sort, searchQuery, sortOverride: value })}
+            href={buildHref(basePath, {
+              sort,
+              searchQuery,
+              sortOverride: value,
+            })}
             className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
               sort === value
-                ? "bg-[#2B2620]/10 text-[#2B2620]"
-                : "text-[#2B2620]/50 hover:text-[#2B2620]"
+                ? 'bg-[#2B2620]/10 text-[#2B2620]'
+                : 'text-[#2B2620]/50 hover:text-[#2B2620]'
             }`}
-            aria-current={sort === value ? "true" : undefined}
+            aria-current={sort === value ? 'true' : undefined}
           >
             {label}
           </Link>

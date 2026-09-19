@@ -1,4 +1,4 @@
-import { SiteHeader, Footer } from "@/components";
+import { SiteHeader, Footer } from '@/components';
 
 /**
  * Shared shell for standalone content pages (legal, contact, etc.).
@@ -20,9 +20,7 @@ export default function PageShell({
       <SiteHeader />
       <main className="flex-1 w-full px-6 pb-24 sm:px-12">
         <div className="mx-auto max-w-3xl py-16">
-          {eyebrow && (
-            <p className="text-sm text-[#5C6B4B]">{eyebrow}</p>
-          )}
+          {eyebrow && <p className="text-sm text-[#5C6B4B]">{eyebrow}</p>}
           <h1 className="mt-2 font-serif text-4xl leading-tight sm:text-5xl">
             {title}
           </h1>

@@ -1,11 +1,39 @@
-import { rawQuery, sql } from "./db";
-import { getPublicUrl } from "./cloudinary";
-import { getAttachedPromo, type AppliedPromo } from "./promo";
-import { computeDiscount } from "./promo-format";
-import { sweepReservations } from "./reservations";
+import { cookies } from 'next/headers';
+import { rawQuery, sql } from './db';
+import { getPublicUrl } from './cloudinary';
+import { getAttachedPromo, type AppliedPromo } from './promo';
+import { computeDiscount } from './promo-format';
+import { sweepReservations } from './reservations';
+import { getSessionUserId } from './request-user';
 
-export const CART_COOKIE = "adore_cart";
+export const CART_COOKIE = 'adore_cart';
 export const CART_MAX_AGE = 60 * 60 * 24 * 90;
+
+/** Single source of truth for the adore_cart cookie attributes. */
+export function cartCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax' as const,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: CART_MAX_AGE,
+    path: '/',
+  };
+}
+
+/**
+ * Resolve the current shopper (session user + cart) in one pass. Shared by
+ * every cart route so the JWT is verified exactly once per request.
+ */
+export async function getCartShopper(): Promise<{
+  cartId: string | null;
+  userId: string | null;
+}> {
+  const [token, userId] = await Promise.all([
+    (async () => (await cookies()).get(CART_COOKIE)?.value)(),
+    getSessionUserId(),
+  ]);
+  return { cartId: await resolveCartId(userId, token), userId };
+}
 
 export type CartLine = {
   id: string;
@@ -38,9 +66,9 @@ export type CartSummary = {
 const EMPTY_CART: CartSummary = {
   items: [],
   itemCount: 0,
-  subtotal: "0",
-  discount: "0",
-  total: "0",
+  subtotal: '0',
+  discount: '0',
+  total: '0',
   promo: null,
   currency: null,
 };
@@ -62,8 +90,11 @@ type CartRow = {
   stock: number;
 };
 
-function mapCart(rows: CartRow[], promo: Omit<AppliedPromo, "discount"> | null): CartSummary {
-  const items = rows.map((row) => ({
+function mapCart(
+  rows: CartRow[],
+  promo: Omit<AppliedPromo, 'discount'> | null
+): CartSummary {
+  const items = rows.map(row => ({
     id: row.id,
     variantId: row.variant_id,
     productId: row.product_id,
@@ -82,11 +113,11 @@ function mapCart(rows: CartRow[], promo: Omit<AppliedPromo, "discount"> | null):
   }));
 
   const subtotal = String(
-    items.reduce((sum, item) => sum + Number(item.lineTotal), 0),
+    items.reduce((sum, item) => sum + Number(item.lineTotal), 0)
   );
   const discount = promo
     ? computeDiscount(promo.discountType, promo.discountValue, subtotal)
-    : "0";
+    : '0';
 
   return {
     items,
@@ -100,115 +131,135 @@ function mapCart(rows: CartRow[], promo: Omit<AppliedPromo, "discount"> | null):
 }
 
 export async function findCartId(
-  token: string | undefined,
+  token: string | undefined
 ): Promise<string | null> {
   if (!token) return null;
   const rows = await rawQuery<{ id: string }>(
-    sql`SELECT id FROM carts WHERE token = ${token} LIMIT 1`,
+    sql`SELECT id FROM carts WHERE token = ${token} LIMIT 1`
   );
   return rows[0]?.id ?? null;
 }
 
 /** The shopper's account cart, if one exists (most recently active wins). */
 export async function findUserCart(
-  userId: string | null,
+  userId: string | null
 ): Promise<{ id: string; token: string } | null> {
   if (!userId) return null;
   const rows = await rawQuery<{ id: string; token: string }>(
     sql`SELECT id, token FROM carts
         WHERE user_id = ${userId}
         ORDER BY updated_at DESC
-        LIMIT 1`,
+        LIMIT 1`
   );
   return rows[0] ?? null;
+}
+
+/** Fold a guest cart's items (stock-capped) + promo into the account cart. */
+async function mergeGuestItems(
+  userCartId: string,
+  guestCartId: string
+): Promise<void> {
+  await rawQuery(sql`
+    WITH merged AS (
+      INSERT INTO cart_items (id, cart_id, variant_id, quantity)
+      SELECT gen_random_uuid(), ${userCartId}, ci.variant_id, ci.quantity
+      FROM cart_items ci
+      WHERE ci.cart_id = ${guestCartId}
+      ON CONFLICT (cart_id, variant_id)
+      DO UPDATE SET quantity = LEAST(
+        cart_items.quantity + EXCLUDED.quantity,
+        COALESCE(
+          (SELECT v.stock_quantity FROM product_variants v WHERE v.id = EXCLUDED.variant_id),
+          EXCLUDED.quantity
+        )
+      )
+    )
+    UPDATE carts
+    SET promo_code_id = COALESCE(
+          carts.promo_code_id,
+          (SELECT promo_code_id FROM carts WHERE id = ${guestCartId})
+        ),
+        updated_at = now()
+    WHERE id = ${userCartId}
+  `);
+  await rawQuery(sql`
+    WITH gone AS (
+      DELETE FROM cart_items WHERE cart_id = ${guestCartId}
+    )
+    DELETE FROM carts WHERE id = ${guestCartId}
+  `);
 }
 
 /**
  * Resolve the active cart for a request: the account cart wins for logged-in
  * users (so the bag follows the account across devices/cookies), otherwise
  * fall back to the anonymous cookie cart. ONE round-trip covers both cases.
+ *
+ * Self-healing for logged-in users (each runs at most once per cart):
+ * - Account cart + anonymous cookie cart both exist → the cookie cart is
+ *   folded in (e.g. items added on another device before its login merge).
+ * - Only an anonymous cookie cart exists → it is adopted into the account.
+ *   This is what links a bag created before the user_id migration (or by a
+ *   login whose merge didn't run) to the account, so it shows up on every
+ *   other device the account is signed in on.
  */
 export async function resolveCartId(
   userId: string | null,
-  token: string | undefined,
+  token: string | undefined
 ): Promise<string | null> {
   if (!userId && !token) return null;
-  const rows = await rawQuery<{ id: string }>(
-    sql`SELECT id FROM carts
+  const rows = await rawQuery<{ id: string; owned: boolean }>(
+    sql`SELECT id, (user_id IS NOT NULL) AS owned
+        FROM carts
         WHERE (user_id IS NOT NULL AND user_id = ${userId})
-           OR (user_id IS NULL AND token = ${token})
-        ORDER BY (user_id IS NOT NULL) DESC, updated_at DESC
-        LIMIT 1`,
+           OR (user_id IS NULL AND token = ${token ?? null})
+        ORDER BY (user_id IS NOT NULL) DESC, updated_at DESC`
   );
-  return rows[0]?.id ?? null;
+  const owned = rows.find(r => r.owned);
+  const guest = rows.find(r => !r.owned);
+
+  if (owned) {
+    if (guest) await mergeGuestItems(owned.id, guest.id);
+    return owned.id;
+  }
+  if (guest && userId) {
+    await rawQuery(
+      sql`UPDATE carts SET user_id = ${userId}, updated_at = now()
+          WHERE id = ${guest.id} AND user_id IS NULL`
+    );
+  }
+  return guest?.id ?? null;
 }
 
 /**
  * Attach (or merge) the guest cookie cart into the user's account cart at
  * login. Returns the account cart's token so the caller can refresh the
- * cookie — after this the bag follows the account, not the browser.
+ * cookie — after this the bag follows the account, not the browser. Returns
+ * null when there is nothing to carry over (no cart is created; the next
+ * add-to-cart creates one bound to the account).
  */
 export async function mergeGuestCart(
   userId: string,
-  guestCartId: string | null,
-): Promise<string> {
+  guestCartId: string | null
+): Promise<string | null> {
   const userCart = await findUserCart(userId);
 
-  // No account cart yet: adopt the guest cart (or create a fresh one). The
-  // UPDATE...RETURNING keeps the happy path at one round-trip; ON CONFLICT
-  // covers a concurrent login racing us to the one-cart-per-user limit.
   if (!userCart) {
     if (guestCartId) {
+      // Adopt the guest cart in one round-trip; the user_id IS NULL guard
+      // means a concurrent login that already claimed it is a no-op.
       const adopted = await rawQuery<{ token: string }>(
         sql`UPDATE carts SET user_id = ${userId}, updated_at = now()
             WHERE id = ${guestCartId} AND user_id IS NULL
-            RETURNING token`,
+            RETURNING token`
       );
       if (adopted[0]) return adopted[0].token;
     }
-    const token = crypto.randomUUID();
-    const rows = await rawQuery<{ token: string }>(
-      sql`INSERT INTO carts (id, token, user_id)
-          VALUES (gen_random_uuid(), ${token}, ${userId})
-          ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
-          RETURNING token`,
-    );
-    return rows[0]!.token;
+    return null;
   }
 
-  // Both exist: fold guest items into the account cart (capped at stock) and
-  // copy the promo if the account cart has none — one round-trip — then drop
-  // the guest cart (its items first).
   if (guestCartId && guestCartId !== userCart.id) {
-    await rawQuery(sql`
-      WITH merged AS (
-        INSERT INTO cart_items (id, cart_id, variant_id, quantity)
-        SELECT gen_random_uuid(), ${userCart.id}, ci.variant_id, ci.quantity
-        FROM cart_items ci
-        WHERE ci.cart_id = ${guestCartId}
-        ON CONFLICT (cart_id, variant_id)
-        DO UPDATE SET quantity = LEAST(
-          cart_items.quantity + EXCLUDED.quantity,
-          COALESCE(
-            (SELECT v.stock_quantity FROM product_variants v WHERE v.id = EXCLUDED.variant_id),
-            EXCLUDED.quantity
-          )
-        )
-      )
-      UPDATE carts
-      SET promo_code_id = COALESCE(
-            carts.promo_code_id,
-            (SELECT promo_code_id FROM carts WHERE id = ${guestCartId})
-          ),
-          updated_at = now()
-      WHERE id = ${userCart.id}
-    `);
-    await rawQuery(sql`
-      WITH gone AS (
-        DELETE FROM cart_items WHERE cart_id = ${guestCartId}
-      )
-      DELETE FROM carts WHERE id = ${guestCartId}
-    `);
+    await mergeGuestItems(userCart.id, guestCartId);
   }
 
   return userCart.token;
@@ -216,7 +267,7 @@ export async function mergeGuestCart(
 
 export async function getCartDetail(
   cartId: string | null,
-  userId: string | null = null,
+  userId: string | null = null
 ): Promise<CartSummary> {
   // No cart → nothing to report, so return BEFORE the housekeeping sweep. The
   // sweep is two sequential round-trips on the Neon HTTP driver and its
@@ -266,16 +317,16 @@ export async function getCartDetail(
 export async function addCartItem(
   cartId: string,
   variantId: string,
-  quantity: number,
+  quantity: number
 ): Promise<void> {
   const rows = await rawQuery<{ stock: number }>(
     sql`SELECT stock_quantity AS stock
         FROM product_variants
-        WHERE id = ${variantId} AND is_active`,
+        WHERE id = ${variantId} AND is_active`
   );
   const stock = rows[0]?.stock ?? 0;
   if (stock <= 0) {
-    throw new CartError("This variant is unavailable", 409);
+    throw new CartError('This variant is unavailable', 409);
   }
 
   const wanted = quantity > 0 ? quantity : 1;
@@ -295,7 +346,7 @@ export async function addCartItem(
 export async function updateCartItem(
   cartId: string,
   itemId: string,
-  quantity: number,
+  quantity: number
 ): Promise<void> {
   if (quantity <= 0) {
     await removeCartItem(cartId, itemId);
@@ -308,7 +359,7 @@ export async function updateCartItem(
     WHERE ci.id = ${itemId} AND ci.cart_id = ${cartId}
   `);
   const stock = rows[0]?.stock;
-  if (stock == null) throw new CartError("Cart item not found", 404);
+  if (stock == null) throw new CartError('Cart item not found', 404);
 
   await rawQuery(sql`
     UPDATE cart_items
@@ -319,10 +370,10 @@ export async function updateCartItem(
 
 export async function removeCartItem(
   cartId: string,
-  itemId: string,
+  itemId: string
 ): Promise<void> {
   await rawQuery(
-    sql`DELETE FROM cart_items WHERE id = ${itemId}::uuid AND cart_id = ${cartId}::uuid`,
+    sql`DELETE FROM cart_items WHERE id = ${itemId}::uuid AND cart_id = ${cartId}::uuid`
   );
 }
 

@@ -1,21 +1,21 @@
-import type { Metadata } from "next";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { SiteHeader, Footer } from "@/components";
-import OrderReceipt from "@/components/checkout/order-receipt";
+import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { SiteHeader, Footer } from '@/components';
+import OrderReceipt from '@/components/checkout/order-receipt';
 import {
   getOrderConfirmation,
   RECENT_ORDER_COOKIE,
   type OrderConfirmation,
-} from "@/utils/checkout";
-import { getSessionUserId } from "@/utils/request-user";
+} from '@/utils/checkout';
+import { getSessionUserId } from '@/utils/request-user';
 
 export const metadata: Metadata = {
-  title: "Order confirmed",
+  title: 'Order confirmed',
   robots: { index: false, follow: false },
 };
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 /**
  * Receipt page. The order number arrives in an httpOnly cookie set by
@@ -40,9 +40,9 @@ export default async function CheckoutSuccessPage({
     // order may see it (guests fall through to the cookie path only).
     const userId = await getSessionUserId();
     if (userId) {
-      const { ensureCustomerForUserId } = await import("@/utils/account");
-      const { db, orders } = await import("@/utils/db");
-      const { eq, and } = await import("drizzle-orm");
+      const { ensureCustomerForUserId } = await import('@/utils/account');
+      const { db, orders } = await import('@/utils/db');
+      const { eq, and } = await import('drizzle-orm');
       const customer = await ensureCustomerForUserId(userId);
       const owned = await db
         .select({ id: orders.id })
@@ -50,8 +50,8 @@ export default async function CheckoutSuccessPage({
         .where(
           and(
             eq(orders.orderNumber, orderParam),
-            eq(orders.customerId, customer.id),
-          ),
+            eq(orders.customerId, customer.id)
+          )
         )
         .limit(1);
       orderNumber = owned.length > 0 ? orderParam : null;
@@ -60,7 +60,7 @@ export default async function CheckoutSuccessPage({
     orderNumber = cookieOrder ?? null;
   }
 
-  if (!orderNumber) redirect("/shop");
+  if (!orderNumber) redirect('/shop');
 
   let confirmation: OrderConfirmation | null = null;
   try {

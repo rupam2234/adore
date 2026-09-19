@@ -1,7 +1,10 @@
-import { ProductForm } from "@/components/admin/product-form";
-import { requireAdminPage } from "@/utils/admin-session";
+import { ProductForm } from '@/components/admin/product-form';
+import { requireAdminPage } from '@/utils/admin-session';
 
-export const metadata = { title: "New product — Admin", robots: { index: false, follow: false } };
+export const metadata = {
+  title: 'New product — Admin',
+  robots: { index: false, follow: false },
+};
 
 export default async function NewProductPage() {
   await requireAdminPage();

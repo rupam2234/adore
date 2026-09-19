@@ -1,10 +1,7 @@
-import { isAdminRequest } from "@/utils/admin-auth";
-import {
-  deleteProductImage,
-  setPrimaryImage,
-} from "@/utils/admin-products";
-import { cloudinary } from "@/utils";
-import { NextResponse } from "next/server";
+import { isAdminRequest } from '@/utils/admin-auth';
+import { deleteProductImage, setPrimaryImage } from '@/utils/admin-products';
+import { cloudinary } from '@/utils';
+import { NextResponse } from 'next/server';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -16,12 +13,15 @@ type RouteContext = { params: Promise<{ id: string }> };
  */
 export async function DELETE(request: Request, ctx: RouteContext) {
   if (!(await isAdminRequest(request))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
-  const imageId = new URL(request.url).searchParams.get("image_id");
+  const imageId = new URL(request.url).searchParams.get('image_id');
   if (!imageId) {
-    return NextResponse.json({ error: "image_id is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: 'image_id is required' },
+      { status: 400 }
+    );
   }
 
   try {
@@ -32,19 +32,25 @@ export async function DELETE(request: Request, ctx: RouteContext) {
     try {
       await cloudinary.uploader.destroy(result.publicId);
     } catch (cloudinaryError) {
-      console.warn("cloudinary destroy failed (db row removed anyway):", cloudinaryError);
+      console.warn(
+        'cloudinary destroy failed (db row removed anyway):',
+        cloudinaryError
+      );
     }
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
-    console.error("image delete failed:", error);
-    return NextResponse.json({ error: "Failed to delete image" }, { status: 500 });
+    console.error('image delete failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete image' },
+      { status: 500 }
+    );
   }
 }
 
 /** PATCH /api/admin/products/[id]/images — {image_id} → make it primary. */
 export async function PATCH(request: Request, ctx: RouteContext) {
   if (!(await isAdminRequest(request))) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
 
@@ -52,20 +58,26 @@ export async function PATCH(request: Request, ctx: RouteContext) {
   try {
     body = (await request.json()) as { image_id?: string };
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
   if (!body.image_id) {
-    return NextResponse.json({ error: "image_id is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: 'image_id is required' },
+      { status: 400 }
+    );
   }
 
   try {
     const updated = await setPrimaryImage(id, body.image_id);
     if (!updated) {
-      return NextResponse.json({ error: "Image not found" }, { status: 404 });
+      return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
     return NextResponse.json({ ok: true }, { status: 200 });
   } catch (error) {
-    console.error("image primary update failed:", error);
-    return NextResponse.json({ error: "Failed to update image" }, { status: 500 });
+    console.error('image primary update failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to update image' },
+      { status: 500 }
+    );
   }
 }

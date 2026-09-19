@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import type { CustomerAddress } from "@/utils/account";
+import { useState } from 'react';
+import type { CustomerAddress } from '@/utils/account';
 
 type FormState = {
   fullName: string;
@@ -16,14 +16,14 @@ type FormState = {
 };
 
 const EMPTY_FORM: FormState = {
-  fullName: "",
-  phone: "",
-  addressLine1: "",
-  addressLine2: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  addressType: "Home",
+  fullName: '',
+  phone: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  postalCode: '',
+  addressType: 'Home',
   isDefault: false,
 };
 
@@ -36,62 +36,62 @@ export default function AddressManager({
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(initialAddresses.length === 0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   function openAdd() {
     setForm(EMPTY_FORM);
     setEditing(null);
     setAdding(true);
-    setError("");
+    setError('');
   }
 
   function openEdit(address: CustomerAddress) {
     setForm({
-      fullName: address.fullName ?? "",
-      phone: address.phone ?? "",
+      fullName: address.fullName ?? '',
+      phone: address.phone ?? '',
       addressLine1: address.addressLine1,
-      addressLine2: address.addressLine2 ?? "",
+      addressLine2: address.addressLine2 ?? '',
       city: address.city,
       state: address.state,
       postalCode: address.postalCode,
-      addressType: address.addressType ?? "Home",
+      addressType: address.addressType ?? 'Home',
       isDefault: address.isDefault,
     });
     setEditing(address.id);
     setAdding(true);
-    setError("");
+    setError('');
   }
 
   function close() {
     setAdding(false);
     setEditing(null);
-    setError("");
+    setError('');
   }
 
   async function call(
-    method: "POST" | "PATCH" | "DELETE",
+    method: 'POST' | 'PATCH' | 'DELETE',
     path: string,
-    body?: unknown,
+    body?: unknown
   ): Promise<boolean> {
     setBusy(true);
-    setError("");
+    setError('');
     try {
       const res = await fetch(`/api/account/addresses${path}`, {
         method,
-        headers: body ? { "Content-Type": "application/json" } : undefined,
-        credentials: "same-origin",
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        credentials: 'same-origin',
         body: body ? JSON.stringify(body) : undefined,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
+        setError(data.error ?? 'Something went wrong.');
         return false;
       }
       setAddresses(data.addresses);
       return true;
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError('Something went wrong. Please try again.');
       return false;
     } finally {
       setBusy(false);
@@ -113,8 +113,8 @@ export default function AddressManager({
       isDefault: form.isDefault,
     };
     const ok = editing
-      ? await call("PATCH", `/${editing}`, payload)
-      : await call("POST", "", payload);
+      ? await call('PATCH', `/${editing}`, payload)
+      : await call('POST', '', payload);
     if (ok) close();
   }
 
@@ -134,7 +134,10 @@ export default function AddressManager({
       </div>
 
       {error && (
-        <p role="alert" className="mt-4 rounded-lg border border-[#A45A4B]/30 bg-[#A45A4B]/10 px-4 py-3 text-sm text-[#A45A4B]">
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-[#A45A4B]/30 bg-[#A45A4B]/10 px-4 py-3 text-sm text-[#A45A4B]"
+        >
           {error}
         </p>
       )}
@@ -146,14 +149,16 @@ export default function AddressManager({
       )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {addresses.map((address) => (
+        {addresses.map(address => (
           <AddressCard
             key={address.id}
             address={address}
             busy={busy}
             onEdit={() => openEdit(address)}
-            onSetDefault={() => call("PATCH", `/${address.id}`, { action: "setDefault" })}
-            onRemove={() => call("DELETE", `/${address.id}`)}
+            onSetDefault={() =>
+              call('PATCH', `/${address.id}`, { action: 'setDefault' })
+            }
+            onRemove={() => call('DELETE', `/${address.id}`)}
           />
         ))}
       </div>
@@ -188,7 +193,7 @@ function AddressCard({
   return (
     <div
       className={`relative rounded-xl border bg-white p-5 ${
-        address.isDefault ? "border-[#5C6B4B]/50" : "border-[#2B2620]/10"
+        address.isDefault ? 'border-[#5C6B4B]/50' : 'border-[#2B2620]/10'
       }`}
     >
       {address.isDefault && (
@@ -199,15 +204,21 @@ function AddressCard({
       <p className="font-medium">{address.fullName}</p>
       <p className="mt-1 text-sm text-[#2B2620]/70">
         {address.addressLine1}
-        {address.addressLine2 ? `, ${address.addressLine2}` : ""}
+        {address.addressLine2 ? `, ${address.addressLine2}` : ''}
       </p>
       <p className="text-sm text-[#2B2620]/70">
         {address.city}, {address.state} {address.postalCode}
       </p>
       <p className="text-sm text-[#2B2620]/70">{address.country}</p>
-      {address.phone && <p className="mt-1 text-sm text-[#2B2620]/50">{address.phone}</p>}
+      {address.phone && (
+        <p className="mt-1 text-sm text-[#2B2620]/50">{address.phone}</p>
+      )}
       <div className="mt-4 flex items-center gap-4 text-xs">
-        <button type="button" onClick={onEdit} className="cursor-pointer underline-offset-2 hover:underline">
+        <button
+          type="button"
+          onClick={onEdit}
+          className="cursor-pointer underline-offset-2 hover:underline"
+        >
           Edit
         </button>
         {!address.isDefault && (
@@ -249,21 +260,22 @@ function AddressForm({
   onCancel: () => void;
 }) {
   const inputClass =
-    "w-full rounded-lg border border-[#2B2620]/20 bg-white px-3 py-2 text-sm focus:border-[#2B2620] focus:outline-none";
-  const labelClass = "mb-1 block text-xs uppercase tracking-wider text-[#2B2620]/60";
+    'w-full rounded-lg border border-[#2B2620]/20 bg-white px-3 py-2 text-sm focus:border-[#2B2620] focus:outline-none';
+  const labelClass =
+    'mb-1 block text-xs uppercase tracking-wider text-[#2B2620]/60';
   const field = (
     label: string,
     key: keyof FormState,
-    options?: { type?: string; span?: boolean; optional?: boolean },
+    options?: { type?: string; span?: boolean; optional?: boolean }
   ) => (
-    <div className={options?.span ? "sm:col-span-2" : undefined}>
+    <div className={options?.span ? 'sm:col-span-2' : undefined}>
       <label className={labelClass}>
         {options?.optional ? `${label} (optional)` : label}
       </label>
       <input
-        type={options?.type ?? "text"}
+        type={options?.type ?? 'text'}
         value={String(form[key])}
-        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
         className={inputClass}
       />
     </div>
@@ -275,20 +287,27 @@ function AddressForm({
       noValidate
       className="mt-6 rounded-xl border border-[#2B2620]/10 bg-white p-6"
     >
-      <h3 className="font-serif text-base">{editing ? "Edit address" : "New address"}</h3>
+      <h3 className="font-serif text-base">
+        {editing ? 'Edit address' : 'New address'}
+      </h3>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {field("Recipient name", "fullName")}
-        {field("Phone", "phone", { type: "tel" })}
-        {field("Address line 1", "addressLine1", { span: true })}
-        {field("Address line 2", "addressLine2", { span: true, optional: true })}
-        {field("City", "city")}
-        {field("State", "state")}
-        {field("PIN code", "postalCode")}
+        {field('Recipient name', 'fullName')}
+        {field('Phone', 'phone', { type: 'tel' })}
+        {field('Address line 1', 'addressLine1', { span: true })}
+        {field('Address line 2', 'addressLine2', {
+          span: true,
+          optional: true,
+        })}
+        {field('City', 'city')}
+        {field('State', 'state')}
+        {field('PIN code', 'postalCode')}
         <div>
           <label className={labelClass}>Type</label>
           <select
             value={form.addressType}
-            onChange={(e) => setForm((f) => ({ ...f, addressType: e.target.value }))}
+            onChange={e =>
+              setForm(f => ({ ...f, addressType: e.target.value }))
+            }
             className={inputClass}
           >
             <option>Home</option>
@@ -301,7 +320,7 @@ function AddressForm({
         <input
           type="checkbox"
           checked={form.isDefault}
-          onChange={(e) => setForm((f) => ({ ...f, isDefault: e.target.checked }))}
+          onChange={e => setForm(f => ({ ...f, isDefault: e.target.checked }))}
           className="h-4 w-4 accent-[#5C6B4B]"
         />
         Set as default address
@@ -313,7 +332,7 @@ function AddressForm({
           disabled={busy}
           className="cursor-pointer rounded-full bg-[#2B2620] px-5 py-2 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? "Saving…" : editing ? "Save changes" : "Add address"}
+          {busy ? 'Saving…' : editing ? 'Save changes' : 'Add address'}
         </button>
         <button
           type="button"

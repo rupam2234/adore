@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
 import {
   CheckoutError,
   RECENT_ORDER_COOKIE,
   RECENT_ORDER_MAX_AGE,
   verifyAndConfirmPayment,
-} from "@/utils/checkout";
-import { RazorpayError } from "@/utils/razorpay";
+} from '@/utils/checkout';
+import { RazorpayError } from '@/utils/razorpay';
 
 /**
  * Step 2 of checkout: the Razorpay Checkout success handler posts the signature
@@ -20,17 +20,23 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
   try {
     const confirmation = await verifyAndConfirmPayment({
       razorpayOrderId:
-        typeof body.razorpay_order_id === "string" ? body.razorpay_order_id : "",
+        typeof body.razorpay_order_id === 'string'
+          ? body.razorpay_order_id
+          : '',
       razorpayPaymentId:
-        typeof body.razorpay_payment_id === "string" ? body.razorpay_payment_id : "",
+        typeof body.razorpay_payment_id === 'string'
+          ? body.razorpay_payment_id
+          : '',
       razorpaySignature:
-        typeof body.razorpay_signature === "string" ? body.razorpay_signature : "",
+        typeof body.razorpay_signature === 'string'
+          ? body.razorpay_signature
+          : '',
     });
 
     const response = NextResponse.json({
@@ -42,23 +48,29 @@ export async function POST(request: Request) {
       name: RECENT_ORDER_COOKIE,
       value: confirmation.orderNumber,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
       maxAge: RECENT_ORDER_MAX_AGE,
     });
     return response;
   } catch (error) {
     if (error instanceof CheckoutError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
     }
     if (error instanceof RazorpayError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
     }
-    console.error("[checkout] payment verification failed", error);
+    console.error('[checkout] payment verification failed', error);
     return NextResponse.json(
       { error: "We couldn't confirm that payment. Please contact support." },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

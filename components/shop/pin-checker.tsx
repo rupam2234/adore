@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
 export type PinResult = {
   serviceable: boolean;
@@ -10,20 +10,20 @@ export type PinResult = {
 };
 
 export type PinStatus =
-  | { kind: "idle" }
-  | { kind: "checking" }
-  | { kind: "result"; pin: string; result: PinResult }
-  | { kind: "error"; message: string };
+  | { kind: 'idle' }
+  | { kind: 'checking' }
+  | { kind: 'result'; pin: string; result: PinResult }
+  | { kind: 'error'; message: string };
 
-export const PIN_STORAGE_KEY = "adore_pin";
+export const PIN_STORAGE_KEY = 'adore_pin';
 
 /**
  * Delivery-PIN verification shared by the bag (gate checkout on it) and the
  * checkout form (prefills the verified PIN so it's never asked for twice).
  */
 export function usePinCheck() {
-  const [pin, setPin] = useState("");
-  const [status, setStatus] = useState<PinStatus>({ kind: "idle" });
+  const [pin, setPin] = useState('');
+  const [status, setStatus] = useState<PinStatus>({ kind: 'idle' });
 
   // Restore a previously verified PIN so returning visitors see it instantly.
   useEffect(() => {
@@ -34,18 +34,18 @@ export function usePinCheck() {
 
   const check = async () => {
     if (!/^\d{6}$/.test(pin)) {
-      setStatus({ kind: "error", message: "Enter a valid 6-digit PIN" });
+      setStatus({ kind: 'error', message: 'Enter a valid 6-digit PIN' });
       return;
     }
-    setStatus({ kind: "checking" });
+    setStatus({ kind: 'checking' });
     try {
       const res = await fetch(`/api/shipping/pin?pin=${pin}`, {
-        cache: "no-store",
+        cache: 'no-store',
       });
       const data = await res.json();
       if (!res.ok) {
         setStatus({
-          kind: "error",
+          kind: 'error',
           message: data?.error ?? "Couldn't check delivery right now",
         });
         return;
@@ -60,16 +60,16 @@ export function usePinCheck() {
       // carried into checkout as if it were verified.
       if (result.serviceable) localStorage.setItem(PIN_STORAGE_KEY, pin);
       else localStorage.removeItem(PIN_STORAGE_KEY);
-      setStatus({ kind: "result", pin, result });
+      setStatus({ kind: 'result', pin, result });
     } catch {
       setStatus({
-        kind: "error",
+        kind: 'error',
         message: "Couldn't check delivery right now. Please try again.",
       });
     }
   };
 
-  const reset = () => setStatus({ kind: "idle" });
+  const reset = () => setStatus({ kind: 'idle' });
 
   return { pin, setPin, status, check, reset };
 }
@@ -78,7 +78,7 @@ export type PinCheck = ReturnType<typeof usePinCheck>;
 /** Presentational PIN checker — pass a shared `usePinCheck()` state (the bag does, to gate checkout) or let it manage its own. */
 export function PinChecker({
   pinCheck,
-  className = "",
+  className = '',
 }: {
   pinCheck?: PinCheck;
   className?: string;
@@ -87,7 +87,7 @@ export function PinChecker({
   const { pin, setPin, status, check, reset } = pinCheck ?? internal;
 
   const resultLine = (() => {
-    if (status.kind === "result") {
+    if (status.kind === 'result') {
       const { result } = status;
       if (result.serviceable) {
         const eta =
@@ -101,22 +101,22 @@ export function PinChecker({
         return (
           <p className="mt-1.5 text-xs text-[#5C6B4B]">
             ✓ Delivery to {status.pin}
-            {eta ? ` ${eta}` : ""} ·{" "}
-            {result.cod ? "Cash on Delivery available" : "Prepaid orders only"}
+            {eta ? ` ${eta}` : ''} ·{' '}
+            {result.cod ? 'Cash on Delivery available' : 'Prepaid orders only'}
           </p>
         );
       }
       return (
         <p className="mt-1.5 text-xs text-[#A45A4B]">
-          Not serviceable at {status.pin} yet — we&apos;re expanding to new
-          PIN codes soon.
+          Not serviceable at {status.pin} yet — we&apos;re expanding to new PIN
+          codes soon.
         </p>
       );
     }
-    if (status.kind === "error") {
+    if (status.kind === 'error') {
       return <p className="mt-1.5 text-xs text-[#A45A4B]">{status.message}</p>;
     }
-    if (status.kind === "checking") {
+    if (status.kind === 'checking') {
       return <p className="mt-1.5 text-xs text-[#2B2620]/50">Checking…</p>;
     }
     return null;
@@ -133,12 +133,12 @@ export function PinChecker({
           aria-label="Delivery PIN code"
           maxLength={6}
           value={pin}
-          onChange={(e) => {
-            setPin(e.target.value.replace(/\D/g, "").slice(0, 6));
-            if (status.kind !== "idle") reset();
+          onChange={e => {
+            setPin(e.target.value.replace(/\D/g, '').slice(0, 6));
+            if (status.kind !== 'idle') reset();
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
               e.preventDefault();
               check();
             }
@@ -148,10 +148,10 @@ export function PinChecker({
         <button
           type="button"
           onClick={check}
-          disabled={status.kind === "checking" || pin.length !== 6}
+          disabled={status.kind === 'checking' || pin.length !== 6}
           className="cursor-pointer rounded-full border border-[#2B2620] px-4 py-2 text-sm text-[#2B2620] transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {status.kind === "checking" ? "Checking…" : "Check"}
+          {status.kind === 'checking' ? 'Checking…' : 'Check'}
         </button>
       </div>
       {resultLine}
@@ -162,5 +162,5 @@ export function PinChecker({
 function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }

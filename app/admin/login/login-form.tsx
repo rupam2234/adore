@@ -1,47 +1,47 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
 interface LoginFormProps {
   next: string;
 }
 
 export default function LoginForm({ next }: LoginFormProps) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError("");
+    setError('');
     if (!email.trim()) {
-      setError("Enter your email.");
+      setError('Enter your email.');
       return;
     }
     if (!password.trim()) {
-      setError("Enter your password.");
+      setError('Enter your password.');
       return;
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setError(data.error ?? "Login failed.");
+        setError(data.error ?? 'Login failed.');
         return;
       }
       const data = await res.json();
-      console.log("[login-form] Login success:", data);
+      console.log('[login-form] Login success:', data);
       window.location.href = next;
     } catch (err) {
-      console.error("Login error:", err);
-      setError("Network error — is the server running?");
+      console.error('Login error:', err);
+      setError('Network error — is the server running?');
     } finally {
       setBusy(false);
     }
@@ -74,7 +74,7 @@ export default function LoginForm({ next }: LoginFormProps) {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={e => setEmail(e.target.value)}
             placeholder="you@example.com"
             disabled={busy}
             className="w-full rounded-lg border border-[#2B2620]/20 bg-white px-3 py-2 text-sm
@@ -95,7 +95,7 @@ export default function LoginForm({ next }: LoginFormProps) {
             type="password"
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={e => setPassword(e.target.value)}
             placeholder="••••••••"
             disabled={busy}
             className="w-full rounded-lg border border-[#2B2620]/20 bg-white px-3 py-2 text-sm
@@ -113,7 +113,7 @@ export default function LoginForm({ next }: LoginFormProps) {
                    hover:bg-[#3A332A] focus:outline-none focus:ring-2 focus:ring-[#2B2620]/40
                    disabled:opacity-50"
         >
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
 

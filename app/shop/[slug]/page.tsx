@@ -1,4 +1,10 @@
-import { SiteHeader, Footer, ProductCard, FilterStripe, AdvancedFilters } from "@/components";
+import {
+  SiteHeader,
+  Footer,
+  ProductCard,
+  FilterStripe,
+  AdvancedFilters,
+} from '@/components';
 import {
   ALL_CATEGORIES,
   CATEGORY_TREE,
@@ -8,10 +14,10 @@ import {
   getFilterFacets,
   parseShopFilters,
   preservedParams,
-} from "@/utils";
-import Link from "next/link";
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+} from '@/utils';
+import Link from 'next/link';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 type PageProps = {
   params: Promise<{ slug: string }>;
@@ -26,19 +32,22 @@ export async function generateMetadata({
 
   return (
     meta ?? {
-      title: "Not found",
+      title: 'Not found',
       robots: { index: false, follow: false },
     }
   );
 }
 
-export default async function ShopCategoryPage({ params, searchParams }: PageProps) {
+export default async function ShopCategoryPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { slug } = await params;
   const filters = parseShopFilters(await searchParams);
   const keep = preservedParams(filters);
 
   // Validate against the static taxonomy (single source of truth).
-  const category = ALL_CATEGORIES.find((c) => c.slug === slug);
+  const category = ALL_CATEGORIES.find(c => c.slug === slug);
   if (!category) notFound();
 
   // Parent slugs (e.g. "kurti") include their children automatically.
@@ -60,22 +69,23 @@ export default async function ShopCategoryPage({ params, searchParams }: PagePro
   let subNav: { slug: string; name: string }[] = [];
   try {
     const rows = await getCategories();
-    const byId = new Map(rows.map((r) => [r.id, r]));
-    const current = rows.find((r) => r.slug === slug) ?? null;
+    const byId = new Map(rows.map(r => [r.id, r]));
+    const current = rows.find(r => r.slug === slug) ?? null;
     if (current) {
       const parentId = current.parentId;
       if (parentId) {
         // On a child page (e.g. short-kurti): show siblings + parent link.
         const parent = byId.get(parentId) ?? null;
         subNav = rows
-          .filter((r) => r.parentId === parentId && r.slug !== slug)
-          .map((r) => ({ slug: r.slug, name: r.name }));
-        if (parent) subNav.unshift({ slug: parent.slug, name: `All ${parent.name}` });
+          .filter(r => r.parentId === parentId && r.slug !== slug)
+          .map(r => ({ slug: r.slug, name: r.name }));
+        if (parent)
+          subNav.unshift({ slug: parent.slug, name: `All ${parent.name}` });
       } else {
         // On a parent page (e.g. kurti): show its children.
         subNav = rows
-          .filter((r) => r.parentId === current.id)
-          .map((r) => ({ slug: r.slug, name: r.name }));
+          .filter(r => r.parentId === current.id)
+          .map(r => ({ slug: r.slug, name: r.name }));
       }
     }
   } catch {
@@ -83,10 +93,10 @@ export default async function ShopCategoryPage({ params, searchParams }: PagePro
     // to the static taxonomy.
     const node =
       category &&
-      (await import("@/utils/categories").then((m) =>
-        m.CATEGORY_TREE.find((n) => n.slug === slug),
+      (await import('@/utils/categories').then(m =>
+        m.CATEGORY_TREE.find(n => n.slug === slug)
       ));
-    subNav = (node?.children ?? []).map((c) => ({
+    subNav = (node?.children ?? []).map(c => ({
       slug: c.slug,
       name: c.name,
     }));
@@ -97,10 +107,13 @@ export default async function ShopCategoryPage({ params, searchParams }: PagePro
       <SiteHeader />
       <main className="w-full px-6 py-12 sm:px-12">
         <p className="text-xs uppercase tracking-wide text-[#2B2620]/50">
-          <Link href="/shop" className="hover:underline hover:underline-offset-4">
+          <Link
+            href="/shop"
+            className="hover:underline hover:underline-offset-4"
+          >
             Shop
           </Link>
-          {" / "}
+          {' / '}
           {category.name}
         </p>
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-4">
@@ -113,13 +126,13 @@ export default async function ShopCategoryPage({ params, searchParams }: PagePro
             )}
           </div>
           <p className="text-sm text-[#2B2620]/50">
-            {products.length} {products.length === 1 ? "style" : "styles"}
+            {products.length} {products.length === 1 ? 'style' : 'styles'}
           </p>
         </div>
 
         {subNav.length > 0 && (
           <div className="mt-6 flex flex-wrap gap-2">
-            {subNav.map((s) => (
+            {subNav.map(s => (
               <Link
                 key={s.slug}
                 href={`/shop/${s.slug}`}
@@ -156,7 +169,7 @@ export default async function ShopCategoryPage({ params, searchParams }: PagePro
 
         <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {products.length > 0 ? (
-            products.map((product) => (
+            products.map(product => (
               <ProductCard key={product.id} product={product} />
             ))
           ) : (

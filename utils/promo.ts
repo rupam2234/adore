@@ -1,11 +1,11 @@
-import { and, eq, sql } from "drizzle-orm";
-import { db, rawQuery, promoCodes, promoRedemptions } from "./db";
-import { computeDiscount } from "./promo-format";
+import { and, eq, sql } from 'drizzle-orm';
+import { db, rawQuery, promoCodes, promoRedemptions } from './db';
+import { computeDiscount } from './promo-format';
 
 export type AppliedPromo = {
   code: string;
   description: string | null;
-  discountType: "PERCENT" | "FIXED";
+  discountType: 'PERCENT' | 'FIXED';
   discountValue: string;
   discount: string;
 };
@@ -26,14 +26,14 @@ async function getCartSubtotal(cartId: string): Promise<string> {
     JOIN products p ON p.id = v.product_id AND p.status = 'ACTIVE'
     WHERE ci.cart_id = ${cartId}
   `);
-  return rows[0]?.subtotal ?? "0";
+  return rows[0]?.subtotal ?? '0';
 }
 
 type PromoRow = {
   id: string;
   code: string;
   description: string | null;
-  discount_type: "PERCENT" | "FIXED";
+  discount_type: 'PERCENT' | 'FIXED';
   discount_value: string;
   min_subtotal: string | null;
   max_redemptions: number | null;
@@ -56,21 +56,21 @@ async function findPromo(code: string): Promise<PromoRow | null> {
 function assertEligible(promo: PromoRow, subtotal: string): void {
   const now = Date.now();
   if (promo.starts_at && new Date(promo.starts_at).getTime() > now) {
-    throw new PromoError("This code is not active yet");
+    throw new PromoError('This code is not active yet');
   }
   if (promo.expires_at && new Date(promo.expires_at).getTime() < now) {
-    throw new PromoError("This code has expired");
+    throw new PromoError('This code has expired');
   }
   if (
     promo.max_redemptions !== null &&
     promo.redemption_count >= promo.max_redemptions
   ) {
-    throw new PromoError("This code has reached its redemption limit");
+    throw new PromoError('This code has reached its redemption limit');
   }
   const min = Number(promo.min_subtotal ?? 0);
   if (Number(subtotal) < min) {
     throw new PromoError(
-      `This code requires a minimum order of ₹${min.toFixed(2)}`,
+      `This code requires a minimum order of ₹${min.toFixed(2)}`
     );
   }
 }
@@ -78,18 +78,18 @@ function assertEligible(promo: PromoRow, subtotal: string): void {
 export async function applyPromo(
   cartId: string,
   userId: string,
-  rawCode: string,
+  rawCode: string
 ): Promise<AppliedPromo> {
   const code = rawCode.trim();
-  if (!code) throw new PromoError("Enter a promo code");
+  if (!code) throw new PromoError('Enter a promo code');
 
   const subtotal = await getCartSubtotal(cartId);
   if (Number(subtotal) <= 0) {
-    throw new PromoError("Add items to your bag before applying a code");
+    throw new PromoError('Add items to your bag before applying a code');
   }
 
   const promo = await findPromo(code);
-  if (!promo) throw new PromoError("Invalid promo code");
+  if (!promo) throw new PromoError('Invalid promo code');
 
   assertEligible(promo, subtotal);
 
@@ -99,12 +99,12 @@ export async function applyPromo(
     .where(
       and(
         eq(promoRedemptions.promoCodeId, promo.id),
-        eq(promoRedemptions.userId, userId),
-      ),
+        eq(promoRedemptions.userId, userId)
+      )
     )
     .limit(1);
   if (redeemed.length > 0) {
-    throw new PromoError("You have already used this code");
+    throw new PromoError('You have already used this code');
   }
 
   await db
@@ -113,11 +113,14 @@ export async function applyPromo(
     .onConflictDoNothing();
   await db
     .update(promoCodes)
-    .set({ redemptionCount: sql`${promoCodes.redemptionCount} + 1`, updatedAt: new Date() })
+    .set({
+      redemptionCount: sql`${promoCodes.redemptionCount} + 1`,
+      updatedAt: new Date(),
+    })
     .where(eq(promoCodes.id, promo.id));
 
   await db.execute(
-    sql`UPDATE carts SET promo_code_id = ${promo.id}, updated_at = now() WHERE id = ${cartId}`,
+    sql`UPDATE carts SET promo_code_id = ${promo.id}, updated_at = now() WHERE id = ${cartId}`
   );
 
   return {
@@ -125,13 +128,17 @@ export async function applyPromo(
     description: promo.description,
     discountType: promo.discount_type,
     discountValue: promo.discount_value,
-    discount: computeDiscount(promo.discount_type, promo.discount_value, subtotal),
+    discount: computeDiscount(
+      promo.discount_type,
+      promo.discount_value,
+      subtotal
+    ),
   };
 }
 
 export async function revalidateAttachedPromo(
   cartId: string,
-  userId: string | null,
+  userId: string | null
 ): Promise<void> {
   if (!userId) return;
   const attached = await getAttachedPromo(cartId, userId);
@@ -151,14 +158,14 @@ export async function revalidateAttachedPromo(
 
 export async function removePromo(cartId: string): Promise<void> {
   await db.execute(
-    sql`UPDATE carts SET promo_code_id = NULL, updated_at = now() WHERE id = ${cartId}`,
+    sql`UPDATE carts SET promo_code_id = NULL, updated_at = now() WHERE id = ${cartId}`
   );
 }
 
 export async function getAttachedPromo(
   cartId: string,
-  userId: string | null,
-): Promise<Omit<AppliedPromo, "discount"> | null> {
+  userId: string | null
+): Promise<Omit<AppliedPromo, 'discount'> | null> {
   if (!userId) return null;
   const rows = await rawQuery<PromoRow>(sql`
     SELECT pc.id, pc.code, pc.description, pc.discount_type, pc.discount_value,

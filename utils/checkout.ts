@@ -13,26 +13,21 @@
  *     automatically (best-effort — a Shiprocket outage never loses an order).
  */
 
-import { cookies } from "next/headers";
-import { and, eq, sql } from "drizzle-orm";
-import { db, rawQuery, orders, orderItems, customers } from "./db";
+import { and, eq, sql } from 'drizzle-orm';
+import { db, rawQuery, orders, orderItems, customers } from './db';
 import {
-  CART_COOKIE,
-  resolveCartId,
+  getCartShopper,
   getCartDetail,
   clearCart,
   type CartLine,
-} from "./cart";
-import { removePromo } from "./promo";
+} from './cart';
+import { removePromo } from './promo';
 import {
   createAddress,
   ensureCustomerForUserId,
   listAddresses,
-} from "./account";
-import {
-  computeShippingAmount,
-  type CheckoutAddress,
-} from "./checkout-format";
+} from './account';
+import { computeShippingAmount, type CheckoutAddress } from './checkout-format';
 
 export {
   SHIPPING_FLAT,
@@ -40,16 +35,15 @@ export {
   computeShippingAmount,
   computeCheckoutTotals,
   toPaise,
-} from "./checkout-format";
-export type { CheckoutAddress, CheckoutTotals } from "./checkout-format";
-import { getSessionUserId } from "./request-user";
-import { checkPinServiceability, createShiprocketOrder } from "./shipping";
+} from './checkout-format';
+export type { CheckoutAddress, CheckoutTotals } from './checkout-format';
+import { checkPinServiceability, createShiprocketOrder } from './shipping';
 import {
   reserveCartItems,
   releaseOrderReservations,
   finalizeReservations,
   StockUnavailableError,
-} from "./reservations";
+} from './reservations';
 import {
   createRazorpayOrder,
   fetchRazorpayPayment,
@@ -57,7 +51,7 @@ import {
   razorpayConfigured,
   verifyRazorpaySignature,
   RazorpayError,
-} from "./razorpay";
+} from './razorpay';
 
 export class CheckoutError extends Error {
   status: number;
@@ -87,37 +81,37 @@ export type CheckoutSessionInput = {
 };
 
 function str(input: Record<string, unknown>, key: string): string {
-  return typeof input[key] === "string" ? (input[key] as string).trim() : "";
+  return typeof input[key] === 'string' ? (input[key] as string).trim() : '';
 }
 
 function validateAddress(raw: Record<string, unknown>): CheckoutAddress {
-  const fullName = str(raw, "fullName");
-  const phone = str(raw, "phone");
-  const addressLine1 = str(raw, "addressLine1");
-  const city = str(raw, "city");
-  const state = str(raw, "state");
-  const postalCode = str(raw, "postalCode");
+  const fullName = str(raw, 'fullName');
+  const phone = str(raw, 'phone');
+  const addressLine1 = str(raw, 'addressLine1');
+  const city = str(raw, 'city');
+  const state = str(raw, 'state');
+  const postalCode = str(raw, 'postalCode');
   if (fullName.length < 2 || fullName.length > 80) {
     throw new CheckoutError("Please enter the recipient's full name.");
   }
   if (!/^[\d\s+-]{10,15}$/.test(phone)) {
-    throw new CheckoutError("Please enter a valid 10-digit phone number.");
+    throw new CheckoutError('Please enter a valid 10-digit phone number.');
   }
-  if (!addressLine1) throw new CheckoutError("Address line 1 is required.");
-  if (!city) throw new CheckoutError("City is required.");
-  if (!state) throw new CheckoutError("State is required.");
+  if (!addressLine1) throw new CheckoutError('Address line 1 is required.');
+  if (!city) throw new CheckoutError('City is required.');
+  if (!state) throw new CheckoutError('State is required.');
   if (!/^\d{6}$/.test(postalCode)) {
-    throw new CheckoutError("Please enter a valid 6-digit PIN code.");
+    throw new CheckoutError('Please enter a valid 6-digit PIN code.');
   }
   return {
     fullName,
     phone,
     addressLine1,
-    addressLine2: str(raw, "addressLine2") || null,
+    addressLine2: str(raw, 'addressLine2') || null,
     city,
     state,
     postalCode,
-    country: str(raw, "country") || "India",
+    country: str(raw, 'country') || 'India',
   };
 }
 
@@ -140,10 +134,12 @@ function generateOrderNumber(): string {
 }
 
 /** Promo attached to the cart (already validated/recorded by ./promo). */
-async function getCartPromoCodeId(cartId: string | null): Promise<string | null> {
+async function getCartPromoCodeId(
+  cartId: string | null
+): Promise<string | null> {
   if (!cartId) return null;
   const rows = await rawQuery<{ promo_code_id: string | null }>(
-    sql`SELECT promo_code_id FROM carts WHERE id = ${cartId} LIMIT 1`,
+    sql`SELECT promo_code_id FROM carts WHERE id = ${cartId} LIMIT 1`
   );
   return rows[0]?.promo_code_id ?? null;
 }
@@ -151,7 +147,7 @@ async function getCartPromoCodeId(cartId: string | null): Promise<string | null>
 /** Guest customer row (userId null) so a future signup adopts the orders. */
 async function ensureGuestCustomer(
   email: string,
-  address: CheckoutAddress,
+  address: CheckoutAddress
 ): Promise<{ id: string; email: string }> {
   const guestEmail = email || `guest-${Date.now().toString(36)}@adore.local`;
   const [first, ...rest] = address.fullName.trim().split(/\s+/);
@@ -167,7 +163,7 @@ async function ensureGuestCustomer(
       userId: null,
       email: guestEmail,
       firstName: first,
-      lastName: rest.join(" ") || null,
+      lastName: rest.join(' ') || null,
       phone: address.phone,
     })
     .returning({ id: customers.id, email: customers.email });
@@ -175,32 +171,29 @@ async function ensureGuestCustomer(
 }
 
 export async function createCheckoutSession(
-  input: CheckoutSessionInput,
+  input: CheckoutSessionInput
 ): Promise<CheckoutSession> {
   if (!razorpayConfigured()) {
-    throw new CheckoutError("Payments are not configured.", 503);
+    throw new CheckoutError('Payments are not configured.', 503);
   }
-
-  const userId = await getSessionUserId();
 
   // --- Cart (server-side truth; client totals are never trusted) ----------
-  const token = (await cookies()).get(CART_COOKIE)?.value;
-  const cartId = await resolveCartId(userId, token);
+  const { cartId, userId } = await getCartShopper();
   const cart = await getCartDetail(cartId, userId);
   if (cart.items.length === 0) {
-    throw new CheckoutError("Your bag is empty.");
+    throw new CheckoutError('Your bag is empty.');
   }
-  const outOfStock = cart.items.find((i) => i.quantity > i.stock);
+  const outOfStock = cart.items.find(i => i.quantity > i.stock);
   if (outOfStock) {
     throw new CheckoutError(
       `${outOfStock.name} (${outOfStock.size}) only has ${outOfStock.stock} left — please update your bag.`,
-      409,
+      409
     );
   }
-  const currency = cart.currency ?? "INR";
-  if (currency !== "INR") {
+  const currency = cart.currency ?? 'INR';
+  if (currency !== 'INR') {
     throw new CheckoutError(
-      `Payments currently support INR only (bag currency: ${currency}).`,
+      `Payments currently support INR only (bag currency: ${currency}).`
     );
   }
 
@@ -208,7 +201,7 @@ export async function createCheckoutSession(
   let address: CheckoutAddress;
   let shippingAddressId: string | null = null;
   // Members are emailed at their account address; guests may leave it blank.
-  let accountEmail = "";
+  let accountEmail = '';
 
   if (userId) {
     // Logged-in: pick a saved account address, or enter one now (optionally
@@ -216,57 +209,57 @@ export async function createCheckoutSession(
     const customer = await ensureCustomerForUserId(userId);
     accountEmail = customer.email;
     const saved = customer.id
-      ? (await listAddresses(customer.id)).find((a) => a.id === input.addressId)
+      ? (await listAddresses(customer.id)).find(a => a.id === input.addressId)
       : undefined;
 
     if (saved) {
       if (!saved.phone?.trim()) {
         throw new CheckoutError(
-          "That address has no phone number — please add one in your account.",
+          'That address has no phone number — please add one in your account.'
         );
       }
       address = {
-        fullName: saved.fullName?.trim() || customer.email.split("@")[0]!,
+        fullName: saved.fullName?.trim() || customer.email.split('@')[0]!,
         phone: saved.phone,
         addressLine1: saved.addressLine1,
         addressLine2: saved.addressLine2,
         city: saved.city,
         state: saved.state,
         postalCode: saved.postalCode,
-        country: saved.country || "India",
+        country: saved.country || 'India',
       };
       shippingAddressId = saved.id;
-    } else if (input.address && typeof input.address === "object") {
+    } else if (input.address && typeof input.address === 'object') {
       address = validateAddress(input.address);
       if (input.saveAddress) {
         await createAddress(customer.id, {
           ...address,
-          addressType: "shipping",
+          addressType: 'shipping',
           isDefault: false,
         });
         const refreshed = await listAddresses(customer.id);
         shippingAddressId =
           refreshed.find(
-            (a) =>
+            a =>
               a.postalCode === address.postalCode &&
-              a.addressLine1 === address.addressLine1,
+              a.addressLine1 === address.addressLine1
           )?.id ?? null;
       }
     } else {
       throw new CheckoutError(
-        "Please pick a delivery address from your account.",
+        'Please pick a delivery address from your account.'
       );
     }
   } else {
-    if (!input.address || typeof input.address !== "object") {
-      throw new CheckoutError("Please enter a delivery address.");
+    if (!input.address || typeof input.address !== 'object') {
+      throw new CheckoutError('Please enter a delivery address.');
     }
     address = validateAddress(input.address);
   }
 
-  const email = typeof input.email === "string" ? input.email.trim() : "";
+  const email = typeof input.email === 'string' ? input.email.trim() : '';
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    throw new CheckoutError("Please enter a valid email address.");
+    throw new CheckoutError('Please enter a valid email address.');
   }
   const contactEmail = userId ? accountEmail : email;
 
@@ -275,7 +268,7 @@ export async function createCheckoutSession(
   if (!pin.serviceable) {
     throw new CheckoutError(
       `We don't deliver to ${address.postalCode} yet — we're expanding to new PIN codes soon.`,
-      422,
+      422
     );
   }
 
@@ -297,11 +290,11 @@ export async function createCheckoutSession(
     .values({
       customerId: customer.id,
       orderNumber,
-      status: "PENDING",
+      status: 'PENDING',
       subtotal: subtotal.toFixed(2),
       discountAmount: discount.toFixed(2),
       shippingAmount: shipping.toFixed(2),
-      taxAmount: "0",
+      taxAmount: '0',
       totalAmount: (total / 100).toFixed(2),
       currency,
       shippingAddressId,
@@ -322,7 +315,7 @@ export async function createCheckoutSession(
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         totalPrice: item.lineTotal,
-      })),
+      }))
     );
 
     // --- Hold the stock BEFORE any payment window opens --------------------
@@ -331,11 +324,11 @@ export async function createCheckoutSession(
     try {
       await reserveCartItems(
         orderId,
-        cartId ?? "",
+        cartId ?? '',
         cart.items.map((item: CartLine) => ({
           variantId: item.variantId,
           quantity: item.quantity,
-        })),
+        }))
       );
     } catch (err) {
       if (err instanceof StockUnavailableError) {
@@ -349,7 +342,7 @@ export async function createCheckoutSession(
       amount: total,
       currency,
       receipt: orderNumber,
-      notes: { order_number: orderNumber, cart_id: cartId ?? "" },
+      notes: { order_number: orderNumber, cart_id: cartId ?? '' },
     });
     await db
       .update(orders)
@@ -389,7 +382,7 @@ export async function createCheckoutSession(
  * the ONLY key to the confirmation page — order numbers are never enumerable,
  * so nobody can read someone else's order.
  */
-export const RECENT_ORDER_COOKIE = "adore_recent_order";
+export const RECENT_ORDER_COOKIE = 'adore_recent_order';
 export const RECENT_ORDER_MAX_AGE = 60 * 60; // seconds
 
 export type PaymentVerificationInput = {
@@ -423,7 +416,7 @@ export type OrderConfirmation = {
 };
 
 export async function getOrderConfirmation(
-  orderNumber: string,
+  orderNumber: string
 ): Promise<OrderConfirmation> {
   const rows = await db
     .select()
@@ -450,7 +443,7 @@ export async function getOrderConfirmation(
     paymentId: order.razorpayPaymentId,
     shiprocketOrderId: order.shiprocketOrderId,
     shiprocketError: null,
-    items: items.map((item) => ({
+    items: items.map(item => ({
       productName: item.productName,
       sku: item.sku,
       quantity: item.quantity,
@@ -469,9 +462,7 @@ async function decrementStock(orderId: string): Promise<void> {
 /** The bag is now an order — empty it (cosmetic; never fails a payment). */
 async function releaseCart(): Promise<void> {
   try {
-    const token = (await cookies()).get(CART_COOKIE)?.value;
-    const userId = await getSessionUserId();
-    const cartId = await resolveCartId(userId, token);
+    const { cartId } = await getCartShopper();
     if (!cartId) return;
     await clearCart(cartId);
     await removePromo(cartId);
@@ -485,7 +476,9 @@ async function releaseCart(): Promise<void> {
  * Best-effort: a courier outage must never lose a paid order — it just gets
  * pushed again later (the order stays CONFIRMED with no shiprocket_order_id).
  */
-async function pushToShiprocket(orderId: string): Promise<string | null> {
+export async function pushToShiprocket(
+  orderId: string
+): Promise<string | null> {
   const orderRows = await db
     .select()
     .from(orders)
@@ -495,31 +488,33 @@ async function pushToShiprocket(orderId: string): Promise<string | null> {
   if (!order) return null;
 
   const [customerRows, items] = await Promise.all([
-    db.select().from(customers).where(eq(customers.id, order.customerId)).limit(1),
+    db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, order.customerId))
+      .limit(1),
     db.select().from(orderItems).where(eq(orderItems.orderId, orderId)),
   ]);
   const customer = customerRows[0];
   const snap = order.shippingAddressSnapshot ?? {};
   const customerName =
     snap.fullName ||
-    [customer?.firstName, customer?.lastName]
-      .filter(Boolean)
-      .join(" ") ||
+    [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') ||
     customer?.email ||
-    "Customer";
+    'Customer';
 
   const result = await createShiprocketOrder({
     orderNumber: order.orderNumber,
     customerName,
-    phone: snap.phone || customer?.phone || "",
-    email: customer?.email ?? "",
-    addressLine1: snap.addressLine1 ?? "",
+    phone: snap.phone || customer?.phone || '',
+    email: customer?.email ?? '',
+    addressLine1: snap.addressLine1 ?? '',
     addressLine2: snap.addressLine2 ?? null,
-    city: snap.city ?? "",
-    state: snap.state ?? "",
-    postalCode: snap.postalCode ?? "",
-    country: snap.country || "India",
-    items: items.map((item) => ({
+    city: snap.city ?? '',
+    state: snap.state ?? '',
+    postalCode: snap.postalCode ?? '',
+    country: snap.country || 'India',
+    items: items.map(item => ({
       name: item.productName,
       sku: item.sku,
       units: item.quantity,
@@ -532,7 +527,10 @@ async function pushToShiprocket(orderId: string): Promise<string | null> {
   if (result.shiprocketOrderId) {
     await db
       .update(orders)
-      .set({ shiprocketOrderId: result.shiprocketOrderId, updatedAt: new Date() })
+      .set({
+        shiprocketOrderId: result.shiprocketOrderId,
+        updatedAt: new Date(),
+      })
       .where(eq(orders.id, orderId));
   }
   return result.shiprocketOrderId || null;
@@ -545,11 +543,11 @@ async function pushToShiprocket(orderId: string): Promise<string | null> {
  * UPDATE, so stock is only ever decremented once.
  */
 export async function verifyAndConfirmPayment(
-  input: PaymentVerificationInput,
+  input: PaymentVerificationInput
 ): Promise<OrderConfirmation> {
   const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = input;
   if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
-    throw new CheckoutError("Missing payment details.", 400);
+    throw new CheckoutError('Missing payment details.', 400);
   }
 
   const orderRows = await db
@@ -561,11 +559,11 @@ export async function verifyAndConfirmPayment(
   if (!order) throw new CheckoutError("We couldn't find that order.", 404);
 
   // Already handled (e.g. the browser retried the callback).
-  if (order.status !== "PENDING") {
+  if (order.status !== 'PENDING') {
     if (order.razorpayPaymentId === razorpayPaymentId) {
       return getOrderConfirmation(order.orderNumber);
     }
-    throw new CheckoutError("This order has already been paid for.", 409);
+    throw new CheckoutError('This order has already been paid for.', 409);
   }
 
   if (
@@ -577,23 +575,26 @@ export async function verifyAndConfirmPayment(
   ) {
     throw new CheckoutError(
       "We couldn't verify that payment. If money was deducted it will be refunded automatically.",
-      400,
+      400
     );
   }
 
   // Server-to-server confirmation: the captured amount must match our order.
   const payment = await fetchRazorpayPayment(razorpayPaymentId);
   const expectedPaise = Math.round(Number(order.totalAmount) * 100);
-  if (payment.order_id !== razorpayOrderId || payment.amount !== expectedPaise) {
+  if (
+    payment.order_id !== razorpayOrderId ||
+    payment.amount !== expectedPaise
+  ) {
     throw new CheckoutError(
       "That payment doesn't match this order — please contact support.",
-      409,
+      409
     );
   }
-  if (payment.status !== "captured" && payment.status !== "authorized") {
+  if (payment.status !== 'captured' && payment.status !== 'authorized') {
     throw new CheckoutError(
       `Payment was not completed (status: ${payment.status}).`,
-      402,
+      402
     );
   }
 
@@ -601,11 +602,11 @@ export async function verifyAndConfirmPayment(
   const confirmed = await db
     .update(orders)
     .set({
-      status: "CONFIRMED",
+      status: 'CONFIRMED',
       razorpayPaymentId,
       updatedAt: new Date(),
     })
-    .where(and(eq(orders.id, order.id), eq(orders.status, "PENDING")))
+    .where(and(eq(orders.id, order.id), eq(orders.status, 'PENDING')))
     .returning({ id: orders.id });
 
   if (confirmed.length === 0) {
@@ -620,13 +621,13 @@ export async function verifyAndConfirmPayment(
   try {
     shiprocketOrderId = await pushToShiprocket(order.id);
     if (!shiprocketOrderId) {
-      shiprocketError = "Shiprocket did not return an order id.";
+      shiprocketError = 'Shiprocket did not return an order id.';
     }
   } catch (err) {
     shiprocketError =
-      err instanceof Error ? err.message : "Courier booking failed.";
+      err instanceof Error ? err.message : 'Courier booking failed.';
     console.error(
-      `[checkout] Shiprocket push for ${order.orderNumber} failed: ${shiprocketError}`,
+      `[checkout] Shiprocket push for ${order.orderNumber} failed: ${shiprocketError}`
     );
   }
 

@@ -1,5 +1,5 @@
-import { SiteHeader, Footer, ProductCard } from "@/components";
-import { getProductsForSection } from "@/utils";
+import { SiteHeader, Footer, ProductCard } from '@/components';
+import { getProductsForSection } from '@/utils';
 
 export const revalidate = 300;
 
@@ -18,26 +18,26 @@ async function getHomeProducts(): Promise<{
   favourites: Awaited<ReturnType<typeof getProductsForSection>>;
 }> {
   const [latest, featured] = await Promise.all([
-    getProductsForSection({ sort: "newest", limit: LATEST_LIMIT }),
+    getProductsForSection({ sort: 'newest', limit: LATEST_LIMIT }),
     getProductsForSection({ featuredOnly: true, limit: 8 }),
   ]);
 
-  const latestIds = new Set(latest.map((p) => p.id));
+  const latestIds = new Set(latest.map(p => p.id));
 
   let favourites = featured
-    .filter((p) => !latestIds.has(p.id))
+    .filter(p => !latestIds.has(p.id))
     .slice(0, FAVOURITES_LIMIT);
 
   // Fallback: nothing featured (or all of it already in the latest row) →
   // fill with the next-newest products instead.
   if (favourites.length === 0) {
     const filler = await getProductsForSection({
-      sort: "newest",
+      sort: 'newest',
       limit: LATEST_LIMIT + FAVOURITES_LIMIT,
     });
     const shown = new Set(latestIds);
     favourites = filler
-      .filter((p) => !shown.has(p.id) && shown.add(p.id))
+      .filter(p => !shown.has(p.id) && shown.add(p.id))
       .slice(0, FAVOURITES_LIMIT);
   }
 
@@ -66,7 +66,7 @@ export default async function Home() {
           {latest.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {latest.map((product) => (
+                {latest.map(product => (
                   <ProductCard key={product.id} product={product} />
                 ))}
               </div>
@@ -104,7 +104,7 @@ export default async function Home() {
             </a>
           </div>
           <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {favourites.map((product) => (
+            {favourites.map(product => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
@@ -170,7 +170,7 @@ function HeroSection() {
         </div>
       </div>
       <img
-        src={"/images/banner-1.jpg"}
+        src={'/images/banner-1.jpg'}
         alt="banner-1"
         loading="eager"
         className="order-1 h-72 w-full sm:order-2 sm:col-span-3 sm:h-auto"

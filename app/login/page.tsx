@@ -1,8 +1,8 @@
-import { Suspense } from "react";
-import { SiteHeader, Footer } from "@/components";
-import LoginForm from "./login-form";
+import { Suspense } from 'react';
+import { SiteHeader, Footer } from '@/components';
+import LoginForm from './login-form';
 
-export const metadata = { title: "Log in" };
+export const metadata = { title: 'Log in' };
 
 export default function LoginPage() {
   return (

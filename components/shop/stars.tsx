@@ -1,13 +1,13 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import { useState } from 'react';
 
 function StarPath({ filled }: { filled: boolean }) {
   return (
     <svg
       viewBox="0 0 20 20"
       aria-hidden="true"
-      className={`h-4 w-4 ${filled ? "fill-[#C9962E]" : "fill-[#2B2620]/15"}`}
+      className={`h-4 w-4 ${filled ? 'fill-[#C9962E]' : 'fill-[#2B2620]/15'}`}
     >
       <path d="M10 1.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L10 14.9 4.7 17.6l1-5.8L1.5 7.7l5.9-.9L10 1.5z" />
     </svg>
@@ -17,7 +17,7 @@ function StarPath({ filled }: { filled: boolean }) {
 /** Read-only stars. Supports fractional values via a clipped overlay. */
 export function Stars({
   value,
-  className = "",
+  className = '',
 }: {
   value: number;
   className?: string;
@@ -30,7 +30,7 @@ export function Stars({
       className={`relative inline-flex shrink-0 ${className}`}
     >
       <span className="flex gap-0.5">
-        {[0, 1, 2, 3, 4].map((i) => (
+        {[0, 1, 2, 3, 4].map(i => (
           <StarPath key={i} filled={false} />
         ))}
       </span>
@@ -39,7 +39,7 @@ export function Stars({
         style={{ width: `${pct}%` }}
         aria-hidden="true"
       >
-        {[0, 1, 2, 3, 4].map((i) => (
+        {[0, 1, 2, 3, 4].map(i => (
           <StarPath key={i} filled={true} />
         ))}
       </span>
@@ -64,13 +64,13 @@ export function StarInput({
       aria-label="Your rating"
       onMouseLeave={() => setHover(0)}
     >
-      {[1, 2, 3, 4, 5].map((n) => (
+      {[1, 2, 3, 4, 5].map(n => (
         <button
           key={n}
           type="button"
           role="radio"
           aria-checked={value === n}
-          aria-label={`${n} star${n > 1 ? "s" : ""}`}
+          aria-label={`${n} star${n > 1 ? 's' : ''}`}
           onClick={() => onChange(n)}
           onMouseEnter={() => setHover(n)}
           onFocus={() => setHover(n)}
@@ -80,7 +80,7 @@ export function StarInput({
             viewBox="0 0 20 20"
             aria-hidden="true"
             className={`h-7 w-7 transition-colors ${
-              n <= shown ? "fill-[#C9962E]" : "fill-[#2B2620]/15"
+              n <= shown ? 'fill-[#C9962E]' : 'fill-[#2B2620]/15'
             }`}
           >
             <path d="M10 1.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8L10 14.9 4.7 17.6l1-5.8L1.5 7.7l5.9-.9L10 1.5z" />

@@ -4,12 +4,16 @@ import {
   ProductDetail,
   ProductCard,
   ProductReviews,
-} from "@/components";
-import { getProductBySlug, getRelatedProducts, getActiveProductSlugs } from "@/utils";
-import { getApprovedReviews, getReviewSummary } from "@/utils/reviews";
-import { EMPTY_SUMMARY } from "@/utils/review-format";
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+} from '@/components';
+import {
+  getProductBySlug,
+  getRelatedProducts,
+  getActiveProductSlugs,
+} from '@/utils';
+import { getApprovedReviews, getReviewSummary } from '@/utils/reviews';
+import { EMPTY_SUMMARY } from '@/utils/review-format';
+import type { Metadata } from 'next';
+import { notFound } from 'next/navigation';
 
 // ISR: cache the product shell at the edge (60s). Only the logged-in
 // reviewer name is resolved client-side (see <ProductReviews>), so the
@@ -28,7 +32,7 @@ export const revalidate = 60;
  */
 export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
   const slugs = await getActiveProductSlugs();
-  return slugs.map((slug) => ({ slug }));
+  return slugs.map(slug => ({ slug }));
 }
 
 type PageProps = {
@@ -44,9 +48,7 @@ export async function generateMetadata({
   if (!product) return {};
 
   const description =
-    product.shortDescription ??
-    product.details[0] ??
-    `${product.name} — Adore`;
+    product.shortDescription ?? product.details[0] ?? `${product.name} — Adore`;
 
   return {
     title: product.name, // root layout template appends "| Adore"
@@ -55,13 +57,18 @@ export async function generateMetadata({
     openGraph: {
       title: `${product.name} | Adore`,
       description,
-      type: "website",
+      type: 'website',
       images: product.images[0]
-        ? [{ url: product.images[0].url, alt: product.images[0].alt ?? product.name }]
+        ? [
+            {
+              url: product.images[0].url,
+              alt: product.images[0].alt ?? product.name,
+            },
+          ]
         : undefined,
     },
     twitter: {
-      card: "summary_large_image",
+      card: 'summary_large_image',
       title: `${product.name} | Adore`,
       description,
       images: product.images[0] ? [product.images[0].url] : undefined,
@@ -84,12 +91,12 @@ export default async function ProductPage({ params }: PageProps) {
   let reviewSummary = EMPTY_SUMMARY;
   let initialReviews: Awaited<
     ReturnType<typeof getApprovedReviews>
-  >["reviews"] = [];
+  >['reviews'] = [];
   let reviewTotal = 0;
   try {
     const [summary, firstPage] = await Promise.all([
       getReviewSummary(product.id),
-      getApprovedReviews(product.id, { page: 1, limit: 5, sort: "recent" }),
+      getApprovedReviews(product.id, { page: 1, limit: 5, sort: 'recent' }),
     ]);
     reviewSummary = summary;
     initialReviews = firstPage.reviews;
@@ -101,11 +108,11 @@ export default async function ProductPage({ params }: PageProps) {
   const reviewJsonLd =
     reviewSummary.count > 0
       ? {
-          "@context": "https://schema.org",
-          "@type": "Product",
+          '@context': 'https://schema.org',
+          '@type': 'Product',
           name: product.name,
           aggregateRating: {
-            "@type": "AggregateRating",
+            '@type': 'AggregateRating',
             ratingValue: reviewSummary.average,
             reviewCount: reviewSummary.count,
           },
@@ -125,7 +132,7 @@ export default async function ProductPage({ params }: PageProps) {
               initialSummary={reviewSummary}
               initialReviews={initialReviews}
               initialTotal={reviewTotal}
-              sizes={product.sizes.map((s) => s.size)}
+              sizes={product.sizes.map(s => s.size)}
             />
           }
         />
@@ -148,7 +155,7 @@ export default async function ProductPage({ params }: PageProps) {
             </a>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4 md:mt-10">
-            {related.map((p) => (
+            {related.map(p => (
               <ProductCard key={p.id} product={p} />
             ))}
           </div>

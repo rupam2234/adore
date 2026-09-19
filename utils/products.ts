@@ -1,8 +1,12 @@
-import { rawQuery, sql, ProductCardData, ProductImage } from ".";
-import { cache } from "react";
-import { getPublicUrl } from "./cloudinary";
-import { CATEGORY_CHILDREN, type CategoryRow, type CategorySlug } from "./categories";
-import { normalizeCareInstructions } from "./product-format";
+import { rawQuery, sql, ProductCardData, ProductImage } from '.';
+import { cache } from 'react';
+import { getPublicUrl } from './cloudinary';
+import {
+  CATEGORY_CHILDREN,
+  type CategoryRow,
+  type CategorySlug,
+} from './categories';
+import { normalizeCareInstructions } from './product-format';
 
 export type { CategoryRow, CategorySlug, ProductCardData, ProductImage };
 
@@ -25,7 +29,12 @@ type ProductRow = {
   compare_at_price: string | null;
   currency: string;
   colors: Array<{ name: string; hex: string | null }> | null;
-  sizes: Array<{ size: string; stock: number; price: string; compare_at_price: string | null }> | null;
+  sizes: Array<{
+    size: string;
+    stock: number;
+    price: string;
+    compare_at_price: string | null;
+  }> | null;
   variants: Array<{
     id: string;
     color: string;
@@ -45,13 +54,13 @@ type ProductRow = {
 };
 
 /** Whitelisted sort options — mapped to SQL below, never interpolated raw. */
-export type ProductSort = "featured" | "newest" | "price-asc" | "price-desc";
+export type ProductSort = 'featured' | 'newest' | 'price-asc' | 'price-desc';
 
 const SORT_CLAUSES: Record<ProductSort, string> = {
-  featured: "p.is_featured DESC, p.created_at DESC",
-  newest: "p.created_at DESC",
-  "price-asc": "min_active.price ASC",
-  "price-desc": "min_active.price DESC",
+  featured: 'p.is_featured DESC, p.created_at DESC',
+  newest: 'p.created_at DESC',
+  'price-asc': 'min_active.price ASC',
+  'price-desc': 'min_active.price DESC',
 };
 
 type QueryOptions = {
@@ -95,7 +104,7 @@ export function expandCategorySlugs(slug: string): string[] {
 function mapProductRow(row: ProductRow): ProductCardData {
   // DB aggregates sizes as snake_case { size, stock, price, compare_at_price };
   // normalize here so client components can read size.price / size.compareAtPrice.
-  const sizes = (row.sizes ?? []).map((s) => {
+  const sizes = (row.sizes ?? []).map(s => {
     const raw = s as unknown as Record<string, unknown>;
     const price = (raw.price ?? raw.min_price ?? row.price) as string;
     const compareAtPrice = (raw.compareAtPrice ??
@@ -118,7 +127,7 @@ function mapProductRow(row: ProductRow): ProductCardData {
     material: row.material,
     fit: row.fit,
     careInstructions: normalizeCareInstructions(row.care_instructions),
-    categories: (row.categories ?? []).map((c) => ({
+    categories: (row.categories ?? []).map(c => ({
       slug: c.slug,
       name: c.name,
       parentSlug: c.parent_slug,
@@ -128,7 +137,7 @@ function mapProductRow(row: ProductRow): ProductCardData {
     currency: row.currency,
     colors: row.colors ?? [],
     sizes,
-    variants: (row.variants ?? []).map((v) => ({
+    variants: (row.variants ?? []).map(v => ({
       id: v.id,
       color: v.color,
       colorHex: v.color_hex,
@@ -138,7 +147,7 @@ function mapProductRow(row: ProductRow): ProductCardData {
       stock: Number(v.stock),
     })),
     totalStock: Number(row.total_stock ?? 0),
-    images: (row.images ?? []).map((img) => ({
+    images: (row.images ?? []).map(img => ({
       id: img.id,
       url: getPublicUrl(img.public_id),
       alt: img.alt_text,
@@ -155,14 +164,14 @@ function mapProductRow(row: ProductRow): ProductCardData {
  * - Image delivery URLs are generated from the Cloudinary public_id.
  */
 export async function getProductsForSection(
-  options: QueryOptions = {},
+  options: QueryOptions = {}
 ): Promise<ProductCardData[]> {
   const {
     categorySlug,
     includeChildren = true,
     featuredOnly = false,
     search,
-    sort = "featured",
+    sort = 'featured',
     colors,
     sizes,
     inStockOnly = false,
@@ -171,7 +180,11 @@ export async function getProductsForSection(
     limit = 8,
   } = options;
   const categorySlugs =
-    categorySlug && includeChildren ? expandCategorySlugs(categorySlug) : categorySlug ? [categorySlug] : null;
+    categorySlug && includeChildren
+      ? expandCategorySlugs(categorySlug)
+      : categorySlug
+        ? [categorySlug]
+        : null;
 
   // Filter fragment: EXISTS over matched categories (parameterized IN list),
   // or plain TRUE when no category filter is given.
@@ -180,8 +193,8 @@ export async function getProductsForSection(
             SELECT 1 FROM product_categories pc
             JOIN categories c ON c.id = pc.category_id
             WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
-              categorySlugs.map((s) => sql`${s}`),
-              sql`, `,
+              categorySlugs.map(s => sql`${s}`),
+              sql`, `
             )}))
           `
     : sql`TRUE`;
@@ -196,17 +209,17 @@ export async function getProductsForSection(
 
   // Advanced filters — each is an EXISTS over active variants (parameterized
   // IN lists), or TRUE when unset. Prices compare against the cheapest variant.
-  const variantIn = (column: "color" | "size", values: string[]) =>
+  const variantIn = (column: 'color' | 'size', values: string[]) =>
     sql`EXISTS (
           SELECT 1 FROM product_variants v
           WHERE v.product_id = p.id AND v.is_active
             AND v.${sql.raw(column)} IN (${sql.join(
-              values.map((v) => sql`${v}`),
-              sql`, `,
+              values.map(v => sql`${v}`),
+              sql`, `
             )}))`;
 
-  const colorFilter = colors?.length ? variantIn("color", colors) : sql`TRUE`;
-  const sizeFilter = sizes?.length ? variantIn("size", sizes) : sql`TRUE`;
+  const colorFilter = colors?.length ? variantIn('color', colors) : sql`TRUE`;
+  const sizeFilter = sizes?.length ? variantIn('size', sizes) : sql`TRUE`;
   const stockFilter = inStockOnly
     ? sql`EXISTS (
           SELECT 1 FROM product_variants v
@@ -220,7 +233,6 @@ export async function getProductsForSection(
         : maxPrice != null
           ? sql`min_active.price <= ${maxPrice}`
           : sql`TRUE`;
-
 
   const rows = await rawQuery<ProductRow>(sql`
     SELECT
@@ -329,14 +341,12 @@ export async function getProductsForSection(
  * options for the advanced filter panel. Optionally scoped to a category
  * (parent slugs include children, same as product queries).
  */
-export async function getFilterFacets(
-  categorySlug?: string,
-): Promise<{
+export async function getFilterFacets(categorySlug?: string): Promise<{
   colors: { name: string; hex: string | null }[];
   sizes: string[];
 }> {
   const categorySlugs =
-    categorySlug && categorySlug !== "all"
+    categorySlug && categorySlug !== 'all'
       ? expandCategorySlugs(categorySlug)
       : null;
 
@@ -345,12 +355,16 @@ export async function getFilterFacets(
             SELECT 1 FROM product_categories pc
             JOIN categories c ON c.id = pc.category_id
             WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
-              categorySlugs.map((s) => sql`${s}`),
-              sql`, `,
+              categorySlugs.map(s => sql`${s}`),
+              sql`, `
             )}))`
     : sql`TRUE`;
 
-  const rows = await rawQuery<{ color: string; color_hex: string | null; size: string }>(sql`
+  const rows = await rawQuery<{
+    color: string;
+    color_hex: string | null;
+    size: string;
+  }>(sql`
     SELECT DISTINCT v.color, v.color_hex, v.size
     FROM product_variants v
     JOIN products p ON p.id = v.product_id
@@ -376,7 +390,7 @@ export async function getFilterFacets(
  * Same shape as ProductCardData; returns null when not found or inactive.
  */
 export const getProductBySlug = cache(async function getProductBySlug(
-  slug: string,
+  slug: string
 ): Promise<ProductCardData | null> {
   const rows = await rawQuery<ProductRow>(sql`
     SELECT
@@ -488,7 +502,7 @@ export const getProductBySlug = cache(async function getProductBySlug(
  */
 export const getRelatedProducts = cache(async function getRelatedProducts(
   slug: string,
-  limit = 4,
+  limit = 4
 ): Promise<ProductCardData[]> {
   const rows = await rawQuery<ProductRow>(sql`
     SELECT
@@ -628,7 +642,7 @@ export async function getActiveProductSlugs(): Promise<string[]> {
       )
     ORDER BY p.created_at DESC
   `);
-  return rows.map((row) => row.slug);
+  return rows.map(row => row.slug);
 }
 
 /** Fetch every category with its parent link (for nav / filters). */
@@ -646,4 +660,3 @@ export async function getCategories(): Promise<CategoryRow[]> {
   `);
   return rows;
 }
-

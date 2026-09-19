@@ -1,16 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
-import {
-  verifyAccessToken,
-  ACCESS_COOKIE_NAME,
-} from "@/utils/auth";
+import { NextResponse, type NextRequest } from 'next/server';
+import { verifyAccessToken, ACCESS_COOKIE_NAME } from '@/utils/auth';
 
-const ADMIN_PATHS = ["/admin", "/api/admin"];
-const PUBLIC_ADMIN_PATH = "/admin/login";
+const ADMIN_PATHS = ['/admin', '/api/admin'];
+const PUBLIC_ADMIN_PATH = '/admin/login';
 
 function isAdminPath(pathname: string): boolean {
-  return ADMIN_PATHS.some(
-    (p) => pathname === p || pathname.startsWith(p + "/"),
-  );
+  return ADMIN_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'));
 }
 
 export default async function authMiddleware(request: NextRequest) {
@@ -20,7 +15,7 @@ export default async function authMiddleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/api/auth/")) {
+  if (pathname.startsWith('/api/auth/')) {
     return NextResponse.next();
   }
 
@@ -33,8 +28,8 @@ export default async function authMiddleware(request: NextRequest) {
   const payload = token ? await verifyAccessToken(token) : null;
 
   if (!payload) {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const url = request.nextUrl.clone();
     url.pathname = PUBLIC_ADMIN_PATH;
@@ -42,9 +37,9 @@ export default async function authMiddleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (isAdminPath(pathname) && payload.role !== "admin") {
-    if (pathname.startsWith("/api/")) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (isAdminPath(pathname) && payload.role !== 'admin') {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const url = request.nextUrl.clone();
     url.pathname = PUBLIC_ADMIN_PATH;
@@ -57,9 +52,9 @@ export default async function authMiddleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/admin",
-    "/admin/:path*",
-    "/api/admin/:path*",
+    '/admin',
+    '/admin/:path*',
+    '/api/admin/:path*',
     // NOTE: the /api/auth/* routes are deliberately NOT matched. The guard
     // above lets them straight through, so matching them only cost a
     // middleware invocation (and a log line) on every /api/auth/me call.

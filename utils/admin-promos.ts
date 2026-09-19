@@ -1,11 +1,11 @@
-import { desc, eq } from "drizzle-orm";
-import { db, promoCodes, promoRedemptions, users } from "./db";
+import { desc, eq } from 'drizzle-orm';
+import { db, promoCodes, promoRedemptions, users } from './db';
 
 export type AdminPromo = {
   id: string;
   code: string;
   description: string | null;
-  discountType: "PERCENT" | "FIXED";
+  discountType: 'PERCENT' | 'FIXED';
   discountValue: string;
   minSubtotal: string | null;
   maxRedemptions: number | null;
@@ -20,7 +20,7 @@ export async function listPromos(): Promise<AdminPromo[]> {
     .select()
     .from(promoCodes)
     .orderBy(desc(promoCodes.createdAt));
-  return rows.map((row) => ({
+  return rows.map(row => ({
     id: row.id,
     code: row.code,
     description: row.description,
@@ -38,7 +38,7 @@ export async function listPromos(): Promise<AdminPromo[]> {
 export type PromoPayload = {
   code: string;
   description: string | null;
-  discountType: "PERCENT" | "FIXED";
+  discountType: 'PERCENT' | 'FIXED';
   discountValue: number;
   minSubtotal: number | null;
   maxRedemptions: number | null;
@@ -62,7 +62,10 @@ export async function createPromo(payload: PromoPayload): Promise<void> {
   });
 }
 
-export async function setPromoActive(id: string, isActive: boolean): Promise<void> {
+export async function setPromoActive(
+  id: string,
+  isActive: boolean
+): Promise<void> {
   await db
     .update(promoCodes)
     .set({ isActive, updatedAt: new Date() })
@@ -73,15 +76,15 @@ export async function deletePromo(id: string): Promise<void> {
   await db.delete(promoCodes).where(eq(promoCodes.id, id));
 }
 
-export async function listPromoRedemptions(promoCodeId: string): Promise<
-  Array<{ userEmail: string; createdAt: string }>
-> {
+export async function listPromoRedemptions(
+  promoCodeId: string
+): Promise<Array<{ userEmail: string; createdAt: string }>> {
   const rows = await db
     .select({ userEmail: users.email, createdAt: promoRedemptions.createdAt })
     .from(promoRedemptions)
     .innerJoin(users, eq(users.id, promoRedemptions.userId))
     .where(eq(promoRedemptions.promoCodeId, promoCodeId));
-  return rows.map((row) => ({
+  return rows.map(row => ({
     userEmail: row.userEmail,
     createdAt: row.createdAt.toISOString(),
   }));

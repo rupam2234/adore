@@ -9,16 +9,16 @@
  * instant and we don't burn Shiprocket's request quota.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const SHIPROCKET_BASE = "https://apiv2.shiprocket.in/v1/external";
+const SHIPROCKET_BASE = 'https://apiv2.shiprocket.in/v1/external';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 const REQUEST_TIMEOUT_MS = 8000;
 
 // Fallback pickup location (seller's warehouse PIN). Override via env.
-const DEFAULT_PICKUP_PIN = process.env.SHIPROCKET_PICKUP_PINCODE ?? "560001";
+const DEFAULT_PICKUP_PIN = process.env.SHIPROCKET_PICKUP_PINCODE ?? '560001';
 const DEFAULT_WEIGHT_KG = 0.5;
 
 export type PinCheckResult = {
@@ -47,7 +47,7 @@ const LOGIN_BACKOFF_CAP_MS = 60 * 60 * 1000;
 // Without this, every dev-server restart / hot-reload would discard the
 // in-memory token and log in again — the failed-login spam that triggers
 // Shiprocket's temporary account lock.
-const TOKEN_CACHE_PATH = join(process.cwd(), ".shiprocket-token.json");
+const TOKEN_CACHE_PATH = join(process.cwd(), '.shiprocket-token.json');
 let tokenLoadAttempted = false;
 
 function loadPersistedToken(): void {
@@ -58,11 +58,11 @@ function loadPersistedToken(): void {
   try {
     if (!existsSync(TOKEN_CACHE_PATH)) return;
     const { token, expiresAt } = JSON.parse(
-      readFileSync(TOKEN_CACHE_PATH, "utf8"),
+      readFileSync(TOKEN_CACHE_PATH, 'utf8')
     ) as { token?: string; expiresAt?: number };
     if (
-      typeof token === "string" &&
-      typeof expiresAt === "number" &&
+      typeof token === 'string' &&
+      typeof expiresAt === 'number' &&
       expiresAt > Date.now() + 60_000 // keep a 1-min safety margin
     ) {
       bearerOverride = token;
@@ -78,7 +78,7 @@ function persistToken(token: string, expiresAt: number): void {
     writeFileSync(
       TOKEN_CACHE_PATH,
       JSON.stringify({ token, expiresAt }, null, 2),
-      "utf8",
+      'utf8'
     );
   } catch {
     // Persisting is best-effort; an unwritable FS just means re-login next boot.
@@ -105,7 +105,7 @@ function tokenExpiry(jwt: string): number {
   // JWT payload.exp (seconds since epoch) — Shiprocket tokens last ~10 days.
   try {
     const payload = JSON.parse(
-      Buffer.from(jwt.split(".")[1]!, "base64").toString("utf8"),
+      Buffer.from(jwt.split('.')[1]!, 'base64').toString('utf8')
     ) as { exp?: number };
     // Refresh an hour before actual expiry.
     return payload.exp ? (payload.exp - 3600) * 1000 : 0;
@@ -128,17 +128,16 @@ function tokenExpiry(jwt: string): number {
 // setting UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN. Without them
 // the app falls back to memory + disk caching only.
 // ---------------------------------------------------------------------------
-const REDIS_TOKEN_KEY = "shiprocket:bearer";
+const REDIS_TOKEN_KEY = 'shiprocket:bearer';
 const REDIS_TIMEOUT_MS = 3000;
 
 function redisEnv(): { url: string; token: string } | null {
   // Accepts both Upstash's own variable names and Vercel KV's (Vercel KV is
   // Upstash under the hood — same REST API).
-  const url =
-    process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
   const token =
     process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
-  return url && token ? { url: url.replace(/\/+$/, ""), token } : null;
+  return url && token ? { url: url.replace(/\/+$/, ''), token } : null;
 }
 
 async function redisGetToken(): Promise<string | null> {
@@ -149,7 +148,7 @@ async function redisGetToken(): Promise<string | null> {
       headers: { Authorization: `Bearer ${redis.token}` },
       signal: AbortSignal.timeout(REDIS_TIMEOUT_MS),
       // Never let a stale shared token sit in any cache layer.
-      cache: "no-store",
+      cache: 'no-store',
     });
     if (!res.ok) return null;
     const body = (await res.json()) as { result?: string | null };
@@ -168,10 +167,10 @@ async function redisSetToken(token: string, expiresAt: number): Promise<void> {
     await fetch(
       `${redis.url}/set/${REDIS_TOKEN_KEY}/${encodeURIComponent(token)}?EX=${ttlSec}`,
       {
-        method: "POST",
+        method: 'POST',
         headers: { Authorization: `Bearer ${redis.token}` },
         signal: AbortSignal.timeout(REDIS_TIMEOUT_MS),
-      },
+      }
     );
   } catch {
     // Best-effort; the in-memory/disk caches still cover this instance.
@@ -202,7 +201,7 @@ async function authHeader(): Promise<string> {
     if (Date.now() < bearerExpiresAt) return `Bearer ${shared}`;
     bearerOverride = null;
   }
-  return "Bearer ";
+  return 'Bearer ';
 }
 
 async function loginForToken(): Promise<string | null> {
@@ -211,16 +210,16 @@ async function loginForToken(): Promise<string | null> {
   if (!email || !password) return null;
   if (Date.now() < loginBackoffUntil) return null;
   let res = await fetch(`${SHIPROCKET_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) {
     // API Users authenticate via a different endpoint than main accounts.
     res = await fetch(`${SHIPROCKET_BASE}/auth/user`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -229,10 +228,13 @@ async function loginForToken(): Promise<string | null> {
     // Blocked / wrong credentials — back off (escalating) instead of retrying
     // every request. Shiprocket temporarily locks accounts that fail too often.
     loginFailureStreak += 1;
-    const backoff = Math.min(LOGIN_BACKOFF_MS * 2 ** (loginFailureStreak - 1), LOGIN_BACKOFF_CAP_MS);
+    const backoff = Math.min(
+      LOGIN_BACKOFF_MS * 2 ** (loginFailureStreak - 1),
+      LOGIN_BACKOFF_CAP_MS
+    );
     loginBackoffUntil = Date.now() + backoff;
     console.error(
-      `[shipping] Shiprocket login failed (status ${res.status}) — backing off for ${Math.round(backoff / 60000)} min`,
+      `[shipping] Shiprocket login failed (status ${res.status}) — backing off for ${Math.round(backoff / 60000)} min`
     );
     return null;
   }
@@ -256,7 +258,7 @@ async function fetchServiceability(pin: string): Promise<Response> {
     new URLSearchParams({
       pickup_postcode: DEFAULT_PICKUP_PIN,
       delivery_postcode: pin,
-      cod: "1",
+      cod: '1',
       // The API expects `weight` (kg) — `order_weight` is rejected with
       // 400 "Weight Required".
       weight: String(DEFAULT_WEIGHT_KG),
@@ -282,14 +284,14 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
   }
 
   if (res.status === 401 || res.status === 403) {
-    throw new ShippingUnavailableError("Shiprocket rejected credentials");
+    throw new ShippingUnavailableError('Shiprocket rejected credentials');
   }
   if (res.status === 429) {
-    throw new ShippingUnavailableError("Rate limited by shipping provider");
+    throw new ShippingUnavailableError('Rate limited by shipping provider');
   }
   if (!res.ok) {
     throw new ShippingUnavailableError(
-      `Shipping provider error (${res.status})`,
+      `Shipping provider error (${res.status})`
     );
   }
 
@@ -297,7 +299,12 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
   const couriers = body.data?.available_courier_companies ?? [];
 
   if (couriers.length === 0) {
-    return { serviceable: false, etaDays: null, estimatedDelivery: null, cod: null };
+    return {
+      serviceable: false,
+      etaDays: null,
+      estimatedDelivery: null,
+      cod: null,
+    };
   }
 
   // Fastest courier = the best promise we can make the customer.
@@ -308,11 +315,14 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
     const etaNum = Number(c.estimated_delivery_days ?? c.eta);
     if (Number.isFinite(etaNum) && (etaDays === null || etaNum < etaDays)) {
       etaDays = etaNum;
-      estimatedDelivery = (c.etd ?? c.estimated_delivery_date) ?? estimatedDelivery;
+      estimatedDelivery =
+        c.etd ?? c.estimated_delivery_date ?? estimatedDelivery;
     }
     if (
-      c.cod === 1 || c.cod === true ||
-      c.cod_available === 1 || c.cod_available === true
+      c.cod === 1 ||
+      c.cod === true ||
+      c.cod_available === 1 ||
+      c.cod_available === true
     ) {
       cod = true;
     }
@@ -324,11 +334,11 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
 export class ShippingUnavailableError extends Error {}
 
 export async function checkPinServiceability(
-  rawPin: string,
+  rawPin: string
 ): Promise<PinCheckResult> {
   const pin = rawPin.trim();
   if (!/^\d{6}$/.test(pin)) {
-    throw new ShippingUnavailableError("PIN must be a 6-digit number");
+    throw new ShippingUnavailableError('PIN must be a 6-digit number');
   }
 
   const hit = cache.get(pin);
@@ -362,7 +372,12 @@ export type ShiprocketOrderInput = {
   state: string;
   postalCode: string;
   country: string;
-  items: Array<{ name: string; sku: string; units: number; sellingPrice: number }>;
+  items: Array<{
+    name: string;
+    sku: string;
+    units: number;
+    sellingPrice: number;
+  }>;
   subTotal: number;
   discount: number;
 };
@@ -373,7 +388,7 @@ export type ShiprocketOrderResult = {
 };
 
 // Seller warehouse pickup location name configured in the Shiprocket dashboard.
-const PICKUP_LOCATION = process.env.SHIPROCKET_PICKUP_LOCATION ?? "Primary";
+const PICKUP_LOCATION = process.env.SHIPROCKET_PICKUP_LOCATION ?? 'Primary';
 // Rough parcel dimensions (cm / g) — good enough for rate estimates.
 const PARCEL_LENGTH_CM = 30;
 const PARCEL_BREADTH_CM = 24;
@@ -382,7 +397,7 @@ const PARCEL_WEIGHT_G_PER_UNIT = 400;
 
 function splitName(fullName: string): { first: string; last: string } {
   const parts = fullName.trim().split(/\s+/);
-  return { first: parts[0] ?? "Customer", last: parts.slice(1).join(" ") };
+  return { first: parts[0] ?? 'Customer', last: parts.slice(1).join(' ') };
 }
 
 /**
@@ -390,33 +405,33 @@ function splitName(fullName: string): { first: string; last: string } {
  * auth as serviceability, with one transparent re-login on a stale token.
  */
 export async function createShiprocketOrder(
-  input: ShiprocketOrderInput,
+  input: ShiprocketOrderInput
 ): Promise<ShiprocketOrderResult> {
   const { first, last } = splitName(input.customerName);
   const totalUnits = input.items.reduce((sum, i) => sum + i.units, 0);
   const payload = {
     order_id: input.orderNumber,
-    order_date: new Date().toISOString().slice(0, 19).replace("T", " "),
+    order_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
     pickup_location: PICKUP_LOCATION,
     billing_customer_name: first,
     billing_last_name: last,
     billing_address: input.addressLine1,
-    billing_address_2: input.addressLine2 ?? "",
+    billing_address_2: input.addressLine2 ?? '',
     billing_city: input.city,
     billing_pincode: input.postalCode,
     billing_state: input.state,
-    billing_country: input.country || "India",
+    billing_country: input.country || 'India',
     billing_email: input.email,
-    billing_phone: input.phone.replace(/\D/g, "").slice(-10),
+    billing_phone: input.phone.replace(/\D/g, '').slice(-10),
     shipping_is_billing: true,
-    order_items: input.items.map((item) => ({
+    order_items: input.items.map(item => ({
       name: item.name,
       sku: item.sku,
       units: item.units,
       selling_price: item.sellingPrice,
-      discount: "",
+      discount: '',
     })),
-    payment_method: "Prepaid",
+    payment_method: 'Prepaid',
     sub_total: input.subTotal,
     total_discount: input.discount,
     length: PARCEL_LENGTH_CM,
@@ -428,8 +443,8 @@ export async function createShiprocketOrder(
   const bearer = await authHeader();
   const createOnce = (auth: string) =>
     fetch(`${SHIPROCKET_BASE}/orders/create/adhoc`, {
-      method: "POST",
-      headers: { Authorization: auth, "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { Authorization: auth, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -448,9 +463,9 @@ export async function createShiprocketOrder(
   }
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
+    const detail = await res.text().catch(() => '');
     throw new ShiprocketOrderError(
-      `Shiprocket order creation failed (${res.status}) ${detail.slice(0, 200)}`,
+      `Shiprocket order creation failed (${res.status}) ${detail.slice(0, 200)}`
     );
   }
 
@@ -459,7 +474,7 @@ export async function createShiprocketOrder(
     shipment_id?: number | string;
   };
   return {
-    shiprocketOrderId: String(body.order_id ?? ""),
+    shiprocketOrderId: String(body.order_id ?? ''),
     shipmentId: body.shipment_id != null ? String(body.shipment_id) : null,
   };
 }

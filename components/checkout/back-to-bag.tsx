@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useCart } from "@/components/cart/cart-provider";
+import { useCart } from '@/components/cart/cart-provider';
 
 /**
  * The bag lives in a drawer, not on its own page — so "back to bag" re-opens

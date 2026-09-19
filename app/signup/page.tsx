@@ -1,8 +1,8 @@
-import { Suspense } from "react";
-import { SiteHeader, Footer } from "@/components";
-import SignupForm from "./signup-form";
+import { Suspense } from 'react';
+import { SiteHeader, Footer } from '@/components';
+import SignupForm from './signup-form';
 
-export const metadata = { title: "Create account" };
+export const metadata = { title: 'Create account' };
 
 export default function SignupPage() {
   return (

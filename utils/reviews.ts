@@ -1,13 +1,13 @@
-import { and, count, desc, eq, notInArray } from "drizzle-orm";
-import { cache } from "react";
-import { db, productReviews, products } from "./db";
-import { orders, orderItems, customers } from "./schema";
-import { EMPTY_SUMMARY } from "./review-format";
+import { and, count, desc, eq, notInArray } from 'drizzle-orm';
+import { cache } from 'react';
+import { db, productReviews, products } from './db';
+import { orders, orderItems, customers } from './schema';
+import { EMPTY_SUMMARY } from './review-format';
 import type {
   FitFeedback,
   ProductReview,
   ReviewSummary,
-} from "./review-format";
+} from './review-format';
 
 export { EMPTY_SUMMARY };
 export type { FitFeedback, ProductReview, ReviewSummary };
@@ -41,7 +41,7 @@ function mapReviewRow(row: {
 
 /** Average rating, total count and per-star distribution (approved only). */
 export const getReviewSummary = cache(async function getReviewSummary(
-  productId: string,
+  productId: string
 ): Promise<ReviewSummary> {
   const rows = await db
     .select({ rating: productReviews.rating, total: count() })
@@ -49,12 +49,12 @@ export const getReviewSummary = cache(async function getReviewSummary(
     .where(
       and(
         eq(productReviews.productId, productId),
-        eq(productReviews.isApproved, true),
-      ),
+        eq(productReviews.isApproved, true)
+      )
     )
     .groupBy(productReviews.rating);
 
-  const distribution: ReviewSummary["distribution"] = {
+  const distribution: ReviewSummary['distribution'] = {
     1: 0,
     2: 0,
     3: 0,
@@ -69,28 +69,29 @@ export const getReviewSummary = cache(async function getReviewSummary(
     if (rating >= 1 && rating <= 5) distribution[rating] = n;
     totalReviews += n;
     total += rating * n;
-    }
+  }
   return {
-    average: totalReviews > 0 ? Math.round((total / totalReviews) * 10) / 10 : 0,
+    average:
+      totalReviews > 0 ? Math.round((total / totalReviews) * 10) / 10 : 0,
     count: totalReviews,
     distribution,
   };
 });
 
-export type ReviewSort = "recent" | "helpful";
+export type ReviewSort = 'recent' | 'helpful';
 
 export async function getApprovedReviews(
   productId: string,
-  options: { page?: number; limit?: number; sort?: ReviewSort } = {},
+  options: { page?: number; limit?: number; sort?: ReviewSort } = {}
 ): Promise<{ reviews: ProductReview[]; total: number }> {
   const page = Math.max(1, Math.floor(options.page ?? 1));
   const limit = Math.min(Math.max(1, Math.floor(options.limit ?? 5)), 20);
   const offset = (page - 1) * limit;
-  const sort: ReviewSort = options.sort === "helpful" ? "helpful" : "recent";
+  const sort: ReviewSort = options.sort === 'helpful' ? 'helpful' : 'recent';
 
   const approved = and(
     eq(productReviews.productId, productId),
-    eq(productReviews.isApproved, true),
+    eq(productReviews.isApproved, true)
   );
 
   const [rows, totalRows] = await Promise.all([
@@ -109,16 +110,13 @@ export async function getApprovedReviews(
       .from(productReviews)
       .where(approved)
       .orderBy(
-        ...(sort === "helpful"
+        ...(sort === 'helpful'
           ? [desc(productReviews.helpfulCount), desc(productReviews.createdAt)]
-          : [desc(productReviews.createdAt)]),
+          : [desc(productReviews.createdAt)])
       )
       .limit(limit)
       .offset(offset),
-    db
-      .select({ count: count() })
-      .from(productReviews)
-      .where(approved),
+    db.select({ count: count() }).from(productReviews).where(approved),
   ]);
 
   return {
@@ -144,7 +142,7 @@ export async function getProductIdBySlug(slug: string): Promise<string | null> {
  */
 export async function hasPurchasedProduct(
   userId: string,
-  productId: string,
+  productId: string
 ): Promise<boolean> {
   try {
     const rows = await db
@@ -156,8 +154,8 @@ export async function hasPurchasedProduct(
         and(
           eq(customers.userId, userId),
           eq(orderItems.productId, productId),
-          notInArray(orders.status, ["CANCELLED", "REFUNDED"]),
-        ),
+          notInArray(orders.status, ['CANCELLED', 'REFUNDED'])
+        )
       )
       .limit(1);
     return rows.length > 0;

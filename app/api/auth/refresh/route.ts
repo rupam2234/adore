@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 import {
   refreshTokens,
   setAuthCookies,
   ACCESS_COOKIE_NAME,
   REFRESH_COOKIE_NAME,
-} from "@/utils/auth";
+} from '@/utils/auth';
 
 /**
  * POST /api/auth/refresh
@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
 
   if (!refreshToken) {
     return NextResponse.json(
-      { error: "Refresh token required" },
-      { status: 401 },
+      { error: 'Refresh token required' },
+      { status: 401 }
     );
   }
 
@@ -37,20 +37,28 @@ export async function POST(request: NextRequest) {
   try {
     tokens = await refreshTokens(refreshToken);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Refresh failed";
+    const msg = err instanceof Error ? err.message : 'Refresh failed';
     return NextResponse.json({ error: msg }, { status: 401 });
   }
 
   const cookies = setAuthCookies(tokens.accessToken, tokens.refreshToken);
 
   const response = NextResponse.json({ ok: true }, { status: 200 });
-  response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
-  response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);
+  response.cookies.set(
+    cookies.access.name,
+    cookies.access.value,
+    cookies.access.options
+  );
+  response.cookies.set(
+    cookies.refresh.name,
+    cookies.refresh.value,
+    cookies.refresh.options
+  );
   // Refresh keeps the session alive, so keep the client hint in sync too.
   response.cookies.set(
     cookies.loggedIn.name,
     cookies.loggedIn.value,
-    cookies.loggedIn.options,
+    cookies.loggedIn.options
   );
 
   return response;

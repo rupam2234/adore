@@ -1,8 +1,8 @@
-import PageShell from "@/components/theme/page-shell";
+import PageShell from '@/components/theme/page-shell';
 
 export const metadata = {
-  title: "Privacy Policy",
-  description: "How Adore collects, uses, and protects your personal data.",
+  title: 'Privacy Policy',
+  description: 'How Adore collects, uses, and protects your personal data.',
 };
 
 function Section({
@@ -51,8 +51,7 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong>Usage data</strong> — pages viewed, cart activity, and
-            device/browser information, used to improve the shopping
-            experience.
+            device/browser information, used to improve the shopping experience.
           </li>
         </ul>
       </Section>
@@ -60,9 +59,7 @@ export default function PrivacyPolicyPage() {
       <Section title="2. How we use your information">
         <ul className="list-disc space-y-2 pl-6">
           <li>Processing and delivering your orders, including returns.</li>
-          <li>
-            Providing customer support and responding to your enquiries.
-          </li>
+          <li>Providing customer support and responding to your enquiries.</li>
           <li>
             Detecting, preventing, and investigating fraud, abuse, and
             violations of our Terms &amp; Conditions.
@@ -83,18 +80,18 @@ export default function PrivacyPolicyPage() {
           limit or cancel orders that show risk indicators, and keep records of
           suspicious activity. Where an order is cancelled as a precaution, any
           payment authorisation is released and you will be notified by email.
-          We may share limited data with payment processors, logistics
-          partners, and law enforcement where required to investigate fraud or
-          comply with the law.
+          We may share limited data with payment processors, logistics partners,
+          and law enforcement where required to investigate fraud or comply with
+          the law.
         </p>
       </Section>
 
       <Section title="4. Sharing your information">
         <p>
-          We only share data with service providers who need it to run the
-          store — payment processors, delivery carriers, and email delivery
-          services — under agreements that require them to protect your data.
-          We never sell your personal information.
+          We only share data with service providers who need it to run the store
+          — payment processors, delivery carriers, and email delivery services —
+          under agreements that require them to protect your data. We never sell
+          your personal information.
         </p>
       </Section>
 
@@ -111,24 +108,24 @@ export default function PrivacyPolicyPage() {
       <Section title="6. Cookies">
         <p>
           We use essential cookies to keep your cart, session, and login
-          working, and lightweight analytics to understand how the site is
-          used. You can control cookies in your browser settings; disabling
-          essential cookies may break checkout.
+          working, and lightweight analytics to understand how the site is used.
+          You can control cookies in your browser settings; disabling essential
+          cookies may break checkout.
         </p>
       </Section>
 
       <Section title="7. Your rights">
         <p>
-          You may request access to, correction of, or deletion of your
-          personal data, and object to marketing communications, by writing to
-          us. We will respond within a reasonable time frame and verify your
-          identity before disclosing or deleting data.
+          You may request access to, correction of, or deletion of your personal
+          data, and object to marketing communications, by writing to us. We
+          will respond within a reasonable time frame and verify your identity
+          before disclosing or deleting data.
         </p>
       </Section>
 
       <Section title="8. Contact">
         <p>
-          Questions about this policy? Reach us via the{" "}
+          Questions about this policy? Reach us via the{' '}
           <a
             href="/contact"
             className="underline underline-offset-4 hover:text-[#5C6B4B]"

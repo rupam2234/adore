@@ -9,8 +9,8 @@
  * as duplicated string literals.
  */
 
-export const ACCESS_COOKIE_NAME = "adore_access_token";
-export const REFRESH_COOKIE_NAME = "adore_refresh_token";
+export const ACCESS_COOKIE_NAME = 'adore_access_token';
+export const REFRESH_COOKIE_NAME = 'adore_refresh_token';
 
 /**
  * Non-httpOnly "this browser may have a session" hint, readable by client JS.
@@ -20,4 +20,4 @@ export const REFRESH_COOKIE_NAME = "adore_refresh_token";
  * every request is still authorized server-side from the httpOnly access
  * token, so a forged value can at worst cause one wasted 401.
  */
-export const LOGIN_HINT_COOKIE_NAME = "adore_logged_in";
+export const LOGIN_HINT_COOKIE_NAME = 'adore_logged_in';

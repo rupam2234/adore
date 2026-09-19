@@ -12,9 +12,9 @@
  * with a timing-safe comparison before trusting a payment.
  */
 
-import crypto from "node:crypto";
+import crypto from 'node:crypto';
 
-const RAZORPAY_BASE = "https://api.razorpay.com/v1";
+const RAZORPAY_BASE = 'https://api.razorpay.com/v1';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 export class RazorpayError extends Error {
@@ -42,24 +42,27 @@ export type RazorpayPayment = {
 
 export function razorpayConfigured(): boolean {
   return Boolean(
-    process.env.RAZORPAY_API_KEY && process.env.RAZORPAY_API_SECRET,
+    process.env.RAZORPAY_API_KEY && process.env.RAZORPAY_API_SECRET
   );
 }
 
 /** Public key id — safe to expose to the browser for Checkout.js. */
 export function razorpayKeyId(): string {
-  return process.env.RAZORPAY_API_KEY ?? "";
+  return process.env.RAZORPAY_API_KEY ?? '';
 }
 
 function authHeader(): string {
-  const key = process.env.RAZORPAY_API_KEY ?? "";
-  const secret = process.env.RAZORPAY_API_SECRET ?? "";
-  return `Basic ${Buffer.from(`${key}:${secret}`).toString("base64")}`;
+  const key = process.env.RAZORPAY_API_KEY ?? '';
+  const secret = process.env.RAZORPAY_API_SECRET ?? '';
+  return `Basic ${Buffer.from(`${key}:${secret}`).toString('base64')}`;
 }
 
 async function razorpayFetch<T>(path: string, init?: RequestInit): Promise<T> {
   if (!razorpayConfigured()) {
-    throw new RazorpayError("Payments are not configured (missing Razorpay keys)", 503);
+    throw new RazorpayError(
+      'Payments are not configured (missing Razorpay keys)',
+      503
+    );
   }
   let res: Response;
   try {
@@ -67,20 +70,21 @@ async function razorpayFetch<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
       headers: {
         Authorization: authHeader(),
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         ...init?.headers,
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch {
-    throw new RazorpayError("Could not reach the payment gateway. Please try again.");
+    throw new RazorpayError(
+      'Could not reach the payment gateway. Please try again.'
+    );
   }
   const body = (await res.json().catch(() => null)) as
-    | (T & { error?: { description?: string } })
-    | null;
+    (T & { error?: { description?: string } }) | null;
   if (!res.ok) {
     throw new RazorpayError(
-      body?.error?.description ?? `Payment gateway error (${res.status})`,
+      body?.error?.description ?? `Payment gateway error (${res.status})`
     );
   }
   return body as T;
@@ -93,11 +97,11 @@ export async function createRazorpayOrder(input: {
   receipt: string;
   notes?: Record<string, string>;
 }): Promise<RazorpayOrder> {
-  return razorpayFetch<RazorpayOrder>("/orders", {
-    method: "POST",
+  return razorpayFetch<RazorpayOrder>('/orders', {
+    method: 'POST',
     body: JSON.stringify({
       amount: input.amount,
-      currency: input.currency ?? "INR",
+      currency: input.currency ?? 'INR',
       receipt: input.receipt,
       notes: input.notes,
     }),
@@ -108,7 +112,9 @@ export async function fetchRazorpayOrder(id: string): Promise<RazorpayOrder> {
   return razorpayFetch<RazorpayOrder>(`/orders/${encodeURIComponent(id)}`);
 }
 
-export async function fetchRazorpayPayment(id: string): Promise<RazorpayPayment> {
+export async function fetchRazorpayPayment(
+  id: string
+): Promise<RazorpayPayment> {
   return razorpayFetch<RazorpayPayment>(`/payments/${encodeURIComponent(id)}`);
 }
 
@@ -121,10 +127,10 @@ export function verifyRazorpaySignature(input: {
   const secret = process.env.RAZORPAY_API_SECRET;
   if (!secret || !input.signature) return false;
   const expected = crypto
-    .createHmac("sha256", secret)
+    .createHmac('sha256', secret)
     .update(`${input.orderId}|${input.paymentId}`)
-    .digest("hex");
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(input.signature, "utf8");
+    .digest('hex');
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(input.signature, 'utf8');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }

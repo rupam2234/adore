@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import {
   useCallback,
@@ -9,11 +9,11 @@ import {
   type MouseEvent,
   type ReactNode,
   type WheelEvent,
-} from "react";
-import { formatPrice, type ProductCardData } from "@/utils/product-format";
-import type { ReviewSummary } from "@/utils/review-format";
-import { useCart } from "@/components/cart/cart-provider";
-import { Stars } from "./stars";
+} from 'react';
+import { formatPrice, type ProductCardData } from '@/utils/product-format';
+import type { ReviewSummary } from '@/utils/review-format';
+import { useCart } from '@/components/cart/cart-provider';
+import { Stars } from './stars';
 
 /**
  * Product detail view (product page).
@@ -39,18 +39,18 @@ export default function ProductDetail({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const selectedVariant = selectedSize
-    ? (product.sizes.find((s) => s.size === selectedSize) ?? null)
+    ? (product.sizes.find(s => s.size === selectedSize) ?? null)
     : null;
   const displayPrice = selectedVariant?.price ?? product.price;
   const displayCompareAtPrice =
     selectedVariant?.compareAtPrice ?? product.compareAtPrice;
   const sizePrices = product.sizes
-    .map((s) => s.price)
-    .filter((p): p is string => typeof p === "string");
-  const uniqueSizePrices = [...new Set(sizePrices.map((p) => Number(p)))];
+    .map(s => s.price)
+    .filter((p): p is string => typeof p === 'string');
+  const uniqueSizePrices = [...new Set(sizePrices.map(p => Number(p)))];
   const hasVaryingPrices = uniqueSizePrices.length > 1;
-  const [openSection, setOpenSection] = useState<"details" | "care" | null>(
-    null,
+  const [openSection, setOpenSection] = useState<'details' | 'care' | null>(
+    null
   );
   const [qty, setQty] = useState(1);
   const { addItem, adding, error, setDrawerOpen } = useCart();
@@ -58,13 +58,12 @@ export default function ProductDetail({
   const activeVariants = product.variants ?? [];
   const matchedVariant =
     activeVariants.find(
-      (v) =>
-        v.size === selectedSize &&
-        (!selectedColor || v.color === selectedColor),
+      v =>
+        v.size === selectedSize && (!selectedColor || v.color === selectedColor)
     ) ??
     (selectedSize
-      ? (activeVariants.find((v) => v.size === selectedSize && v.stock > 0) ??
-        activeVariants.find((v) => v.size === selectedSize))
+      ? (activeVariants.find(v => v.size === selectedSize && v.stock > 0) ??
+        activeVariants.find(v => v.size === selectedSize))
       : null);
   const variantStock = matchedVariant?.stock ?? 0;
   const canAdd = Boolean(matchedVariant) && variantStock > 0;
@@ -96,7 +95,7 @@ export default function ProductDetail({
       setZoomStyle({});
       setWheelZoom(1);
     },
-    [viewerIndex, images.length],
+    [viewerIndex, images.length]
   );
 
   // Click-to-zoom: zooms at the clicked point (1x → 2.5x → 5x → reset)
@@ -104,9 +103,9 @@ export default function ProductDetail({
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setZoomStyle((prev) => {
+    setZoomStyle(prev => {
       const scale = Number(
-        prev.transform?.match(/scale\((\d+(?:\.\d+)?)\)/)?.[1] ?? 1,
+        prev.transform?.match(/scale\((\d+(?:\.\d+)?)\)/)?.[1] ?? 1
       );
       const next = scale === 1 ? 2.5 : scale === 2.5 ? 5 : 1;
       return next === 1
@@ -119,7 +118,7 @@ export default function ProductDetail({
   // Scroll wheel zoom inside the viewer
   const handleViewerWheel = (e: WheelEvent<HTMLDivElement>) => {
     if (!e.deltaY) return;
-    setWheelZoom((prev) => {
+    setWheelZoom(prev => {
       const next = Math.min(Math.max(prev - Math.sign(e.deltaY) * 0.5, 1), 5);
       return next;
     });
@@ -128,16 +127,16 @@ export default function ProductDetail({
 
   // Keyboard: Escape closes, arrows navigate
   const handleViewerKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "Escape") closeViewer();
-    if (e.key === "ArrowRight") stepViewer(1);
-    if (e.key === "ArrowLeft") stepViewer(-1);
+    if (e.key === 'Escape') closeViewer();
+    if (e.key === 'ArrowRight') stepViewer(1);
+    if (e.key === 'ArrowLeft') stepViewer(-1);
   };
 
   // Lock body scroll while the viewer is open
   useEffect(() => {
     if (viewerIndex === null) return;
     const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
     return () => {
       document.body.style.overflow = prevOverflow;
     };
@@ -190,10 +189,10 @@ export default function ProductDetail({
               style={{
                 ...zoomStyle,
                 transform:
-                  `${zoomStyle.transform ?? ""} scale(${wheelZoom})`.trim(),
+                  `${zoomStyle.transform ?? ''} scale(${wheelZoom})`.trim(),
               }}
               className={`max-h-full w-auto object-contain transition-transform duration-200 ease-out ${
-                isZoomed ? "cursor-zoom-out" : "cursor-zoom-in"
+                isZoomed ? 'cursor-zoom-out' : 'cursor-zoom-in'
               }`}
             />
           </div>
@@ -224,7 +223,7 @@ export default function ProductDetail({
           <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 py-3">
             <p className="text-xs text-[#2B2620]/50">
               {viewerIndex + 1} / {images.length}
-              {isZoomed && " · zoomed"}
+              {isZoomed && ' · zoomed'}
             </p>
             <button
               type="button"
@@ -252,11 +251,11 @@ export default function ProductDetail({
                   type="button"
                   onClick={() =>
                     document
-                      .getElementById("reviews")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      .getElementById('reviews')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                   }
                   aria-label={`Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`}
-                  title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? "" : "s"} — jump to reviews`}
+                  title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? '' : 's'} — jump to reviews`}
                   className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
                 >
                   <Stars value={reviewSummary.average} />
@@ -300,7 +299,7 @@ export default function ProductDetail({
                 Colour
               </p>
               <div className="flex flex-wrap gap-2">
-                {product.colors.map((color) => (
+                {product.colors.map(color => (
                   <button
                     key={color.name}
                     type="button"
@@ -309,13 +308,13 @@ export default function ProductDetail({
                     aria-label={`Colour: ${color.name}`}
                     className={`cursor-pointer rounded-full border-2 p-0.5 transition-colors ${
                       selectedColor === color.name
-                        ? "border-[#2B2620]"
-                        : "border-transparent hover:border-[#2B2620]/40"
+                        ? 'border-[#2B2620]'
+                        : 'border-transparent hover:border-[#2B2620]/40'
                     }`}
                   >
                     <span
                       className="block h-6 w-6 rounded-full border border-[#2B2620]/10"
-                      style={{ backgroundColor: color.hex ?? "#E7DFCB" }}
+                      style={{ backgroundColor: color.hex ?? '#E7DFCB' }}
                     />
                   </button>
                 ))}
@@ -333,16 +332,16 @@ export default function ProductDetail({
               <button
                 type="button"
                 onClick={() =>
-                  setOpenSection((s) => (s === "details" ? null : "details"))
+                  setOpenSection(s => (s === 'details' ? null : 'details'))
                 }
-                aria-expanded={openSection === "details"}
+                aria-expanded={openSection === 'details'}
                 className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
               >
                 Details
                 <span
                   aria-hidden="true"
                   className={`text-base leading-none transition-transform duration-300 ${
-                    openSection === "details" ? "rotate-45" : ""
+                    openSection === 'details' ? 'rotate-45' : ''
                   }`}
                 >
                   +
@@ -350,13 +349,13 @@ export default function ProductDetail({
               </button>
               <div
                 className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                  openSection === "details"
-                    ? "grid-rows-[1fr]"
-                    : "grid-rows-[0fr]"
+                  openSection === 'details'
+                    ? 'grid-rows-[1fr]'
+                    : 'grid-rows-[0fr]'
                 }`}
               >
                 <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm">
-                  {product.details.map((line) => (
+                  {product.details.map(line => (
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
@@ -380,16 +379,16 @@ export default function ProductDetail({
               <button
                 type="button"
                 onClick={() =>
-                  setOpenSection((s) => (s === "care" ? null : "care"))
+                  setOpenSection(s => (s === 'care' ? null : 'care'))
                 }
-                aria-expanded={openSection === "care"}
+                aria-expanded={openSection === 'care'}
                 className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
               >
                 Cloth care
                 <span
                   aria-hidden="true"
                   className={`text-base leading-none transition-transform duration-300 ${
-                    openSection === "care" ? "rotate-45" : ""
+                    openSection === 'care' ? 'rotate-45' : ''
                   }`}
                 >
                   +
@@ -397,11 +396,11 @@ export default function ProductDetail({
               </button>
               <div
                 className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-                  openSection === "care" ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                  openSection === 'care' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
                 }`}
               >
                 <ul className="list-disc space-y-1 overflow-hidden pl-4 pt-3 text-sm leading-relaxed text-[#2B2620]/70">
-                  {product.careInstructions.map((line) => (
+                  {product.careInstructions.map(line => (
                     <li key={line}>{line}</li>
                   ))}
                 </ul>
@@ -415,7 +414,7 @@ export default function ProductDetail({
             </p>
             <div className="flex flex-wrap gap-1.5">
               {product.sizes.length > 0 ? (
-                product.sizes.map((s) => (
+                product.sizes.map(s => (
                   <button
                     key={s.size}
                     type="button"
@@ -428,8 +427,8 @@ export default function ProductDetail({
                     }
                     className={`cursor-pointer border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                       selectedSize === s.size
-                        ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
-                        : "border-[#2B2620]/20 hover:border-[#2B2620]"
+                        ? 'border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]'
+                        : 'border-[#2B2620]/20 hover:border-[#2B2620]'
                     }`}
                   >
                     {s.size}
@@ -458,7 +457,7 @@ export default function ProductDetail({
             <div className="flex items-center border border-[#2B2620]/20">
               <button
                 type="button"
-                onClick={() => setQty((q) => Math.max(q - 1, 1))}
+                onClick={() => setQty(q => Math.max(q - 1, 1))}
                 aria-label="Decrease quantity"
                 disabled={qty <= 1}
                 className="cursor-pointer px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
@@ -468,7 +467,7 @@ export default function ProductDetail({
               <span className="min-w-8 text-center text-sm">{qty}</span>
               <button
                 type="button"
-                onClick={() => setQty((q) => Math.min(q + 1, 9))}
+                onClick={() => setQty(q => Math.min(q + 1, 9))}
                 aria-label="Increase quantity"
                 className="cursor-pointer px-3 py-2 text-sm"
               >
@@ -482,12 +481,12 @@ export default function ProductDetail({
               disabled={!canAdd || adding || product.totalStock <= 0}
             >
               {product.totalStock <= 0
-                ? "Sold out"
+                ? 'Sold out'
                 : adding
-                  ? "Adding…"
+                  ? 'Adding…'
                   : selectedSize
                     ? `Add to basket — ${selectedSize}`
-                    : "Select a size"}
+                    : 'Select a size'}
             </button>
           </div>
           {canAdd && variantStock <= 3 && (

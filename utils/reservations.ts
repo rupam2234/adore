@@ -1,4 +1,4 @@
-import { rawQuery, sql } from "./db";
+import { rawQuery, sql } from './db';
 
 /**
  * Stock reservations — hold inventory while an order is being paid for.
@@ -93,7 +93,7 @@ export async function sweepReservations(force = false): Promise<void> {
 export async function reserveCartItems(
   orderId: string,
   cartId: string,
-  items: ReservationItem[],
+  items: ReservationItem[]
 ): Promise<void> {
   // Forced sweep: a pay attempt must never be blocked by an expired hold.
   await sweepReservations(true);
@@ -139,9 +139,9 @@ export async function reserveCartItems(
       throw new StockUnavailableError(
         available > 0
           ? `Only ${available} left — someone else just reserved this item.`
-          : "Too popular. Looks like someone else just purchased this item.",
+          : 'Too popular. Looks like someone else just purchased this item.',
         item.variantId,
-        available,
+        available
       );
     }
   }
@@ -175,7 +175,7 @@ export async function releaseOrderReservations(orderId: string): Promise<void> {
       WHERE v.id = r.variant_id
     `);
   } catch (err) {
-    console.error("[reservations] release failed — stock returns at TTL:", err);
+    console.error('[reservations] release failed — stock returns at TTL:', err);
   }
 }
 

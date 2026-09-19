@@ -35,7 +35,7 @@ export function computeShippingAmount(subtotal: number): number {
 /** Rupee amounts (not paise). `total` is what Razorpay is asked to charge. */
 export function computeCheckoutTotals(
   subtotal: number,
-  discount: number,
+  discount: number
 ): CheckoutTotals {
   const shipping = computeShippingAmount(subtotal);
   return {

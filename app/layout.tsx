@@ -1,34 +1,34 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, Roboto } from "next/font/google";
-import { CartProvider, CartDrawer } from "@/components";
-import "./globals.css";
+import type { Metadata } from 'next';
+import { Geist, Geist_Mono, Roboto } from 'next/font/google';
+import { CartProvider, CartDrawer } from '@/components';
+import './globals.css';
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
 });
 
 const roboto = Roboto({
-  variable: "--font-roboto",
-  subsets: ["latin"],
+  variable: '--font-roboto',
+  subsets: ['latin'],
   preload: true,
-  weight: ["400", "500", "600", "700"],
+  weight: ['400', '500', '600', '700'],
 });
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
 });
 
 export const metadata: Metadata = {
   title: {
-    default: "Adore | Wear Love",
-    template: "%s | Adore",
+    default: 'Adore | Wear Love',
+    template: '%s | Adore',
   },
-  description: "Clothes that become more yours with every wear",
+  description: 'Clothes that become more yours with every wear',
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html
       lang="en"

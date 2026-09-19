@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { count } from "drizzle-orm";
-import { db, users } from "@/utils/db";
-import { verifyAccessToken, ACCESS_COOKIE_NAME } from "@/utils/auth";
+import { NextRequest, NextResponse } from 'next/server';
+import { count } from 'drizzle-orm';
+import { db, users } from '@/utils/db';
+import { verifyAccessToken, ACCESS_COOKIE_NAME } from '@/utils/auth';
 
 export async function GET(request: NextRequest) {
   const cookie = request.cookies.get(ACCESS_COOKIE_NAME);
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     userCount = Number(rows[0]?.c ?? 0);
     dbOk = true;
   } catch (err) {
-    console.error("Debug DB error:", err);
+    console.error('Debug DB error:', err);
   }
 
   return NextResponse.json({

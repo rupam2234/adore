@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 export type AdvancedFiltersProps = {
   /** Available colour facets (name + swatch hex). */
@@ -49,8 +49,8 @@ export default function AdvancedFilters({
 }: AdvancedFiltersProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [minInput, setMinInput] = useState(minPrice?.toString() ?? "");
-  const [maxInput, setMaxInput] = useState(maxPrice?.toString() ?? "");
+  const [minInput, setMinInput] = useState(minPrice?.toString() ?? '');
+  const [maxInput, setMaxInput] = useState(maxPrice?.toString() ?? '');
 
   const activeCount =
     activeColors.length +
@@ -65,23 +65,23 @@ export default function AdvancedFilters({
     for (const [key, value] of Object.entries(preservedParams)) {
       if (value) params.set(key, value);
     }
-    if (next.colors.length) params.set("colors", next.colors.join(","));
-    if (next.sizes.length) params.set("sizes", next.sizes.join(","));
-    if (next.stock) params.set("stock", "1");
-    if (next.min) params.set("min", next.min);
-    if (next.max) params.set("max", next.max);
+    if (next.colors.length) params.set('colors', next.colors.join(','));
+    if (next.sizes.length) params.set('sizes', next.sizes.join(','));
+    if (next.stock) params.set('stock', '1');
+    if (next.min) params.set('min', next.min);
+    if (next.max) params.set('max', next.max);
     const qs = params.toString();
     router.push(qs ? `${basePath}?${qs}` : basePath);
   };
 
   const toggle = (list: string[], value: string) =>
-    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+    list.includes(value) ? list.filter(v => v !== value) : [...list, value];
 
   const chip = (active: boolean) =>
     `cursor-pointer rounded-full border px-3 py-1.5 text-xs transition-colors ${
       active
-        ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
-        : "border-[#2B2620]/20 hover:border-[#2B2620]"
+        ? 'border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]'
+        : 'border-[#2B2620]/20 hover:border-[#2B2620]'
     }`;
 
   return (
@@ -90,7 +90,7 @@ export default function AdvancedFilters({
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => setOpen(o => !o)}
           aria-expanded={open}
           className="flex cursor-pointer items-center gap-2 rounded-full border border-[#2B2620]/20 px-4 py-1.5 text-xs transition-colors hover:border-[#2B2620]"
         >
@@ -113,7 +113,7 @@ export default function AdvancedFilters({
           )}
           <span
             aria-hidden="true"
-            className={`text-base leading-none transition-transform duration-300 ${open ? "rotate-45" : ""}`}
+            className={`text-base leading-none transition-transform duration-300 ${open ? 'rotate-45' : ''}`}
           >
             +
           </span>
@@ -123,8 +123,8 @@ export default function AdvancedFilters({
           <button
             type="button"
             onClick={() => {
-              setMinInput("");
-              setMaxInput("");
+              setMinInput('');
+              setMaxInput('');
               apply({ colors: [], sizes: [], stock: false });
             }}
             className="cursor-pointer text-xs text-[#2B2620]/50 underline-offset-4 transition-colors hover:text-[#2B2620] hover:underline"
@@ -137,7 +137,7 @@ export default function AdvancedFilters({
       {/* Expanding panel — same grid-rows animation as the accordions */}
       <div
         className={`grid transition-[grid-template-rows] duration-300 ease-out ${
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
         <div className="overflow-hidden">
@@ -150,7 +150,13 @@ export default function AdvancedFilters({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {colors.map(({ name, hex }) => {
                     const active = activeColors.includes(name);
-                    const next = { colors: toggle(activeColors, name), sizes: activeSizes, stock: inStockOnly, min: minInput, max: maxInput };
+                    const next = {
+                      colors: toggle(activeColors, name),
+                      sizes: activeSizes,
+                      stock: inStockOnly,
+                      min: minInput,
+                      max: maxInput,
+                    };
                     return (
                       <button
                         key={name}
@@ -160,13 +166,13 @@ export default function AdvancedFilters({
                         aria-pressed={active}
                         className={`flex cursor-pointer items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-xs transition-colors ${
                           active
-                            ? "border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]"
-                            : "border-[#2B2620]/20 hover:border-[#2B2620]"
+                            ? 'border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]'
+                            : 'border-[#2B2620]/20 hover:border-[#2B2620]'
                         }`}
                       >
                         <span
                           className="h-4 w-4 rounded-full border border-[#2B2620]/10"
-                          style={{ backgroundColor: hex ?? "#E7DFCB" }}
+                          style={{ backgroundColor: hex ?? '#E7DFCB' }}
                         />
                         {name}
                       </button>
@@ -182,9 +188,15 @@ export default function AdvancedFilters({
                   Size
                 </legend>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {sizes.map((size) => {
+                  {sizes.map(size => {
                     const active = activeSizes.includes(size);
-                    const next = { colors: activeColors, sizes: toggle(activeSizes, size), stock: inStockOnly, min: minInput, max: maxInput };
+                    const next = {
+                      colors: activeColors,
+                      sizes: toggle(activeSizes, size),
+                      stock: inStockOnly,
+                      min: minInput,
+                      max: maxInput,
+                    };
                     return (
                       <button
                         key={size}
@@ -211,24 +223,32 @@ export default function AdvancedFilters({
                   min="0"
                   placeholder="Min"
                   value={minInput}
-                  onChange={(e) => setMinInput(e.target.value)}
+                  onChange={e => setMinInput(e.target.value)}
                   aria-label="Minimum price"
                   className="w-full rounded-lg border border-[#2B2620]/20 bg-transparent px-3 py-1.5 text-sm focus:border-[#2B2620] focus:outline-none"
                 />
-                <span aria-hidden="true" className="text-[#2B2620]/40">–</span>
+                <span aria-hidden="true" className="text-[#2B2620]/40">
+                  –
+                </span>
                 <input
                   type="number"
                   min="0"
                   placeholder="Max"
                   value={maxInput}
-                  onChange={(e) => setMaxInput(e.target.value)}
+                  onChange={e => setMaxInput(e.target.value)}
                   aria-label="Maximum price"
                   className="w-full rounded-lg border border-[#2B2620]/20 bg-transparent px-3 py-1.5 text-sm focus:border-[#2B2620] focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={() =>
-                    apply({ colors: activeColors, sizes: activeSizes, stock: inStockOnly, min: minInput, max: maxInput })
+                    apply({
+                      colors: activeColors,
+                      sizes: activeSizes,
+                      stock: inStockOnly,
+                      min: minInput,
+                      max: maxInput,
+                    })
                   }
                   className="shrink-0 cursor-pointer rounded-full bg-[#2B2620] px-4 py-1.5 text-xs text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
                 >
@@ -245,8 +265,14 @@ export default function AdvancedFilters({
                 <input
                   type="checkbox"
                   checked={inStockOnly}
-                  onChange={(e) =>
-                    apply({ colors: activeColors, sizes: activeSizes, stock: e.target.checked, min: minInput, max: maxInput })
+                  onChange={e =>
+                    apply({
+                      colors: activeColors,
+                      sizes: activeSizes,
+                      stock: e.target.checked,
+                      min: minInput,
+                      max: maxInput,
+                    })
                   }
                   className="h-4 w-4 accent-[#2B2620]"
                 />

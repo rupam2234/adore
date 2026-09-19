@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from 'next/server';
 import {
   clearAuthCookies,
   REFRESH_COOKIE_NAME,
   revokeSession,
-} from "@/utils/auth";
+} from '@/utils/auth';
 
 /**
  * POST /api/auth/logout
@@ -21,13 +21,21 @@ export async function POST(request: NextRequest) {
 
   const cookies = clearAuthCookies();
   const response = NextResponse.json({ ok: true }, { status: 200 });
-  response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
-  response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);
+  response.cookies.set(
+    cookies.access.name,
+    cookies.access.value,
+    cookies.access.options
+  );
+  response.cookies.set(
+    cookies.refresh.name,
+    cookies.refresh.value,
+    cookies.refresh.options
+  );
   // Must clear the hint too, or the client keeps asking /api/auth/me after logout.
   response.cookies.set(
     cookies.loggedIn.name,
     cookies.loggedIn.value,
-    cookies.loggedIn.options,
+    cookies.loggedIn.options
   );
   return response;
 }

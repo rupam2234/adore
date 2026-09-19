@@ -1,12 +1,12 @@
-import { getPublicUrl, rawQuery, sql } from "@/utils";
-import { normalizeCareInstructions } from "@/utils/product-format";
-import { NextResponse } from "next/server";
+import { getPublicUrl, rawQuery, sql } from '@/utils';
+import { normalizeCareInstructions } from '@/utils/product-format';
+import { NextResponse } from 'next/server';
 
 type Images = {
-  public_id: string
-  alt_text: string,
-  sort_order: number
-}
+  public_id: string;
+  alt_text: string;
+  sort_order: number;
+};
 
 export async function GET() {
   try {
@@ -113,11 +113,16 @@ export async function GET() {
       currency: string | null;
       total_stock: number | null;
       colors: Array<{ name: string; hex: string | null }> | null;
-      sizes: Array<{ size: string; stock: number; price: string; compare_at_price: string | null }> | null;
+      sizes: Array<{
+        size: string;
+        stock: number;
+        price: string;
+        compare_at_price: string | null;
+      }> | null;
       images: Array<Images> | null;
     }>;
 
-    const productsWithUrls = products?.map((product) => ({
+    const productsWithUrls = products?.map(product => ({
       ...product,
       details: product.details ?? [],
       careInstructions: normalizeCareInstructions(product.care_instructions),
@@ -133,20 +138,19 @@ export async function GET() {
           stock: Number(s.stock ?? 0),
           price: String(s.price ?? product.price),
           compareAtPrice: (s.compare_at_price ?? null) as string | null,
-        }),
+        })
       ),
       total_stock: Number(product.total_stock ?? 0),
-      images: (product.images ?? []).map((image) => ({
+      images: (product.images ?? []).map(image => ({
         ...image,
         url: getPublicUrl(image.public_id),
       })),
     }));
 
-
-    return NextResponse.json({ products: productsWithUrls }, { status: 200 })
+    return NextResponse.json({ products: productsWithUrls }, { status: 200 });
   } catch (error) {
     return NextResponse.json(
-      { error: "Failed to fetch products" },
+      { error: 'Failed to fetch products' },
       { status: 500 }
     );
   }

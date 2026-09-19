@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
 
 export type AdminImage = {
   id: string;
@@ -16,7 +16,7 @@ export type AdminImage = {
 interface UploadProgress {
   fileName: string;
   progress: number;
-  status: "uploading" | "done" | "error";
+  status: 'uploading' | 'done' | 'error';
 }
 
 export function ImageManager({
@@ -33,19 +33,19 @@ export function ImageManager({
   const [busy, setBusy] = useState(false);
 
   function uploadFileWithProgress(file: File): Promise<boolean> {
-    return new Promise((resolve) => {
+    return new Promise(resolve => {
       const body = new FormData();
-      body.set("product_id", productId);
-      body.set("file", file);
+      body.set('product_id', productId);
+      body.set('file', file);
 
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/upload");
+      xhr.open('POST', '/api/upload');
 
-      xhr.upload.onprogress = (e) => {
+      xhr.upload.onprogress = e => {
         if (e.lengthComputable) {
           const pct = Math.round((e.loaded / e.total) * 100);
-          setUploads((prev) =>
-            prev.map((u) =>
+          setUploads(prev =>
+            prev.map(u =>
               u.fileName === file.name ? { ...u, progress: pct } : u
             )
           );
@@ -54,10 +54,10 @@ export function ImageManager({
 
       xhr.onload = () => {
         const ok = xhr.status >= 200 && xhr.status < 300;
-        setUploads((prev) =>
-          prev.map((u) =>
+        setUploads(prev =>
+          prev.map(u =>
             u.fileName === file.name
-              ? { ...u, progress: 100, status: ok ? "done" : "error" }
+              ? { ...u, progress: 100, status: ok ? 'done' : 'error' }
               : u
           )
         );
@@ -65,9 +65,9 @@ export function ImageManager({
       };
 
       xhr.onerror = () => {
-        setUploads((prev) =>
-          prev.map((u) =>
-            u.fileName === file.name ? { ...u, status: "error" } : u
+        setUploads(prev =>
+          prev.map(u =>
+            u.fileName === file.name ? { ...u, status: 'error' } : u
           )
         );
         resolve(false);
@@ -80,7 +80,13 @@ export function ImageManager({
   async function uploadFiles(files: File[]) {
     if (files.length === 0) return;
     setBusy(true);
-    setUploads(files.map((f) => ({ fileName: f.name, progress: 0, status: "uploading" as const })));
+    setUploads(
+      files.map(f => ({
+        fileName: f.name,
+        progress: 0,
+        status: 'uploading' as const,
+      }))
+    );
 
     let anySuccess = false;
     for (const file of files) {
@@ -89,7 +95,7 @@ export function ImageManager({
     }
 
     setBusy(false);
-    if (inputRef.current) inputRef.current.value = "";
+    if (inputRef.current) inputRef.current.value = '';
     if (anySuccess) router.refresh();
 
     // Clear progress after a delay
@@ -106,10 +112,10 @@ export function ImageManager({
     try {
       const res = await fetch(
         `/api/admin/products/${productId}/images?image_id=${imageId}`,
-        { method: "DELETE" },
+        { method: 'DELETE' }
       );
       if (res.ok) {
-        setImages((imgs) => imgs.filter((i) => i.id !== imageId));
+        setImages(imgs => imgs.filter(i => i.id !== imageId));
         router.refresh();
       }
     } finally {
@@ -121,13 +127,13 @@ export function ImageManager({
     setBusy(true);
     try {
       const res = await fetch(`/api/admin/products/${productId}/images`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_id: imageId }),
       });
       if (res.ok) {
-        setImages((imgs) =>
-          imgs.map((i) => ({ ...i, isPrimary: i.id === imageId })),
+        setImages(imgs =>
+          imgs.map(i => ({ ...i, isPrimary: i.id === imageId }))
         );
         router.refresh();
       }
@@ -156,12 +162,16 @@ export function ImageManager({
 
       {uploads.length > 0 && (
         <div className="mt-4 space-y-2">
-          {uploads.map((u) => (
+          {uploads.map(u => (
             <div key={u.fileName} className="flex items-center gap-3">
               <div className="h-1.5 flex-1 overflow-hidden bg-[#2B2620]/10">
                 <div
                   className={`h-full transition-all duration-300 ${
-                    u.status === "error" ? "bg-red-500" : u.status === "done" ? "bg-green-500" : "bg-[#5C6B4B]"
+                    u.status === 'error'
+                      ? 'bg-red-500'
+                      : u.status === 'done'
+                        ? 'bg-green-500'
+                        : 'bg-[#5C6B4B]'
                   }`}
                   style={{ width: `${u.progress}%` }}
                 />
@@ -170,9 +180,9 @@ export function ImageManager({
                 {u.fileName}
               </span>
               <span className="w-16 text-right text-xs">
-                {u.status === "error" ? (
+                {u.status === 'error' ? (
                   <span className="text-red-600">Failed</span>
-                ) : u.status === "done" ? (
+                ) : u.status === 'done' ? (
                   <span className="text-green-600">Done</span>
                 ) : (
                   <span className="text-[#2B2620]/50">{u.progress}%</span>
@@ -190,15 +200,18 @@ export function ImageManager({
       )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {images.map((img) => (
-          <div key={img.id} className="group relative overflow-hidden border border-[#2B2620]/10">
+        {images.map(img => (
+          <div
+            key={img.id}
+            className="group relative overflow-hidden border border-[#2B2620]/10"
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={img.url}
-              alt={img.altText ?? "Product image"}
+              alt={img.altText ?? 'Product image'}
               loading="lazy"
               className="aspect-3/4 w-full object-cover"
-              onError={(event) => {
+              onError={event => {
                 // Fallback to the stored URL if the freshly built one 404s.
                 const target = event.currentTarget;
                 if (target.src !== img.secureUrl) target.src = img.secureUrl;

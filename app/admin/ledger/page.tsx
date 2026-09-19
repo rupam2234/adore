@@ -1,36 +1,36 @@
-import { formatPrice } from "@/utils";
+import { formatPrice } from '@/utils';
 import {
   currentPrepDayKey,
   groupByPrepDay,
   ledgerSummary,
   listLedgerOrders,
-} from "@/utils/order-ledger";
-import { requireAdminPage } from "@/utils/admin-session";
+} from '@/utils/order-ledger';
+import { requireAdminPage } from '@/utils/admin-session';
 
 export const metadata = {
-  title: "Order ledger — Admin",
+  title: 'Order ledger — Admin',
   robots: { index: false, follow: false },
 };
 
 // Fetch current data on each visit; never statically cache customer details.
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 const STATUS_STYLES: Record<string, string> = {
-  CONFIRMED: "bg-green-100 text-green-800",
-  PROCESSING: "bg-blue-100 text-blue-800",
-  SHIPPED: "bg-indigo-100 text-indigo-800",
-  DELIVERED: "bg-neutral-200 text-neutral-700",
-  REFUNDED: "bg-rose-100 text-rose-700",
+  CONFIRMED: 'bg-green-100 text-green-800',
+  PROCESSING: 'bg-blue-100 text-blue-800',
+  SHIPPED: 'bg-indigo-100 text-indigo-800',
+  DELIVERED: 'bg-neutral-200 text-neutral-700',
+  REFUNDED: 'bg-rose-100 text-rose-700',
 };
 
 function formatIstDateTime(date: Date): string {
-  return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+  return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
     hour12: true,
   }).format(date);
 }
@@ -38,14 +38,14 @@ function formatIstDateTime(date: Date): string {
 export default async function AdminLedgerPage() {
   if (!process.env.JWT_SECRET) {
     throw new Error(
-      "Admin authentication must be configured to access the ledger.",
+      'Admin authentication must be configured to access the ledger.'
     );
   }
   const admin = await requireAdminPage();
-  if (admin.role !== "admin") throw new Error("Admin access required.");
+  if (admin.role !== 'admin') throw new Error('Admin access required.');
 
-  let days: Awaited<ReturnType<typeof groupByPrepDay>>["days"] = [];
-  let stats: Awaited<ReturnType<typeof groupByPrepDay>>["stats"] = {
+  let days: Awaited<ReturnType<typeof groupByPrepDay>>['days'] = [];
+  let stats: Awaited<ReturnType<typeof groupByPrepDay>>['stats'] = {
     totalRevenue: 0,
     totalOrders: 0,
     totalItems: 0,
@@ -65,7 +65,7 @@ export default async function AdminLedgerPage() {
     stats = grouped.stats;
     summary = ledgerSummary(orders);
   } catch {
-    error = "Could not load the ledger — check the database connection.";
+    error = 'Could not load the ledger — check the database connection.';
   }
 
   const todayKey = currentPrepDayKey();
@@ -92,24 +92,24 @@ export default async function AdminLedgerPage() {
           {
             label: "Today's prep revenue",
             value: `₹${summary.todayRevenue.toFixed(2)}`,
-            sub: `${summary.todayOrders} order${summary.todayOrders === 1 ? "" : "s"} in today's batch`,
+            sub: `${summary.todayOrders} order${summary.todayOrders === 1 ? '' : 's'} in today's batch`,
           },
           {
-            label: "Revenue — latest paid orders",
+            label: 'Revenue — latest paid orders',
             value: `₹${stats.totalRevenue.toFixed(2)}`,
-            sub: `${stats.totalOrders} paid order${stats.totalOrders === 1 ? "" : "s"} · ${stats.totalItems} items · refunds excluded`,
+            sub: `${stats.totalOrders} paid order${stats.totalOrders === 1 ? '' : 's'} · ${stats.totalItems} items · refunds excluded`,
           },
           {
-            label: "Open orders",
+            label: 'Open orders',
             value: String(summary.openOrders),
-            sub: "Confirmed / processing",
+            sub: 'Confirmed / processing',
           },
           {
-            label: "Pending Shiprocket push",
+            label: 'Pending Shiprocket push',
             value: String(summary.pendingShiprocket),
-            sub: "Not yet booked with courier",
+            sub: 'Not yet booked with courier',
           },
-        ].map((card) => (
+        ].map(card => (
           <div
             key={card.label}
             className="rounded-2xl border border-[#2B2620]/10 bg-white p-5"
@@ -130,7 +130,7 @@ export default async function AdminLedgerPage() {
       )}
 
       {/* Prep-day batches */}
-      {days.map((day) => (
+      {days.map(day => (
         <div key={day.prepDay} className="mt-10">
           <div className="flex flex-wrap items-center gap-3">
             <h2 className="font-admin font-semibold text-lg">{day.label}</h2>
@@ -141,12 +141,12 @@ export default async function AdminLedgerPage() {
             )}
             {!day.isToday && (
               <span className="rounded-full bg-neutral-200 px-2 py-0.5 text-xs text-neutral-600">
-                {day.prepDay < todayKey ? "past batch" : "upcoming batch"}
+                {day.prepDay < todayKey ? 'past batch' : 'upcoming batch'}
               </span>
             )}
             <span className="ml-auto text-xs text-[#2B2620]/60">
-              {day.orderCount} order{day.orderCount === 1 ? "" : "s"} ·{" "}
-              {day.itemCount} item{day.itemCount === 1 ? "" : "s"} · ₹
+              {day.orderCount} order{day.orderCount === 1 ? '' : 's'} ·{' '}
+              {day.itemCount} item{day.itemCount === 1 ? '' : 's'} · ₹
               {day.revenue.toFixed(2)}
             </span>
           </div>
@@ -165,7 +165,7 @@ export default async function AdminLedgerPage() {
                 </tr>
               </thead>
               <tbody>
-                {day.orders.map((order) => (
+                {day.orders.map(order => (
                   <tr
                     key={order.id}
                     className="border-t border-[#2B2620]/10 align-top"
@@ -187,7 +187,7 @@ export default async function AdminLedgerPage() {
                         {order.customer.email}
                         {order.customer.phone
                           ? ` · ${order.customer.phone}`
-                          : ""}
+                          : ''}
                       </p>
                       {order.shippingAddress && (
                         <p className="mt-1 text-xs text-[#2B2620]/50">
@@ -200,7 +200,7 @@ export default async function AdminLedgerPage() {
                             order.shippingAddress.country,
                           ]
                             .filter(Boolean)
-                            .join(", ")}
+                            .join(', ')}
                         </p>
                       )}
                     </td>
@@ -210,7 +210,7 @@ export default async function AdminLedgerPage() {
                           <li key={`${order.id}-${i}`}>
                             {item.quantity}× {item.productName}
                             <span className="text-[#2B2620]/40">
-                              {" "}
+                              {' '}
                               ({item.sku})
                             </span>
                           </li>
@@ -221,25 +221,25 @@ export default async function AdminLedgerPage() {
                       {formatPrice(order.totalAmount, order.currency)}
                       {Number(order.discountAmount) > 0 && (
                         <p className="text-xs text-[#2B2620]/50">
-                          −{formatPrice(order.discountAmount, order.currency)}{" "}
+                          −{formatPrice(order.discountAmount, order.currency)}{' '}
                           promo
                         </p>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status] ?? "bg-neutral-200 text-neutral-600"}`}
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[order.status] ?? 'bg-neutral-200 text-neutral-600'}`}
                       >
                         {order.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-[#2B2620]/60">
                       <p>
-                        {order.status === "REFUNDED"
-                          ? "Refunded"
+                        {order.status === 'REFUNDED'
+                          ? 'Refunded'
                           : order.paymentId
-                            ? "Razorpay paid"
-                            : "Payment reference unavailable"}
+                            ? 'Razorpay paid'
+                            : 'Payment reference unavailable'}
                       </p>
                       {order.paymentId && (
                         <p className="break-all">{order.paymentId}</p>
@@ -250,7 +250,7 @@ export default async function AdminLedgerPage() {
                       <p>
                         {order.shiprocketOrderId
                           ? `Shiprocket #${order.shiprocketOrderId}`
-                          : "not booked yet"}
+                          : 'not booked yet'}
                       </p>
                     </td>
                   </tr>

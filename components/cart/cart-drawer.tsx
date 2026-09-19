@@ -1,15 +1,12 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { formatPrice } from "@/utils/product-format";
-import {
-  PinChecker,
-  usePinCheck,
-} from "@/components/shop/pin-checker";
-import { useAuthUser } from "@/components/auth/use-auth-user";
-import { useCart } from "./cart-provider";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { formatPrice } from '@/utils/product-format';
+import { PinChecker, usePinCheck } from '@/components/shop/pin-checker';
+import { useAuthUser } from '@/components/auth/use-auth-user';
+import { useCart } from './cart-provider';
 
 export function CartDrawer() {
   const { cart, drawerOpen, setDrawerOpen, updateItem, removeItem, clear } =
@@ -28,13 +25,13 @@ export function CartDrawer() {
   useEffect(() => {
     if (!drawerOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawerOpen(false);
+      if (e.key === 'Escape') setDrawerOpen(false);
     };
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
     };
   }, [drawerOpen, setDrawerOpen]);
 
@@ -42,12 +39,12 @@ export function CartDrawer() {
     <div
       aria-hidden={!drawerOpen}
       inert={!drawerOpen ? true : undefined}
-      className={`fixed inset-0 z-60 ${drawerOpen ? "" : "pointer-events-none"}`}
+      className={`fixed inset-0 z-60 ${drawerOpen ? '' : 'pointer-events-none'}`}
     >
       <div
         onClick={() => setDrawerOpen(false)}
         className={`absolute inset-0 bg-[#2B2620]/60 transition-opacity duration-300 ${
-          drawerOpen ? "opacity-100" : "opacity-0"
+          drawerOpen ? 'opacity-100' : 'opacity-0'
         }`}
       />
       <aside
@@ -55,12 +52,12 @@ export function CartDrawer() {
         aria-modal="true"
         aria-label="Shopping bag"
         className={`absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-[#FAF8F3] shadow-2xl transition-transform duration-300 ease-out ${
-          drawerOpen ? "translate-x-0" : "translate-x-full"
+          drawerOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         <div className="flex items-center justify-between border-b border-[#2B2620]/10 px-6 py-5">
           <h2 className="font-serif text-xl">
-            Bag{" "}
+            Bag{' '}
             <span className="text-sm text-[#2B2620]/50">
               ({cart.itemCount})
             </span>
@@ -97,15 +94,13 @@ export function CartDrawer() {
 function PromoSection() {
   const { cart, applyPromo, removePromo, error, setDrawerOpen } = useCart();
   const { user, loading } = useAuthUser();
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
 
   if (!loading && !user) {
     return (
       <div className="mt-4 flex items-center justify-between rounded-lg bg-[#E7DFCB]/50 px-3 py-2.5 text-xs">
-        <span className="text-[#2B2620]/60">
-          Promo codes are for members
-        </span>
+        <span className="text-[#2B2620]/60">Promo codes are for members</span>
         <Link
           href="/login"
           onClick={() => setDrawerOpen(false)}
@@ -144,12 +139,12 @@ function PromoSection() {
 
   return (
     <form
-      onSubmit={async (e) => {
+      onSubmit={async e => {
         e.preventDefault();
         if (!code.trim() || busy) return;
         setBusy(true);
         const ok = await applyPromo(code);
-        if (ok) setCode("");
+        if (ok) setCode('');
         setBusy(false);
       }}
       className="mt-4"
@@ -157,7 +152,7 @@ function PromoSection() {
       <div className="flex gap-2">
         <input
           value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onChange={e => setCode(e.target.value.toUpperCase())}
           placeholder="Promo code"
           aria-label="Promo code"
           disabled={busy}
@@ -170,7 +165,7 @@ function PromoSection() {
           className="cursor-pointer rounded-lg border border-[#2B2620] px-4 py-2 text-sm transition-colors
                    hover:bg-[#2B2620] hover:text-[#FAF8F3] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? "…" : "Apply"}
+          {busy ? '…' : 'Apply'}
         </button>
       </div>
       {error && <p className="mt-1.5 text-xs text-[#A45A4B]">{error}</p>}
@@ -184,13 +179,13 @@ function DrawerBody() {
   // checkout — checkout reuses this verified PIN instead of asking again.
   const pinCheck = usePinCheck();
   const pinVerified =
-    pinCheck.status.kind === "result" && pinCheck.status.result.serviceable;
-  const pinChecking = pinCheck.status.kind === "checking";
+    pinCheck.status.kind === 'result' && pinCheck.status.result.serviceable;
+  const pinChecking = pinCheck.status.kind === 'checking';
 
   return (
     <>
       <ul className="flex-1 divide-y divide-[#2B2620]/10 overflow-y-auto px-6">
-        {cart.items.map((item) => (
+        {cart.items.map(item => (
           <li key={item.id} className="flex gap-4 py-4">
             <Link
               href={`/products/${item.slug}`}
@@ -248,7 +243,7 @@ function DrawerBody() {
                     disabled={item.quantity >= item.stock}
                     title={
                       item.quantity >= item.stock
-                        ? "Only this many in stock"
+                        ? 'Only this many in stock'
                         : undefined
                     }
                     className="cursor-pointer px-2.5 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40"
@@ -313,8 +308,8 @@ function DrawerBody() {
             </button>
             <p className="mt-1.5 text-center text-xs text-[#2B2620]/50">
               {pinChecking
-                ? "Checking delivery…"
-                : "Check your delivery PIN above to continue."}
+                ? 'Checking delivery…'
+                : 'Check your delivery PIN above to continue.'}
             </p>
           </>
         )}

@@ -1,19 +1,19 @@
-"use client";
+'use client';
 
 import {
   FIT_LABELS,
   formatReviewDate,
   type ProductReview,
-} from "@/utils/review-format";
-import { Stars } from "./stars";
+} from '@/utils/review-format';
+import { Stars } from './stars';
 
 function initials(name: string): string {
   return name
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
+    .map(w => w[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
 export function ReviewListItem({
@@ -36,7 +36,9 @@ export function ReviewListItem({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <Stars value={review.rating} />
-          {review.title && <p className="text-sm font-medium">{review.title}</p>}
+          {review.title && (
+            <p className="text-sm font-medium">{review.title}</p>
+          )}
         </div>
         <p className="mt-0.5 text-xs text-[#2B2620]/50">
           {review.authorName}

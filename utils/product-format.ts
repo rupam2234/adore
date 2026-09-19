@@ -67,8 +67,8 @@ export type ProductCardData = {
 /** Format a DB price ("2499.00", INR) for display. */
 export function formatPrice(price: string, currency: string): string {
   const amount = Number(price);
-  const symbol = currency === "INR" ? "₹" : `${currency} `;
-  return `${symbol}${amount.toLocaleString("en-IN", {
+  const symbol = currency === 'INR' ? '₹' : `${currency} `;
+  return `${symbol}${amount.toLocaleString('en-IN', {
     maximumFractionDigits: 0,
   })}`;
 }
@@ -85,8 +85,8 @@ export function formatPrice(price: string, currency: string): string {
 export function normalizeCareInstructions(value: unknown): string[] {
   const cleaned = (s: string) =>
     s
-      .replace(/^[\s\-•*·>]+/, "")
-      .replace(/^\d+[.)\s]+/, "")
+      .replace(/^[\s\-•*·>]+/, '')
+      .replace(/^\d+[.)\s]+/, '')
       .trim();
   const splitSentences = (s: string) =>
     s
@@ -96,7 +96,7 @@ export function normalizeCareInstructions(value: unknown): string[] {
 
   if (value == null) return [];
   if (Array.isArray(value)) {
-    return value.flatMap((entry) => {
+    return value.flatMap(entry => {
       if (entry == null) return [];
       const text = String(entry).trim();
       if (!text) return [];
@@ -104,7 +104,7 @@ export function normalizeCareInstructions(value: unknown): string[] {
       return text.split(/\r?\n+/).flatMap(splitSentences);
     });
   }
-  if (typeof value === "string") {
+  if (typeof value === 'string') {
     const text = value.trim();
     if (!text) return [];
     return text.split(/\r?\n+/).flatMap(splitSentences);

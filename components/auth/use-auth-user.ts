@@ -1,7 +1,7 @@
-"use client";
+'use client';
 
-import { useSyncExternalStore } from "react";
-import { LOGIN_HINT_COOKIE_NAME } from "@/utils/auth-cookies";
+import { useSyncExternalStore } from 'react';
+import { LOGIN_HINT_COOKIE_NAME } from '@/utils/auth-cookies';
 
 type AuthUser = {
   id: string;
@@ -58,13 +58,13 @@ function setState(next: AuthState) {
  * Read the login hint: `"1"` signed in, `"0"` confirmed signed out, `null`
  * when the cookie is absent (state unknown — must be verified).
  */
-function readLoginHint(): "1" | "0" | null {
+function readLoginHint(): '1' | '0' | null {
   const prefix = `${LOGIN_HINT_COOKIE_NAME}=`;
   const part = document.cookie
-    .split("; ")
-    .find((entry) => entry.startsWith(prefix));
+    .split('; ')
+    .find(entry => entry.startsWith(prefix));
   if (!part) return null;
-  return part.slice(prefix.length) === "1" ? "1" : "0";
+  return part.slice(prefix.length) === '1' ? '1' : '0';
 }
 
 /**
@@ -76,19 +76,19 @@ function ensureStarted() {
   started = true;
 
   // The server has confirmed this browser is signed out — nothing to ask.
-  if (readLoginHint() === "0") {
+  if (readLoginHint() === '0') {
     setState({ user: null, loading: false });
     return;
   }
 
-  fetch("/api/auth/me", { cache: "no-store", credentials: "same-origin" })
-    .then(async (res) => {
+  fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' })
+    .then(async res => {
       if (!res.ok) return null;
       const data = (await res.json()) as { user?: AuthUser | null } | null;
       return data?.user ?? null;
     })
     .catch(() => null)
-    .then((user) => setState({ user, loading: false }));
+    .then(user => setState({ user, loading: false }));
 }
 
 function subscribe(listener: () => void) {
@@ -111,4 +111,3 @@ function getServerSnapshot(): AuthState {
 export function useAuthUser(): AuthState {
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
-

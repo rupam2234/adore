@@ -1,20 +1,20 @@
-import type { Metadata } from "next";
-import { SiteHeader, Footer } from "@/components";
+import type { Metadata } from 'next';
+import { SiteHeader, Footer } from '@/components';
 import CheckoutForm, {
   type CheckoutAddressOption,
-} from "@/components/checkout/checkout-form";
-import BackToBag from "@/components/checkout/back-to-bag";
-import { getSessionUserId } from "@/utils/request-user";
-import { ensureCustomerForUserId, listAddresses } from "@/utils/account";
+} from '@/components/checkout/checkout-form';
+import BackToBag from '@/components/checkout/back-to-bag';
+import { getSessionUserId } from '@/utils/request-user';
+import { ensureCustomerForUserId, listAddresses } from '@/utils/account';
 
 export const metadata: Metadata = {
-  title: "Checkout",
+  title: 'Checkout',
   robots: { index: false, follow: false },
 };
 
 // The page reads the session cookie (saved addresses) and the cart is per
 // visitor, so it is always rendered per request.
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 export default async function CheckoutPage() {
   const userId = await getSessionUserId();
@@ -23,7 +23,7 @@ export default async function CheckoutPage() {
   let addresses: CheckoutAddressOption[] = [];
 
   if (userId) {
-    const { getUserById } = await import("@/utils/auth");
+    const { getUserById } = await import('@/utils/auth');
     const user = await getUserById(userId);
     if (user) {
       member = { name: user.name, email: user.email };

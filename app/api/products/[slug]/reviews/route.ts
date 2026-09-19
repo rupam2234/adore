@@ -1,18 +1,18 @@
-import { NextResponse } from "next/server";
-import { db, productReviews } from "@/utils";
+import { NextResponse } from 'next/server';
+import { db, productReviews } from '@/utils';
 import {
   getApprovedReviews,
   getProductIdBySlug,
   getReviewSummary,
   hasPurchasedProduct,
   type ReviewSort,
-} from "@/utils/reviews";
-import { getSessionUserId } from "@/utils/request-user";
-import { getUserById } from "@/utils/auth";
+} from '@/utils/reviews';
+import { getSessionUserId } from '@/utils/request-user';
+import { getUserById } from '@/utils/auth';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
-const FIT_VALUES = new Set(["runs_small", "true_to_size", "runs_large"]);
+const FIT_VALUES = new Set(['runs_small', 'true_to_size', 'runs_large']);
 
 // Simple in-memory rate limit: 3 reviews / IP / hour. Resets on redeploy,
 // good enough until you add Redis/Upstash.
@@ -20,7 +20,7 @@ const hits = new Map<string, number[]>();
 function isRateLimited(ip: string): boolean {
   const now = Date.now();
   const windowStart = now - 60 * 60 * 1000;
-  const recent = (hits.get(ip) ?? []).filter((t) => t > windowStart);
+  const recent = (hits.get(ip) ?? []).filter(t => t > windowStart);
   recent.push(now);
   hits.set(ip, recent);
   return recent.length > 3;
@@ -35,17 +35,17 @@ export async function GET(request: Request, { params }: RouteContext) {
   const { slug } = await params;
   const productId = await getProductIdBySlug(slug);
   if (!productId) {
-    return NextResponse.json({ error: "Product not found" }, { status: 404 });
+    return NextResponse.json({ error: 'Product not found' }, { status: 404 });
   }
 
   const url = new URL(request.url);
-  const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+  const page = Math.max(1, Number(url.searchParams.get('page')) || 1);
   const limit = Math.min(
-    Math.max(1, Number(url.searchParams.get("limit")) || 5),
-    20,
+    Math.max(1, Number(url.searchParams.get('limit')) || 5),
+    20
   );
   const sort: ReviewSort =
-    url.searchParams.get("sort") === "helpful" ? "helpful" : "recent";
+    url.searchParams.get('sort') === 'helpful' ? 'helpful' : 'recent';
 
   const [summary, { reviews, total }] = await Promise.all([
     getReviewSummary(productId),
@@ -70,64 +70,64 @@ export async function GET(request: Request, { params }: RouteContext) {
 export async function POST(request: Request, { params }: RouteContext) {
   const { slug } = await params;
   const productId = await getProductIdBySlug(slug);
-  if (!productId) return error("Product not found", 404);
+  if (!productId) return error('Product not found', 404);
 
   // Reviews require an account.
   const userId = await getSessionUserId();
   if (!userId) {
-    return error("Please log in to write a review.", 401);
+    return error('Please log in to write a review.', 401);
   }
   const user = await getUserById(userId);
   if (!user) {
-    return error("Your session has expired — please log in again.", 401);
+    return error('Your session has expired — please log in again.', 401);
   }
 
   // Verified purchase → auto-approve; otherwise hold for moderation.
   const verifiedPurchase = await hasPurchasedProduct(userId, productId);
 
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
+    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   if (isRateLimited(ip)) {
-    return error("Too many reviews — please try again later.", 429);
+    return error('Too many reviews — please try again later.', 429);
   }
 
   let data: unknown;
   try {
     data = await request.json();
   } catch {
-    return error("Invalid JSON body.");
+    return error('Invalid JSON body.');
   }
-  if (typeof data !== "object" || data === null) return error("Invalid body.");
+  if (typeof data !== 'object' || data === null) return error('Invalid body.');
   const b = data as Record<string, unknown>;
 
   // Honeypot: bots fill this hidden field; humans never see it.
-  if (typeof b.website === "string" && b.website.trim() !== "") {
+  if (typeof b.website === 'string' && b.website.trim() !== '') {
     return NextResponse.json({ ok: true }, { status: 201 });
   }
 
   const rating = Number(b.rating);
-  const body = typeof b.body === "string" ? b.body.trim() : "";
+  const body = typeof b.body === 'string' ? b.body.trim() : '';
   // Author name comes from the account; ignore any client-supplied value.
-  const authorName = user.name?.trim() || user.email.split("@")[0] || "Customer";
-  const title = typeof b.title === "string" ? b.title.trim() : "";
+  const authorName =
+    user.name?.trim() || user.email.split('@')[0] || 'Customer';
+  const title = typeof b.title === 'string' ? b.title.trim() : '';
   const sizePurchased =
-    typeof b.sizePurchased === "string" && b.sizePurchased.trim() !== ""
+    typeof b.sizePurchased === 'string' && b.sizePurchased.trim() !== ''
       ? b.sizePurchased.trim().slice(0, 10).toUpperCase()
       : null;
   const fitFeedback =
-    typeof b.fitFeedback === "string" && FIT_VALUES.has(b.fitFeedback)
+    typeof b.fitFeedback === 'string' && FIT_VALUES.has(b.fitFeedback)
       ? b.fitFeedback
       : null;
 
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
-    return error("Please select a star rating (1–5).");
+    return error('Please select a star rating (1–5).');
   }
   if (body.length < 2 || body.length > 2000) {
-    return error("Please write a review (2–2000 characters).");
+    return error('Please write a review (2–2000 characters).');
   }
   if (title.length > 120) {
-    return error("Headline must be under 120 characters.");
+    return error('Headline must be under 120 characters.');
   }
 
   const inserted = await db
@@ -135,12 +135,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     .values({
       productId,
       rating,
-      title: title === "" ? null : title,
+      title: title === '' ? null : title,
       body,
       authorName,
       sizePurchased,
       isApproved: verifiedPurchase,
-      fitFeedback: fitFeedback as "runs_small" | "true_to_size" | "runs_large" | null,
+      fitFeedback: fitFeedback as
+        'runs_small' | 'true_to_size' | 'runs_large' | null,
     })
     .returning({
       id: productReviews.id,
@@ -174,6 +175,6 @@ export async function POST(request: Request, { params }: RouteContext) {
             : String(r.created_at),
       },
     },
-    { status: 201 },
+    { status: 201 }
   );
 }

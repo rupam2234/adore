@@ -1,5 +1,14 @@
-import { and, count, desc, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  ne,
+  notInArray,
+  sql,
+} from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
 import {
   db,
   rawQuery,
@@ -8,9 +17,14 @@ import {
   productImages,
   productVariants,
   products,
-} from "./db";
-import { getPublicUrl } from "./cloudinary.ts";
-import { buildSku, slugify, type ProductPayload, type ProductStatus } from "./admin-schema.ts";
+} from './db';
+import { getPublicUrl } from './cloudinary.ts';
+import {
+  buildSku,
+  slugify,
+  type ProductPayload,
+  type ProductStatus,
+} from './admin-schema.ts';
 
 /**
  * Admin product pipeline — all DB reads/writes for the admin product pages.
@@ -28,9 +42,9 @@ import { buildSku, slugify, type ProductPayload, type ProductStatus } from "./ad
 /** Generate a unique product slug (appends -2, -3, … on collision). */
 export async function uniqueSlug(
   base: string,
-  excludeId?: string,
+  excludeId?: string
 ): Promise<string> {
-  const root = slugify(base) || "product";
+  const root = slugify(base) || 'product';
   for (let i = 1; i < 100; i++) {
     const candidate = i === 1 ? root : `${root}-${i}`;
     const rows = excludeId
@@ -59,12 +73,12 @@ export async function uniqueSlug(
 function revalidateStorefront(slug: string): void {
   try {
     revalidatePath(`/products/${slug}`);
-    revalidatePath("/");
-    revalidatePath("/shop");
+    revalidatePath('/');
+    revalidatePath('/shop');
     // Category listings live at /shop/<category> and are ISR-cached by
     // app/shop/layout.tsx. A product edit can add or remove it from any of
     // them, so invalidate every instance of the dynamic segment.
-    revalidatePath("/shop/[slug]", "page");
+    revalidatePath('/shop/[slug]', 'page');
   } catch {
     // Cache revalidation is best-effort.
   }
@@ -88,7 +102,7 @@ export async function createProduct(payload: ProductPayload): Promise<{
       material: payload.material,
       careInstructions: payload.careInstructions,
       fit: payload.fit,
-      status: "DRAFT",
+      status: 'DRAFT',
       isFeatured: payload.isFeatured,
     })
     .returning({ id: products.id, slug: products.slug });
@@ -104,7 +118,7 @@ export async function createProduct(payload: ProductPayload): Promise<{
 async function syncVariants(
   productId: string,
   slug: string,
-  variants: ProductPayload["variants"],
+  variants: ProductPayload['variants']
 ): Promise<void> {
   await db
     .update(productVariants)
@@ -115,21 +129,26 @@ async function syncVariants(
     await db
       .insert(productVariants)
       .values(
-        variants.map((v) => ({
+        variants.map(v => ({
           productId,
           sku: buildSku(slug, v),
           color: v.color,
           colorHex: v.colorHex,
           size: v.size,
           price: String(v.price),
-          compareAtPrice: v.compareAtPrice === null ? null : String(v.compareAtPrice),
-          currency: "INR",
+          compareAtPrice:
+            v.compareAtPrice === null ? null : String(v.compareAtPrice),
+          currency: 'INR',
           stockQuantity: v.stock,
           isActive: true,
-        })),
+        }))
       )
       .onConflictDoUpdate({
-        target: [productVariants.productId, productVariants.color, productVariants.size],
+        target: [
+          productVariants.productId,
+          productVariants.color,
+          productVariants.size,
+        ],
         set: {
           sku: sql`excluded.sku`,
           colorHex: sql`excluded.color_hex`,
@@ -146,7 +165,7 @@ async function syncVariants(
 /** Replace the product's category links with the given slugs. */
 export async function syncCategories(
   productId: string,
-  categorySlugs: string[],
+  categorySlugs: string[]
 ): Promise<void> {
   if (categorySlugs.length === 0) {
     await db
@@ -169,31 +188,35 @@ export async function syncCategories(
   }
 
   // Remove links not in the payload
-  const keepIds = matched.map((c) => c.id);
-  await db.delete(productCategories).where(
-    keepIds.length > 0
-      ? and(
-          eq(productCategories.productId, productId),
-          notInArray(productCategories.categoryId, keepIds),
-        )
-      : eq(productCategories.productId, productId),
-  );
+  const keepIds = matched.map(c => c.id);
+  await db
+    .delete(productCategories)
+    .where(
+      keepIds.length > 0
+        ? and(
+            eq(productCategories.productId, productId),
+            notInArray(productCategories.categoryId, keepIds)
+          )
+        : eq(productCategories.productId, productId)
+    );
 }
 
 /** Update an existing product (fields + variants + categories + status). */
 export async function updateProduct(
   productId: string,
-  payload: ProductPayload,
+  payload: ProductPayload
 ): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const current = await db
     .select({ id: products.id, slug: products.slug, status: products.status })
     .from(products)
     .where(eq(products.id, productId));
-  if (current.length === 0) return { ok: false, error: "Product not found" };
+  if (current.length === 0) return { ok: false, error: 'Product not found' };
 
   const row = current[0];
   const slug =
-    payload.slug === row.slug ? row.slug : await uniqueSlug(payload.slug, productId);
+    payload.slug === row.slug
+      ? row.slug
+      : await uniqueSlug(payload.slug, productId);
 
   await db
     .update(products)
@@ -231,9 +254,9 @@ export async function updateProduct(
  */
 export async function setStatus(
   productId: string,
-  status: ProductStatus,
+  status: ProductStatus
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (status === "ACTIVE") {
+  if (status === 'ACTIVE') {
     const [variantRows, imageRows] = await Promise.all([
       db
         .select({ c: count() })
@@ -241,8 +264,8 @@ export async function setStatus(
         .where(
           and(
             eq(productVariants.productId, productId),
-            eq(productVariants.isActive, true),
-          ),
+            eq(productVariants.isActive, true)
+          )
         ),
       db
         .select({ c: count() })
@@ -252,9 +275,15 @@ export async function setStatus(
     const variants = Number(variantRows[0]?.c ?? 0);
     const images = Number(imageRows[0]?.c ?? 0);
     if (variants === 0)
-      return { ok: false, error: "Cannot activate: at least one active variant is required." };
+      return {
+        ok: false,
+        error: 'Cannot activate: at least one active variant is required.',
+      };
     if (images === 0)
-      return { ok: false, error: "Cannot activate: upload at least one image first." };
+      return {
+        ok: false,
+        error: 'Cannot activate: upload at least one image first.',
+      };
   }
 
   const rows = await db
@@ -270,7 +299,7 @@ export async function setStatus(
 export async function archiveProduct(productId: string): Promise<boolean> {
   const rows = await db
     .update(products)
-    .set({ status: "ARCHIVED", updatedAt: new Date() })
+    .set({ status: 'ARCHIVED', updatedAt: new Date() })
     .where(eq(products.id, productId))
     .returning({ slug: products.slug });
   if (rows.length === 0) return false;
@@ -281,7 +310,7 @@ export async function archiveProduct(productId: string): Promise<boolean> {
 }
 
 /** List every product (all statuses) with light aggregates for the admin table. */
-export async function listAdminProducts(search = ""): Promise<
+export async function listAdminProducts(search = ''): Promise<
   {
     id: string;
     name: string;
@@ -311,7 +340,7 @@ export async function listAdminProducts(search = ""): Promise<
           AND STRPOS(LOWER(sv.sku), LOWER(${search.trim()})) > 0
       ))
     ORDER BY p.updated_at DESC`);
-  return rows.map((r) => ({
+  return rows.map(r => ({
     id: r.id as string,
     name: r.name as string,
     slug: r.slug as string,
@@ -360,7 +389,11 @@ export async function getAdminProduct(productId: string) {
       })
       .from(productVariants)
       .where(eq(productVariants.productId, productId))
-      .orderBy(desc(productVariants.isActive), productVariants.color, productVariants.size),
+      .orderBy(
+        desc(productVariants.isActive),
+        productVariants.color,
+        productVariants.size
+      ),
     db
       .select({
         id: productImages.id,
@@ -392,19 +425,19 @@ export async function getAdminProduct(productId: string) {
     fit: (p.fit as string | null) ?? null,
     status: p.status as ProductStatus,
     isFeatured: p.is_featured as boolean,
-    categorySlugs: (categoryRows as { slug: string }[]).map((c) => c.slug),
-    variants: (variantRows as Record<string, unknown>[]).map((v) => ({
+    categorySlugs: (categoryRows as { slug: string }[]).map(c => c.slug),
+    variants: (variantRows as Record<string, unknown>[]).map(v => ({
       id: v.id as string,
       color: v.color as string,
       colorHex: (v.color_hex as string | null) ?? null,
       size: v.size as string,
-      price: String(v.price ?? ""),
+      price: String(v.price ?? ''),
       compareAtPrice:
         v.compare_at_price === null ? null : String(v.compare_at_price),
       stock: Number(v.stock_quantity ?? 0),
       isActive: v.is_active as boolean,
     })),
-    images: (imageRows as Record<string, unknown>[]).map((i) => ({
+    images: (imageRows as Record<string, unknown>[]).map(i => ({
       id: i.id as string,
       publicId: i.public_id as string,
       // Build the delivery URL from public_id, exactly like the storefront —
@@ -422,14 +455,20 @@ export async function getAdminProduct(productId: string) {
 /** Delete one image: Cloudinary asset + DB row (order matters — DB first). */
 export async function deleteProductImage(
   productId: string,
-  imageId: string,
+  imageId: string
 ): Promise<{ ok: true; publicId: string } | { ok: false; error: string }> {
   const rows = await db
-    .select({ id: productImages.id, publicId: productImages.publicId, slug: products.slug })
+    .select({
+      id: productImages.id,
+      publicId: productImages.publicId,
+      slug: products.slug,
+    })
     .from(productImages)
     .innerJoin(products, eq(products.id, productImages.productId))
-    .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)));
-  if (rows.length === 0) return { ok: false, error: "Image not found" };
+    .where(
+      and(eq(productImages.id, imageId), eq(productImages.productId, productId))
+    );
+  if (rows.length === 0) return { ok: false, error: 'Image not found' };
 
   const wasPrimary = await db
     .select({ isPrimary: productImages.isPrimary })
@@ -442,15 +481,17 @@ export async function deleteProductImage(
     await db
       .update(productImages)
       .set({ isPrimary: true })
-      .where(eq(
-        productImages.id,
-        db
-          .select({ id: productImages.id })
-          .from(productImages)
-          .where(eq(productImages.productId, productId))
-          .orderBy(productImages.sortOrder)
-          .limit(1),
-      ));
+      .where(
+        eq(
+          productImages.id,
+          db
+            .select({ id: productImages.id })
+            .from(productImages)
+            .where(eq(productImages.productId, productId))
+            .orderBy(productImages.sortOrder)
+            .limit(1)
+        )
+      );
   }
 
   if (rows[0]?.slug) revalidateStorefront(rows[0].slug);
@@ -460,13 +501,15 @@ export async function deleteProductImage(
 /** Set which image is primary (exactly one per product). */
 export async function setPrimaryImage(
   productId: string,
-  imageId: string,
+  imageId: string
 ): Promise<boolean> {
   const owned = await db
     .select({ id: productImages.id, slug: products.slug })
     .from(productImages)
     .innerJoin(products, eq(products.id, productImages.productId))
-    .where(and(eq(productImages.id, imageId), eq(productImages.productId, productId)));
+    .where(
+      and(eq(productImages.id, imageId), eq(productImages.productId, productId))
+    );
   if (owned.length === 0) return false;
 
   await db

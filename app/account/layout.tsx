@@ -1,11 +1,14 @@
-import Link from "next/link";
-import { SiteHeader, Footer } from "@/components";
-import { requireAccountPage } from "@/utils/account-session";
-import { ensureCustomerForUserId } from "@/utils/account";
-import AccountNav from "@/components/account/account-nav";
-import LogoutButton from "@/components/account/logout-button";
+import Link from 'next/link';
+import { SiteHeader, Footer } from '@/components';
+import { requireAccountPage } from '@/utils/account-session';
+import { ensureCustomerForUserId } from '@/utils/account';
+import AccountNav from '@/components/account/account-nav';
+import LogoutButton from '@/components/account/logout-button';
 
-export const metadata = { title: "Account", robots: { index: false, follow: false } };
+export const metadata = {
+  title: 'Account',
+  robots: { index: false, follow: false },
+};
 
 export default async function AccountLayout({
   children,

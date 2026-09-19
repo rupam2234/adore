@@ -1,18 +1,18 @@
-import Link from "next/link";
-import { formatPrice } from "@/utils";
-import { listAdminProducts } from "@/utils/admin-products";
-import { requireAdminPage } from "@/utils/admin-session";
-import { DeleteProductButton } from "@/components/admin/delete-product-button";
+import Link from 'next/link';
+import { formatPrice } from '@/utils';
+import { listAdminProducts } from '@/utils/admin-products';
+import { requireAdminPage } from '@/utils/admin-session';
+import { DeleteProductButton } from '@/components/admin/delete-product-button';
 
 export const metadata = {
-  title: "Products — Admin",
+  title: 'Products — Admin',
   robots: { index: false, follow: false },
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  DRAFT: "bg-amber-100 text-amber-800",
-  ACTIVE: "bg-green-100 text-green-800",
-  ARCHIVED: "bg-neutral-200 text-neutral-600",
+  DRAFT: 'bg-amber-100 text-amber-800',
+  ACTIVE: 'bg-green-100 text-green-800',
+  ARCHIVED: 'bg-neutral-200 text-neutral-600',
 };
 
 export default async function AdminProductsPage({
@@ -22,14 +22,14 @@ export default async function AdminProductsPage({
 }) {
   await requireAdminPage();
   const params = await searchParams;
-  const query = (typeof params.q === "string" ? params.q : "").trim();
+  const query = (typeof params.q === 'string' ? params.q : '').trim();
 
   let products: Awaited<ReturnType<typeof listAdminProducts>> = [];
   let error: string | null = null;
   try {
     products = await listAdminProducts(query);
   } catch {
-    error = "Could not load products — check the database connection.";
+    error = 'Could not load products — check the database connection.';
   }
 
   return (
@@ -90,8 +90,8 @@ export default async function AdminProductsPage({
       </form>
       {!error && (
         <p className="mt-3 text-sm text-[#2B2620]/70">
-          {products.length} {products.length === 1 ? "product" : "products"}
-          {query ? ` matching “${query}”` : " in your catalogue"}
+          {products.length} {products.length === 1 ? 'product' : 'products'}
+          {query ? ` matching “${query}”` : ' in your catalogue'}
         </p>
       )}
 
@@ -115,12 +115,12 @@ export default async function AdminProductsPage({
                   className="px-4 py-8 text-center text-[#2B2620]/50"
                 >
                   {query
-                    ? "No products match your search. Try another name, slug, or SKU."
-                    : "No products yet — create the first one."}
+                    ? 'No products match your search. Try another name, slug, or SKU.'
+                    : 'No products yet — create the first one.'}
                 </td>
               </tr>
             )}
-            {products.map((p) => (
+            {products.map(p => (
               <tr key={p.id} className="border-t border-[#2B2620]/10">
                 <td className="px-4 py-3">
                   <p className="font-admin font-medium">{p.name}</p>
@@ -135,8 +135,8 @@ export default async function AdminProductsPage({
                 </td>
                 <td className="px-4 py-3">
                   {p.minPrice === null
-                    ? "—"
-                    : formatPrice(String(p.minPrice), "INR")}
+                    ? '—'
+                    : formatPrice(String(p.minPrice), 'INR')}
                 </td>
                 <td className="px-4 py-3">{p.variantCount}</td>
                 <td className="px-4 py-3">{p.imageCount}</td>

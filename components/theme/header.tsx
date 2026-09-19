@@ -1,12 +1,12 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { useState } from "react";
-import { CATEGORY_TREE } from "@/utils/categories";
-import SearchBar from "./search-bar";
-import { useCart } from "@/components/cart/cart-provider";
-import { useAuthUser } from "@/components/auth/use-auth-user";
-import Image from "next/image";
+import Link from 'next/link';
+import { useState } from 'react';
+import { CATEGORY_TREE } from '@/utils/categories';
+import SearchBar from './search-bar';
+import { useCart } from '@/components/cart/cart-provider';
+import { useAuthUser } from '@/components/auth/use-auth-user';
+import Image from 'next/image';
 
 export default function Header() {
   const [megaOpen, setMegaOpen] = useState(false);
@@ -27,7 +27,7 @@ export default function Header() {
         >
           {/* Adore */}
           <Image
-            src={"/images/Adore_logo.png"}
+            src={'/images/Adore_logo.png'}
             alt="Adore_tag"
             width={100}
             height={42}
@@ -61,7 +61,7 @@ export default function Header() {
               Categories
               <span
                 aria-hidden="true"
-                className={`text-xs leading-none transition-transform duration-300 ${megaOpen ? "rotate-45" : ""}`}
+                className={`text-xs leading-none transition-transform duration-300 ${megaOpen ? 'rotate-45' : ''}`}
               >
                 +
               </span>
@@ -70,7 +70,7 @@ export default function Header() {
             {/* Dropdown — anchored to this item, floats over content. */}
             <div
               aria-hidden={!megaOpen}
-              className={`absolute left-1/2 top-full z-50 w-[min(40rem,88vw)] -translate-x-1/2 pt-3 transition-[opacity,transform] duration-200 ease-out ${megaOpen ? "visible translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0"}`}
+              className={`absolute left-1/2 top-full z-50 w-[min(40rem,88vw)] -translate-x-1/2 pt-3 transition-[opacity,transform] duration-200 ease-out ${megaOpen ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-1 opacity-0'}`}
             >
               <div className="overflow-hidden rounded-2xl border border-[#2B2620]/10 bg-[#FAF8F3] shadow-2xl shadow-[#2B2620]/15">
                 <nav
@@ -98,7 +98,7 @@ export default function Header() {
                       Shop all →
                     </span>
                   </Link>
-                  {CATEGORY_TREE.map((cat) => (
+                  {CATEGORY_TREE.map(cat => (
                     <div
                       key={cat.slug}
                       className="border-l border-[#2B2620]/10 p-6"
@@ -126,7 +126,7 @@ export default function Header() {
                       )}
                       {cat.children && cat.children.length > 0 ? (
                         <ul className="mt-4 space-y-1">
-                          {cat.children.map((sub) => (
+                          {cat.children.map(sub => (
                             <li key={sub.slug}>
                               <Link
                                 href={`/shop/${sub.slug}`}
@@ -192,9 +192,9 @@ export default function Header() {
             )}
           </button>
           <Link
-            href={user ? "/account" : "/login"}
+            href={user ? '/account' : '/login'}
             className="group relative inline-flex items-center gap-1.5 text-sm hover:text-[#5C6B4B]"
-            aria-label={user ? "Your account" : "Log in"}
+            aria-label={user ? 'Your account' : 'Log in'}
           >
             <svg
               viewBox="0 0 24 24"
@@ -209,7 +209,9 @@ export default function Header() {
               <path d="M4 21c1.5-3.5 4.5-5 8-5s6.5 1.5 8 5" />
             </svg>
             {!loading && user && (
-              <span className="hidden lg:inline">{user.name.split(" ")[0]}</span>
+              <span className="hidden lg:inline">
+                {user.name.split(' ')[0]}
+              </span>
             )}
           </Link>
           <Link
@@ -220,12 +222,12 @@ export default function Header() {
           </Link>
           <button
             type="button"
-            onClick={() => setMobileOpen((o) => !o)}
+            onClick={() => setMobileOpen(o => !o)}
             aria-expanded={mobileOpen}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
+            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
             className="cursor-pointer text-2xl leading-none sm:hidden"
           >
-            {mobileOpen ? "×" : "☰"}
+            {mobileOpen ? '×' : '☰'}
           </button>
         </div>
       </div>
@@ -250,7 +252,7 @@ export default function Header() {
           >
             Shop all
           </Link>
-          {CATEGORY_TREE.map((cat) => (
+          {CATEGORY_TREE.map(cat => (
             <div key={cat.slug} className="border-t border-[#2B2620]/10">
               <div className="flex items-center justify-between">
                 <Link
@@ -264,9 +266,7 @@ export default function Header() {
                   <button
                     type="button"
                     onClick={() =>
-                      setMobileExpanded((s) =>
-                        s === cat.slug ? null : cat.slug,
-                      )
+                      setMobileExpanded(s => (s === cat.slug ? null : cat.slug))
                     }
                     aria-expanded={mobileExpanded === cat.slug}
                     aria-label={`Expand ${cat.name} sub-categories`}
@@ -274,7 +274,7 @@ export default function Header() {
                   >
                     <span
                       aria-hidden="true"
-                      className={`inline-block transition-transform duration-300 ${mobileExpanded === cat.slug ? "rotate-45" : ""}`}
+                      className={`inline-block transition-transform duration-300 ${mobileExpanded === cat.slug ? 'rotate-45' : ''}`}
                     >
                       +
                     </span>
@@ -283,7 +283,7 @@ export default function Header() {
               </div>
               {cat.children && mobileExpanded === cat.slug && (
                 <ul className="pb-2 pl-4">
-                  {cat.children.map((sub) => (
+                  {cat.children.map(sub => (
                     <li key={sub.slug}>
                       <Link
                         href={`/shop/${sub.slug}`}
@@ -299,11 +299,11 @@ export default function Header() {
             </div>
           ))}
           <Link
-            href={user ? "/account" : "/login"}
+            href={user ? '/account' : '/login'}
             onClick={() => setMobileOpen(false)}
             className="block border-t border-[#2B2620]/10 py-2 text-sm font-medium"
           >
-            {user ? "My account" : "Log in"}
+            {user ? 'My account' : 'Log in'}
           </Link>
           <Link
             href="/#how-we-make-it"

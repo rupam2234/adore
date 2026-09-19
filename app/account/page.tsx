@@ -1,7 +1,11 @@
-import Link from "next/link";
-import { requireAccountPage } from "@/utils/account-session";
-import { ensureCustomerForUserId, listAddresses, listOrders } from "@/utils/account";
-import ProfileForm from "./profile-form";
+import Link from 'next/link';
+import { requireAccountPage } from '@/utils/account-session';
+import {
+  ensureCustomerForUserId,
+  listAddresses,
+  listOrders,
+} from '@/utils/account';
+import ProfileForm from './profile-form';
 
 export default async function AccountOverviewPage() {
   const user = await requireAccountPage();
@@ -10,7 +14,7 @@ export default async function AccountOverviewPage() {
     listOrders(customer.id),
     listAddresses(customer.id),
   ]);
-  const defaultAddress = addresses.find((a) => a.isDefault) ?? addresses[0];
+  const defaultAddress = addresses.find(a => a.isDefault) ?? addresses[0];
 
   return (
     <section className="space-y-6">
@@ -21,7 +25,7 @@ export default async function AccountOverviewPage() {
         >
           <p className="font-roboto text-2xl font-medium">{orders.length}</p>
           <p className="mt-1 text-sm text-[#2B2620]/60 group-hover:text-[#2B2620]">
-            {orders.length === 1 ? "Order" : "Orders"}
+            {orders.length === 1 ? 'Order' : 'Orders'}
           </p>
         </Link>
         <Link
@@ -30,7 +34,7 @@ export default async function AccountOverviewPage() {
         >
           <p className="font-roboto text-2xl font-medium">{addresses.length}</p>
           <p className="mt-1 text-sm text-[#2B2620]/60 group-hover:text-[#2B2620]">
-            {addresses.length === 1 ? "Address" : "Addresses"}
+            {addresses.length === 1 ? 'Address' : 'Addresses'}
           </p>
         </Link>
         <div className="rounded-2xl border border-[#2B2620]/10 bg-white p-5">
@@ -38,10 +42,10 @@ export default async function AccountOverviewPage() {
             Member
           </p>
           <p className="mt-1 text-sm text-[#2B2620]/60">
-            Since{" "}
-            {new Date(customer.createdAt).toLocaleDateString("en-IN", {
-              month: "long",
-              year: "numeric",
+            Since{' '}
+            {new Date(customer.createdAt).toLocaleDateString('en-IN', {
+              month: 'long',
+              year: 'numeric',
             })}
           </p>
         </div>
@@ -59,13 +63,18 @@ export default async function AccountOverviewPage() {
         </div>
         {defaultAddress ? (
           <div className="mt-3 text-sm text-[#2B2620]/70">
-            <p className="font-medium text-[#2B2620]">{defaultAddress.fullName}</p>
-            <p>
-              {defaultAddress.addressLine1}
-              {defaultAddress.addressLine2 ? `, ${defaultAddress.addressLine2}` : ""}
+            <p className="font-medium text-[#2B2620]">
+              {defaultAddress.fullName}
             </p>
             <p>
-              {defaultAddress.city}, {defaultAddress.state} {defaultAddress.postalCode}
+              {defaultAddress.addressLine1}
+              {defaultAddress.addressLine2
+                ? `, ${defaultAddress.addressLine2}`
+                : ''}
+            </p>
+            <p>
+              {defaultAddress.city}, {defaultAddress.state}{' '}
+              {defaultAddress.postalCode}
             </p>
           </div>
         ) : (
@@ -77,7 +86,10 @@ export default async function AccountOverviewPage() {
 
       <div className="rounded-2xl border border-[#2B2620]/10 bg-white p-6">
         <h2 className="font-serif text-lg">Profile</h2>
-        <ProfileForm initialName={user.name} initialPhone={customer.phone ?? ""} />
+        <ProfileForm
+          initialName={user.name}
+          initialPhone={customer.phone ?? ''}
+        />
       </div>
     </section>
   );

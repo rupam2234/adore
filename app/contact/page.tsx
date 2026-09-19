@@ -1,25 +1,25 @@
-import PageShell from "@/components/theme/page-shell";
-import ContactForm from "./contact-form";
+import PageShell from '@/components/theme/page-shell';
+import ContactForm from './contact-form';
 
 export const metadata = {
-  title: "Contact Us",
+  title: 'Contact Us',
   description: "Get in touch with the Adore team — we'd love to hear from you.",
 };
 
 const CONTACT_CHANNELS = [
   {
-    title: "Email us",
-    detail: "hello@adore.example",
-    note: "We reply within 1–2 business days.",
+    title: 'Email us',
+    detail: 'hello@adore.example',
+    note: 'We reply within 1–2 business days.',
   },
   {
-    title: "Order support",
-    detail: "Include your order number so we can help faster.",
-    note: "Shipping questions, returns, exchanges, and defects.",
+    title: 'Order support',
+    detail: 'Include your order number so we can help faster.',
+    note: 'Shipping questions, returns, exchanges, and defects.',
   },
   {
-    title: "Press & partnerships",
-    detail: "For collaborations and press enquiries, use the same form.",
+    title: 'Press & partnerships',
+    detail: 'For collaborations and press enquiries, use the same form.',
     note: "Mark your subject as 'Press' or 'Partnership'.",
   },
 ];
