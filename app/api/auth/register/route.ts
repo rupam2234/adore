@@ -9,6 +9,7 @@ import {
   db,
   users,
 } from "@/utils";
+import { CART_COOKIE, findCartId, mergeGuestCart } from "@/utils/cart";
 
 export async function POST(request: NextRequest) {
   let body: { name?: string; email?: string; password?: string };
@@ -69,6 +70,15 @@ export async function POST(request: NextRequest) {
       console.error("Customer provisioning failed:", err);
     }
 
+    // Adopt the guest cookie cart so the new account keeps its bag.
+    let cartToken: string | null = null;
+    try {
+      const guestCartId = await findCartId(request.cookies.get(CART_COOKIE)?.value);
+      cartToken = await mergeGuestCart(user.id, guestCartId);
+    } catch (err) {
+      console.error("Cart merge failed (signup continues):", err);
+    }
+
     const response = NextResponse.json({ user }, { status: 201 });
     response.cookies.set(cookies.access.name, cookies.access.value, cookies.access.options);
     response.cookies.set(cookies.refresh.name, cookies.refresh.value, cookies.refresh.options);
@@ -78,6 +88,15 @@ export async function POST(request: NextRequest) {
       cookies.loggedIn.value,
       cookies.loggedIn.options,
     );
+    if (cartToken) {
+      response.cookies.set(CART_COOKIE, cartToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 90,
+        path: "/",
+      });
+    }
     return response;
   } catch (err) {
     if (err instanceof Error && err.message.includes("duplicate key")) {

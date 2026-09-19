@@ -4,7 +4,7 @@ import {
   CART_COOKIE,
   CART_MAX_AGE,
   addCartItem,
-  findCartId,
+  resolveCartId,
   getCartDetail,
   CartError,
 } from "@/utils/cart";
@@ -12,11 +12,19 @@ import { rawQuery, sql } from "@/utils/db";
 import { getSessionUserId } from "@/utils/request-user";
 import { revalidateAttachedPromo } from "@/utils/promo";
 
-async function getOrCreateCartId(): Promise<string> {
+/**
+ * Resolve the active cart (account cart first, cookie fallback) or create a
+ * fresh anonymous cart. Returns the cartId plus the token to persist in the
+ * cookie when a new cart was created.
+ */
+async function getOrCreateCartId(
+  userId: string | null,
+): Promise<{ cartId: string; token?: string }> {
   const cookieStore = await cookies();
   const token = cookieStore.get(CART_COOKIE)?.value;
-  const existing = await findCartId(token);
-  if (existing) return existing;
+
+  const existing = await resolveCartId(userId, token);
+  if (existing) return { cartId: existing };
 
   const newToken = crypto.randomUUID();
   const rows = await rawQuery<{ id: string }>(
@@ -31,7 +39,7 @@ async function getOrCreateCartId(): Promise<string> {
     maxAge: CART_MAX_AGE,
     path: "/",
   });
-  return rows[0].id;
+  return { cartId: rows[0]!.id, token: newToken };
 }
 
 export async function POST(request: Request) {
@@ -42,9 +50,9 @@ export async function POST(request: Request) {
     if (!variantId) {
       return NextResponse.json({ error: "variantId is required" }, { status: 400 });
     }
-    const cartId = await getOrCreateCartId();
-    await addCartItem(cartId, variantId, quantity);
     const userId = await getSessionUserId();
+    const { cartId } = await getOrCreateCartId(userId);
+    await addCartItem(cartId, variantId, quantity);
     await revalidateAttachedPromo(cartId, userId);
     return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {

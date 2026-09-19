@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { CART_COOKIE, findCartId, getCartDetail, clearCart } from "@/utils/cart";
+import { CART_COOKIE, resolveCartId, getCartDetail, clearCart } from "@/utils/cart";
 import { removePromo } from "@/utils/promo";
 import { getSessionUserId } from "@/utils/request-user";
 
@@ -15,20 +15,26 @@ function noStore(response: NextResponse): NextResponse {
   return response;
 }
 
+async function currentShopper() {
+  const [token, userId] = await Promise.all([
+    (async () => (await cookies()).get(CART_COOKIE)?.value)(),
+    getSessionUserId(),
+  ]);
+  return { token, userId };
+}
+
 export async function GET() {
-  const token = (await cookies()).get(CART_COOKIE)?.value;
-  const cartId = await findCartId(token);
-  const userId = await getSessionUserId();
+  const { token, userId } = await currentShopper();
+  const cartId = await resolveCartId(userId, token);
   return noStore(NextResponse.json(await getCartDetail(cartId, userId)));
 }
 
 export async function DELETE() {
-  const token = (await cookies()).get(CART_COOKIE)?.value;
-  const cartId = await findCartId(token);
+  const { token, userId } = await currentShopper();
+  const cartId = await resolveCartId(userId, token);
   if (cartId) {
     await clearCart(cartId);
     await removePromo(cartId);
   }
-  const userId = await getSessionUserId();
   return noStore(NextResponse.json(await getCartDetail(cartId, userId)));
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { CART_COOKIE, findCartId, getCartDetail } from "@/utils/cart";
+import { CART_COOKIE, resolveCartId, getCartDetail } from "@/utils/cart";
 import { applyPromo, removePromo, PromoError } from "@/utils/promo";
 import { getSessionUserId } from "@/utils/request-user";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     }
 
     const token = (await cookies()).get(CART_COOKIE)?.value;
-    const cartId = await findCartId(token);
+    const cartId = await resolveCartId(userId, token);
     if (!cartId) {
       return NextResponse.json({ error: "Cart not found" }, { status: 404 });
     }
@@ -39,9 +39,11 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  const token = (await cookies()).get(CART_COOKIE)?.value;
-  const cartId = await findCartId(token);
+  const [token, userId] = await Promise.all([
+    (async () => (await cookies()).get(CART_COOKIE)?.value)(),
+    getSessionUserId(),
+  ]);
+  const cartId = await resolveCartId(userId, token);
   if (cartId) await removePromo(cartId);
-  const userId = await getSessionUserId();
   return NextResponse.json(await getCartDetail(cartId, userId));
 }

@@ -18,7 +18,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, rawQuery, orders, orderItems, customers } from "./db";
 import {
   CART_COOKIE,
-  findCartId,
+  resolveCartId,
   getCartDetail,
   clearCart,
   type CartLine,
@@ -185,7 +185,7 @@ export async function createCheckoutSession(
 
   // --- Cart (server-side truth; client totals are never trusted) ----------
   const token = (await cookies()).get(CART_COOKIE)?.value;
-  const cartId = await findCartId(token);
+  const cartId = await resolveCartId(userId, token);
   const cart = await getCartDetail(cartId, userId);
   if (cart.items.length === 0) {
     throw new CheckoutError("Your bag is empty.");
@@ -470,7 +470,8 @@ async function decrementStock(orderId: string): Promise<void> {
 async function releaseCart(): Promise<void> {
   try {
     const token = (await cookies()).get(CART_COOKIE)?.value;
-    const cartId = await findCartId(token);
+    const userId = await getSessionUserId();
+    const cartId = await resolveCartId(userId, token);
     if (!cartId) return;
     await clearCart(cartId);
     await removePromo(cartId);

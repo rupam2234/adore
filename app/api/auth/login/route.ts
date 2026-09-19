@@ -3,6 +3,7 @@ import {
   login,
   setAuthCookies,
 } from "@/utils/auth";
+import { CART_COOKIE, findCartId, mergeGuestCart } from "@/utils/cart";
 
 export async function POST(request: NextRequest) {
   let body: { email?: string; password?: string };
@@ -31,6 +32,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Account-based cart: fold the guest cookie cart into the account cart so
+    // the bag follows the user across devices. Guest + account carts are
+    // merged; the cookie is refreshed to the account cart's token.
+    let cartToken: string | null = null;
+    try {
+      const guestToken = request.cookies.get(CART_COOKIE)?.value;
+      const guestCartId = await findCartId(guestToken);
+      cartToken = await mergeGuestCart(result.user!.id, guestCartId);
+    } catch (err) {
+      console.error("Cart merge failed (login continues):", err);
+    }
+
     const cookies = setAuthCookies(result.accessToken, result.refreshToken);
 
     const response = NextResponse.json(
@@ -53,6 +66,16 @@ export async function POST(request: NextRequest) {
       cookies.loggedIn.value,
       cookies.loggedIn.options,
     );
+
+    if (cartToken) {
+      response.cookies.set(CART_COOKIE, cartToken, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        maxAge: 60 * 60 * 24 * 90,
+        path: "/",
+      });
+    }
 
     return response;
   } catch (err) {

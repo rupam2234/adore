@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  findCartId,
+  resolveCartId,
   getCartDetail,
   updateCartItem,
   removeCartItem,
@@ -13,15 +13,22 @@ import { revalidateAttachedPromo } from "@/utils/promo";
 
 type Context = { params: Promise<{ id: string }> };
 
-async function requireCartId(): Promise<string | null> {
-  const token = (await cookies()).get(CART_COOKIE)?.value;
-  return findCartId(token);
+/** Resolve the cart AND the session user in one pass (single JWT verify). */
+async function requireShopper(): Promise<{
+  cartId: string | null;
+  userId: string | null;
+}> {
+  const [token, userId] = await Promise.all([
+    (async () => (await cookies()).get(CART_COOKIE)?.value)(),
+    getSessionUserId(),
+  ]);
+  return { cartId: await resolveCartId(userId, token), userId };
 }
 
 export async function PATCH(request: Request, ctx: Context) {
   try {
     const { id } = await ctx.params;
-    const cartId = await requireCartId();
+    const { cartId, userId } = await requireShopper();
     if (!cartId) throw new CartError("Cart not found", 404);
 
     const body = await request.json();
@@ -30,7 +37,6 @@ export async function PATCH(request: Request, ctx: Context) {
       return NextResponse.json({ error: "quantity is required" }, { status: 400 });
     }
     await updateCartItem(cartId, id, quantity);
-    const userId = await getSessionUserId();
     await revalidateAttachedPromo(cartId, userId);
     return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {
@@ -44,11 +50,10 @@ export async function PATCH(request: Request, ctx: Context) {
 export async function DELETE(_request: Request, ctx: Context) {
   try {
     const { id } = await ctx.params;
-    const cartId = await requireCartId();
+    const { cartId, userId } = await requireShopper();
     if (!cartId) throw new CartError("Cart not found", 404);
 
     await removeCartItem(cartId, id);
-    const userId = await getSessionUserId();
     await revalidateAttachedPromo(cartId, userId);
     return NextResponse.json(await getCartDetail(cartId, userId));
   } catch (error) {

@@ -109,19 +109,125 @@ export async function findCartId(
   return rows[0]?.id ?? null;
 }
 
+/** The shopper's account cart, if one exists (most recently active wins). */
+export async function findUserCart(
+  userId: string | null,
+): Promise<{ id: string; token: string } | null> {
+  if (!userId) return null;
+  const rows = await rawQuery<{ id: string; token: string }>(
+    sql`SELECT id, token FROM carts
+        WHERE user_id = ${userId}
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Resolve the active cart for a request: the account cart wins for logged-in
+ * users (so the bag follows the account across devices/cookies), otherwise
+ * fall back to the anonymous cookie cart. ONE round-trip covers both cases.
+ */
+export async function resolveCartId(
+  userId: string | null,
+  token: string | undefined,
+): Promise<string | null> {
+  if (!userId && !token) return null;
+  const rows = await rawQuery<{ id: string }>(
+    sql`SELECT id FROM carts
+        WHERE (user_id IS NOT NULL AND user_id = ${userId})
+           OR (user_id IS NULL AND token = ${token})
+        ORDER BY (user_id IS NOT NULL) DESC, updated_at DESC
+        LIMIT 1`,
+  );
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Attach (or merge) the guest cookie cart into the user's account cart at
+ * login. Returns the account cart's token so the caller can refresh the
+ * cookie — after this the bag follows the account, not the browser.
+ */
+export async function mergeGuestCart(
+  userId: string,
+  guestCartId: string | null,
+): Promise<string> {
+  const userCart = await findUserCart(userId);
+
+  // No account cart yet: adopt the guest cart (or create a fresh one). The
+  // UPDATE...RETURNING keeps the happy path at one round-trip; ON CONFLICT
+  // covers a concurrent login racing us to the one-cart-per-user limit.
+  if (!userCart) {
+    if (guestCartId) {
+      const adopted = await rawQuery<{ token: string }>(
+        sql`UPDATE carts SET user_id = ${userId}, updated_at = now()
+            WHERE id = ${guestCartId} AND user_id IS NULL
+            RETURNING token`,
+      );
+      if (adopted[0]) return adopted[0].token;
+    }
+    const token = crypto.randomUUID();
+    const rows = await rawQuery<{ token: string }>(
+      sql`INSERT INTO carts (id, token, user_id)
+          VALUES (gen_random_uuid(), ${token}, ${userId})
+          ON CONFLICT (user_id) DO UPDATE SET updated_at = now()
+          RETURNING token`,
+    );
+    return rows[0]!.token;
+  }
+
+  // Both exist: fold guest items into the account cart (capped at stock) and
+  // copy the promo if the account cart has none — one round-trip — then drop
+  // the guest cart (its items first).
+  if (guestCartId && guestCartId !== userCart.id) {
+    await rawQuery(sql`
+      WITH merged AS (
+        INSERT INTO cart_items (id, cart_id, variant_id, quantity)
+        SELECT gen_random_uuid(), ${userCart.id}, ci.variant_id, ci.quantity
+        FROM cart_items ci
+        WHERE ci.cart_id = ${guestCartId}
+        ON CONFLICT (cart_id, variant_id)
+        DO UPDATE SET quantity = LEAST(
+          cart_items.quantity + EXCLUDED.quantity,
+          COALESCE(
+            (SELECT v.stock_quantity FROM product_variants v WHERE v.id = EXCLUDED.variant_id),
+            EXCLUDED.quantity
+          )
+        )
+      )
+      UPDATE carts
+      SET promo_code_id = COALESCE(
+            carts.promo_code_id,
+            (SELECT promo_code_id FROM carts WHERE id = ${guestCartId})
+          ),
+          updated_at = now()
+      WHERE id = ${userCart.id}
+    `);
+    await rawQuery(sql`
+      WITH gone AS (
+        DELETE FROM cart_items WHERE cart_id = ${guestCartId}
+      )
+      DELETE FROM carts WHERE id = ${guestCartId}
+    `);
+  }
+
+  return userCart.token;
+}
+
 export async function getCartDetail(
   cartId: string | null,
   userId: string | null = null,
 ): Promise<CartSummary> {
   // No cart → nothing to report, so return BEFORE the housekeeping sweep. The
-  // sweep is two sequential round-trips (~2 x 114ms on the Neon HTTP driver)
-  // and its result is discarded here: an empty bag has no availability to show.
+  // sweep is two sequential round-trips on the Neon HTTP driver and its
+  // result is discarded here: an empty bag has no availability to show.
   // Guests with no cart (the bulk of page loads) take this path every time.
   if (!cartId) return EMPTY_CART;
 
-  // Lazy housekeeping: expired checkout reservations go back on sale here, so
-  // the bag always shows true availability. Idempotent and cheap. Checkout
-  // (reserveCartItems) sweeps too, so an expired hold is never stranded.
+  // Lazy housekeeping (throttled to 30s in reservations.ts): expired checkout
+  // reservations go back on sale here, so the bag always shows true
+  // availability. Checkout forces a sweep too, so an expired hold is never
+  // stranded at pay time.
   await sweepReservations();
   const [rows, promo] = await Promise.all([
     rawQuery<CartRow>(sql`
@@ -173,15 +279,17 @@ export async function addCartItem(
   }
 
   const wanted = quantity > 0 ? quantity : 1;
+  // Insert + touch the cart's updated_at in one round-trip (the CTE runs
+  // alongside the upsert, so the account-cart ordering stays fresh).
   await rawQuery(sql`
-    INSERT INTO cart_items (id, cart_id, variant_id, quantity)
-    VALUES (gen_random_uuid(), ${cartId}, ${variantId}, ${Math.min(wanted, stock)})
-    ON CONFLICT (cart_id, variant_id)
-    DO UPDATE SET quantity = LEAST(cart_items.quantity + ${wanted}, ${stock})
+    WITH upsert AS (
+      INSERT INTO cart_items (id, cart_id, variant_id, quantity)
+      VALUES (gen_random_uuid(), ${cartId}, ${variantId}, ${Math.min(wanted, stock)})
+      ON CONFLICT (cart_id, variant_id)
+      DO UPDATE SET quantity = LEAST(cart_items.quantity + ${wanted}, ${stock})
+    )
+    UPDATE carts SET updated_at = now() WHERE id = ${cartId}
   `);
-  await rawQuery(
-    sql`UPDATE carts SET updated_at = now() WHERE id = ${cartId}`,
-  );
 }
 
 export async function updateCartItem(

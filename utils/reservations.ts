@@ -43,9 +43,23 @@ export class StockUnavailableError extends Error {
  *     abandoned checkout; the items go back on sale).
  *  2. Reservations of orders that are NOT PENDING anymore (confirmed/cancelled/
  *     refunded) → delete only. Confirmed rows were already sold, so no restock.
- * Cheap, idempotent, and safe to run on every cart read / checkout attempt.
+ *
+ * Lazy housekeeping runs on every cart read; two sequential round-trips on
+ * the Neon HTTP driver (~2 x 114ms) would tax every page load, so it is
+ * throttled to once per 30s per server instance. A hold lives for 10 minutes,
+ * so a briefly-delayed restock is invisible next to the TTL itself. Checkout
+ * passes force=true so an expired hold can never block a paying customer.
  */
-export async function sweepReservations(): Promise<void> {
+const SWEEP_THROTTLE_MS = 30_000;
+let lastSweepAt = 0;
+
+export async function sweepReservations(force = false): Promise<void> {
+  if (!force) {
+    const now = Date.now();
+    if (now - lastSweepAt < SWEEP_THROTTLE_MS) return;
+    lastSweepAt = now;
+  }
+
   await rawQuery(sql`
     WITH expired AS (
       DELETE FROM stock_reservations r
@@ -67,6 +81,7 @@ export async function sweepReservations(): Promise<void> {
     WHERE r.order_id = o.id AND o.status <> 'PENDING'
   `);
 }
+
 /**
  * Hold stock for a checkout attempt. Runs before the Razorpay order is
  * created, so a checkout that can't be honoured never opens a payment window.
@@ -80,7 +95,8 @@ export async function reserveCartItems(
   cartId: string,
   items: ReservationItem[],
 ): Promise<void> {
-  await sweepReservations();
+  // Forced sweep: a pay attempt must never be blocked by an expired hold.
+  await sweepReservations(true);
 
   // Release this cart's earlier (still-pending) attempt.
   await rawQuery(sql`

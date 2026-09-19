@@ -140,13 +140,20 @@ export const productReviews = pgTable("product_reviews", {
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const carts = pgTable("carts", {
-    id: text("id").primaryKey().$defaultFn(randomId),
-    token: text("token").notNull().unique(),
-    promoCodeId: text("promo_code_id"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const carts = pgTable(
+    "carts",
+    {
+        id: text("id").primaryKey().$defaultFn(randomId),
+        token: text("token").notNull().unique(),
+        // Set once the shopper logs in: the cart then follows the account
+        // across devices/browsers instead of just this browser's cookie.
+        userId: text("user_id").unique(),
+        promoCodeId: text("promo_code_id"),
+        createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [index("idx_carts_user_id").on(t.userId)],
+);
 
 export const cartItems = pgTable(
     "cart_items",
