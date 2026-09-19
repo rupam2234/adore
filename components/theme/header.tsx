@@ -250,7 +250,7 @@ export default function Header() {
             onClick={() => setMobileOpen(false)}
             className="block py-2 text-sm font-medium"
           >
-            Shop all
+            Our entire collection
           </Link>
           {CATEGORY_TREE.map(cat => (
             <div key={cat.slug} className="border-t border-[#2B2620]/10">

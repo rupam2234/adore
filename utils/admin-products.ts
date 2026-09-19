@@ -8,7 +8,7 @@ import {
   notInArray,
   sql,
 } from 'drizzle-orm';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   db,
   rawQuery,
@@ -19,6 +19,7 @@ import {
   products,
 } from './db';
 import { getPublicUrl } from './cloudinary.ts';
+import { SHOP_CATEGORIES_TAG, SHOP_FACETS_TAG } from './products';
 import {
   buildSku,
   slugify,
@@ -79,6 +80,13 @@ function revalidateStorefront(slug: string): void {
     // app/shop/layout.tsx. A product edit can add or remove it from any of
     // them, so invalidate every instance of the dynamic segment.
     revalidatePath('/shop/[slug]', 'page');
+    // The filter facets and category nav are cached read models shared by every
+    // shop listing, so a new colour/size must expire them immediately rather
+    // than wait out their TTL. Admin writes run in route handlers, where
+    // `updateTag` is not allowed — `{ expire: 0 }` is revalidateTag's
+    // immediate-expiry form there.
+    revalidateTag(SHOP_FACETS_TAG, { expire: 0 });
+    revalidateTag(SHOP_CATEGORIES_TAG, { expire: 0 });
   } catch {
     // Cache revalidation is best-effort.
   }

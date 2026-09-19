@@ -4,6 +4,7 @@ import {
   ProductCard,
   FilterStripe,
   AdvancedFilters,
+  ResultsBusy,
 } from '@/components';
 import {
   ALL_CATEGORIES,
@@ -50,8 +51,11 @@ export default async function ShopCategoryPage({
   const category = ALL_CATEGORIES.find(c => c.slug === slug);
   if (!category) notFound();
 
-  // Parent slugs (e.g. "kurti") include their children automatically.
-  const [products, facets] = await Promise.all([
+  // Parent slugs (e.g. "kurti") include their children automatically. The
+  // category tree for sub-navigation is fetched alongside them so it costs no
+  // extra round trip; a missing `parent_id` column (migration not run) resolves
+  // to null and we fall back to the static taxonomy below.
+  const [products, facets, categoryRows] = await Promise.all([
     getProductsForSection({
       categorySlug: slug,
       sort: filters.sort,
@@ -63,39 +67,35 @@ export default async function ShopCategoryPage({
       limit: 24,
     }),
     getFilterFacets(slug),
+    getCategories().catch(() => null),
   ]);
 
   // Siblings / children for sub-navigation (prefer live DB tree when present).
   let subNav: { slug: string; name: string }[] = [];
-  try {
-    const rows = await getCategories();
-    const byId = new Map(rows.map(r => [r.id, r]));
-    const current = rows.find(r => r.slug === slug) ?? null;
+  if (categoryRows) {
+    const byId = new Map(categoryRows.map(r => [r.id, r]));
+    const current = categoryRows.find(r => r.slug === slug) ?? null;
     if (current) {
       const parentId = current.parentId;
       if (parentId) {
         // On a child page (e.g. short-kurti): show siblings + parent link.
         const parent = byId.get(parentId) ?? null;
-        subNav = rows
+        subNav = categoryRows
           .filter(r => r.parentId === parentId && r.slug !== slug)
           .map(r => ({ slug: r.slug, name: r.name }));
         if (parent)
           subNav.unshift({ slug: parent.slug, name: `All ${parent.name}` });
       } else {
         // On a parent page (e.g. kurti): show its children.
-        subNav = rows
+        subNav = categoryRows
           .filter(r => r.parentId === current.id)
           .map(r => ({ slug: r.slug, name: r.name }));
       }
     }
-  } catch {
-    // categories table predates parent_id (migration not run) — fall back
-    // to the static taxonomy.
-    const node =
-      category &&
-      (await import('@/utils/categories').then(m =>
-        m.CATEGORY_TREE.find(n => n.slug === slug)
-      ));
+  } else {
+    // categories table predates parent_id (migration not run) — fall back to
+    // the taxonomy already imported above.
+    const node = CATEGORY_TREE.find(n => n.slug === slug);
     subNav = (node?.children ?? []).map(c => ({
       slug: c.slug,
       name: c.name,
@@ -152,7 +152,8 @@ export default async function ShopCategoryPage({
             sort={filters.sort}
             showAllPill={false}
           />
-          <div className="px-6 pt-4 sm:px-12">
+          {/* lg and up: filter sidebar on the left, product grid on the right. */}
+          <div className="mt-8 flex flex-col gap-6 lg:flex-row lg:gap-10">
             <AdvancedFilters
               colors={facets.colors}
               sizes={facets.sizes}
@@ -164,19 +165,27 @@ export default async function ShopCategoryPage({
               basePath={`/shop/${slug}`}
               preservedParams={keep}
             />
+            {/*
+              `aria-label` + `<ResultsBusy>` give screen readers and sighted
+              users a pending cue on filter clicks — the grid stays responsive
+              (the click paints optimistically) while Next streams the new page.
+            */}
+            <div className="min-w-0 flex-1" aria-label="Product results">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                <ResultsBusy />
+                {products.length > 0 ? (
+                  products.map(product => (
+                    <ProductCard key={product.id} product={product} />
+                  ))
+                ) : (
+                  <p className="col-span-full text-sm text-[#2B2620]/60">
+                    No {category.name.toLowerCase()} styles yet — check back
+                    soon.
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {products.length > 0 ? (
-            products.map(product => (
-              <ProductCard key={product.id} product={product} />
-            ))
-          ) : (
-            <p className="col-span-2 text-sm text-[#2B2620]/60 sm:col-span-4">
-              No {category.name.toLowerCase()} styles yet — check back soon.
-            </p>
-          )}
         </div>
       </main>
       <Footer />

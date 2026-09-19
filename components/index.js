@@ -8,6 +8,7 @@ export { default as AdvancedFilters } from './shop/advanced-filters';
 export { CartProvider, useCart } from './cart/cart-provider';
 export { CartDrawer } from './cart/cart-drawer';
 export { default as ProductReviews } from './shop/product-reviews';
+export { ResultsBusy } from './shop/results-busy';
 export { Stars, StarInput } from './shop/stars';
 export { ReviewForm } from './shop/review-form';
 export { ReviewListItem } from './shop/review-list';

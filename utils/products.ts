@@ -1,5 +1,6 @@
 import { rawQuery, sql, ProductCardData, ProductImage } from '.';
 import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
 import { getPublicUrl } from './cloudinary';
 import {
   CATEGORY_CHILDREN,
@@ -100,6 +101,45 @@ export function expandCategorySlugs(slug: string): string[] {
   return children ? [slug, ...children] : [slug];
 }
 
+/**
+ * Cache tags for the shop read models that every listing shares. Admin product
+ * writes expire them (see `revalidateStorefront` in utils/admin-products.ts).
+ */
+export const SHOP_FACETS_TAG = 'shop-facets';
+export const SHOP_CATEGORIES_TAG = 'shop-categories';
+
+/**
+ * Backstop TTL for those caches, matching app/shop/layout.tsx's ISR window: if a
+ * tag invalidation is ever missed, the read model is at most this stale.
+ */
+const SHOP_CACHE_SECONDS = 300;
+
+/**
+ * Category slugs a query should match: a parent slug includes its children
+ * (e.g. "kurti" → "kurti", "short-kurti", …); "all"/undefined means no filter.
+ * Shared by the product query and the facet query so both scope identically.
+ */
+function categorySlugsFor(
+  categorySlug: string | undefined,
+  includeChildren: boolean
+): string[] | null {
+  if (!categorySlug || categorySlug === 'all') return null;
+  return includeChildren ? expandCategorySlugs(categorySlug) : [categorySlug];
+}
+
+/** `EXISTS` over the matching categories (parameterized); `TRUE` when unfiltered. */
+function categoryFilterSql(slugs: string[] | null) {
+  return slugs
+    ? sql`EXISTS (
+            SELECT 1 FROM product_categories pc
+            JOIN categories c ON c.id = pc.category_id
+            WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
+              slugs.map(s => sql`${s}`),
+              sql`, `
+            )}))`
+    : sql`TRUE`;
+}
+
 /** Map a raw SQL row (products + variant + image aggregates) to ProductCardData. */
 function mapProductRow(row: ProductRow): ProductCardData {
   // DB aggregates sizes as snake_case { size, stock, price, compare_at_price };
@@ -179,25 +219,11 @@ export async function getProductsForSection(
     maxPrice,
     limit = 8,
   } = options;
-  const categorySlugs =
-    categorySlug && includeChildren
-      ? expandCategorySlugs(categorySlug)
-      : categorySlug
-        ? [categorySlug]
-        : null;
-
   // Filter fragment: EXISTS over matched categories (parameterized IN list),
   // or plain TRUE when no category filter is given.
-  const categoryFilter = categorySlugs
-    ? sql`EXISTS (
-            SELECT 1 FROM product_categories pc
-            JOIN categories c ON c.id = pc.category_id
-            WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
-              categorySlugs.map(s => sql`${s}`),
-              sql`, `
-            )}))
-          `
-    : sql`TRUE`;
+  const categoryFilter = categoryFilterSql(
+    categorySlugsFor(categorySlug, includeChildren)
+  );
 
   // Parameterized ILIKE over the searchable text fields; TRUE when no query.
   const searchPattern = search ? `%${search}%` : null;
@@ -338,37 +364,31 @@ export async function getProductsForSection(
 
 /**
  * Distinct colours and sizes available across active products — the facet
- * options for the advanced filter panel. Optionally scoped to a category
- * (parent slugs include children, same as product queries).
+ * options for the advanced filter panel. Scoped to a category (parent slugs
+ * include children, same as product queries).
+ *
+ * Facets depend on the category only, never on the active filters, so the
+ * result is cached across requests: a filter click then costs one DB round trip
+ * (the product query) instead of two. Admin writes expire the tag; the 5-minute
+ * TTL matches the shop layout's ISR window as a backstop.
+ *
+ * Price needs no facet: the slider uses a fixed 0 → 5000 scale.
  */
-export async function getFilterFacets(categorySlug?: string): Promise<{
-  colors: { name: string; hex: string | null }[];
-  sizes: string[];
-}> {
-  const categorySlugs =
-    categorySlug && categorySlug !== 'all'
-      ? expandCategorySlugs(categorySlug)
-      : null;
+const fetchFilterFacets = unstable_cache(
+  async (categorySlug: string) => {
+    const categoryFilter = categoryFilterSql(
+      categorySlugsFor(categorySlug, true)
+    );
 
-  const categoryFilter = categorySlugs
-    ? sql`EXISTS (
-            SELECT 1 FROM product_categories pc
-            JOIN categories c ON c.id = pc.category_id
-            WHERE pc.product_id = p.id AND c.slug IN (${sql.join(
-              categorySlugs.map(s => sql`${s}`),
-              sql`, `
-            )}))`
-    : sql`TRUE`;
-
-  // Postgres rejects `SELECT DISTINCT` when an ORDER BY expression is missing
-  // from the select list (42P10), so the size-rank key is projected as
-  // `size_rank` and referenced by its output name in ORDER BY.
-  const rows = await rawQuery<{
-    color: string;
-    color_hex: string | null;
-    size: string;
-    size_rank: number;
-  }>(sql`
+    // Postgres rejects `SELECT DISTINCT` when an ORDER BY expression is missing
+    // from the select list (42P10), so the size-rank key is projected as
+    // `size_rank` and referenced by its output name in ORDER BY.
+    const rows = await rawQuery<{
+      color: string;
+      color_hex: string | null;
+      size: string;
+      size_rank: number;
+    }>(sql`
     SELECT DISTINCT
       v.color,
       v.color_hex,
@@ -380,17 +400,29 @@ export async function getFilterFacets(categorySlug?: string): Promise<{
     ORDER BY v.color, size_rank
   `);
 
-  const colorMap = new Map<string, string | null>();
-  const sizeSet = new Set<string>();
-  for (const row of rows) {
-    if (!colorMap.has(row.color)) colorMap.set(row.color, row.color_hex);
-    sizeSet.add(row.size);
-  }
+    const colorMap = new Map<string, string | null>();
+    const sizeSet = new Set<string>();
+    for (const row of rows) {
+      if (!colorMap.has(row.color)) colorMap.set(row.color, row.color_hex);
+      sizeSet.add(row.size);
+    }
 
-  return {
-    colors: [...colorMap].map(([name, hex]) => ({ name, hex })),
-    sizes: sortSizes([...sizeSet]),
-  };
+    return {
+      colors: [...colorMap].map(([name, hex]) => ({ name, hex })),
+      sizes: sortSizes([...sizeSet]),
+    };
+  },
+  ['shop-filter-facets'],
+  { tags: [SHOP_FACETS_TAG], revalidate: SHOP_CACHE_SECONDS }
+);
+
+export async function getFilterFacets(categorySlug?: string): Promise<{
+  colors: { name: string; hex: string | null }[];
+  sizes: string[];
+}> {
+  // "all" is the key for the unfiltered listing (categorySlugsFor maps it to
+  // null, i.e. no category filter) — the argument doubles as the cache key.
+  return fetchFilterFacets(categorySlug ?? 'all');
 }
 
 /**
@@ -653,9 +685,15 @@ export async function getActiveProductSlugs(): Promise<string[]> {
   return rows.map(row => row.slug);
 }
 
-/** Fetch every category with its parent link (for nav / filters). */
-export async function getCategories(): Promise<CategoryRow[]> {
-  const rows = await rawQuery<CategoryRow>(sql`
+/**
+ * Fetch every category with its parent link (for nav / filters). Cached across
+ * requests: the table only changes when admins edit a product's categories, and
+ * `/shop/[slug]` awaits it after the product query, so an uncached call was a
+ * serial DB round trip on every category page view.
+ */
+const fetchCategories = unstable_cache(
+  async (): Promise<CategoryRow[]> => {
+    const rows = await rawQuery<CategoryRow>(sql`
     SELECT
       child.id,
       child.slug,
@@ -666,6 +704,12 @@ export async function getCategories(): Promise<CategoryRow[]> {
     LEFT JOIN categories parent ON parent.id = child.parent_id
     ORDER BY child.slug
   `);
-  return rows;
-}
+    return rows;
+  },
+  ['shop-categories'],
+  { tags: [SHOP_CATEGORIES_TAG], revalidate: SHOP_CACHE_SECONDS }
+);
 
+export async function getCategories(): Promise<CategoryRow[]> {
+  return fetchCategories();
+}

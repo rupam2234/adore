@@ -4,6 +4,7 @@ import {
   ProductCard,
   FilterStripe,
   AdvancedFilters,
+  ResultsBusy,
 } from '@/components';
 import {
   CATEGORY_TREE,
@@ -48,8 +49,8 @@ export default async function ShopAllPage({ searchParams }: PageProps) {
       <SiteHeader />
       <main className="w-full py-12">
         <div className="px-6 sm:px-12">
-          <h1 className="font-serif text-3xl sm:text-4xl">
-            {filters.query ? `Results for “${filters.query}”` : 'Shop all'}
+          <h1 className="font-normal font-serif text-primary/80 text-3xl sm:text-4xl">
+            {filters.query ? `Results for “${filters.query}”` : 'Shop'}
           </h1>
           <p className="mt-2 max-w-md text-sm text-[#2B2620]/60">
             {filters.query
@@ -64,7 +65,8 @@ export default async function ShopAllPage({ searchParams }: PageProps) {
             sort={filters.sort}
             searchQuery={filters.query || undefined}
           />
-          <div className="px-6 pt-4 sm:px-12">
+          {/* lg and up: filter sidebar on the left, product grid on the right. */}
+          <div className="mt-8 flex flex-col gap-6 px-6 sm:px-12 lg:flex-row lg:gap-10">
             <AdvancedFilters
               colors={facets.colors}
               sizes={facets.sizes}
@@ -76,20 +78,28 @@ export default async function ShopAllPage({ searchParams }: PageProps) {
               basePath="/shop"
               preservedParams={keep}
             />
+            {/*
+              `aria-label` + `<ResultsBusy>` give screen readers and sighted
+              users a pending cue on filter clicks — the grid stays responsive
+              (the click paints optimistically) while Next streams the new page.
+            */}
+            <div className="min-w-0 flex-1" aria-label="Product results">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
+                <ResultsBusy />
+                {products.length > 0 ? (
+                  products.map(product => (
+                    <ProductCard key={product.id} product={product} />
+                  ))
+                ) : (
+                  <p className="col-span-full text-sm text-[#2B2620]/60">
+                    {filters.query
+                      ? `Nothing matches “${filters.query}”. Try another search.`
+                      : 'No products match these filters. Try clearing some.'}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="mt-8 grid grid-cols-2 gap-4 px-6 sm:grid-cols-4 sm:px-12">
-          {products.length > 0 ? (
-            products.map(product => (
-              <ProductCard key={product.id} product={product} />
-            ))
-          ) : (
-            <p className="col-span-2 text-sm text-[#2B2620]/60 sm:col-span-4">
-              {filters.query
-                ? `Nothing matches “${filters.query}” — try another search.`
-                : 'No products match these filters — try clearing some.'}
-            </p>
-          )}
         </div>
       </main>
       <Footer />
