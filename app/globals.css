@@ -9,7 +9,7 @@
   --color-secondary-foreground: hsl(var(--secondary-foreground));
 
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-playfair);
   --font-admin: var(--font-roboto);
 }
 

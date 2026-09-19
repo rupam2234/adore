@@ -53,16 +53,16 @@ export default async function Home() {
 
       <HeroSection />
 
-      <section id="shop" className="w-full px-6 py-20 sm:px-12">
+      <section id="shop" className="w-full px-6 py-5 sm:py-15 sm:px-12">
         <div className="text-center">
-          <h2 className="font-serif text-4xl">Latest arrivals</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm italic leading-relaxed text-[#2B2620]/60">
+          <h2 className="font-serif text-xl sm:text-4xl">Latest arrivals</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm sm:italic leading-relaxed text-[#2B2620]/60">
             Every piece tells a story of the hands that shaped it and the
             moments it will witness with you.
           </p>
         </div>
 
-        <div className="mt-14">
+        <div className="sm:mt-10 mt-5">
           {latest.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -143,8 +143,37 @@ export default async function Home() {
 
 function HeroSection() {
   return (
-    <section className="grid w-full flex-1 grid-cols-1 sm:grid-cols-5">
-      <div className="order-2 flex flex-col justify-center gap-6 px-6 py-6 sm:order-1 sm:col-span-2 sm:px-12 sm:py-24">
+    <section className="relative grid w-full flex-1 grid-cols-1 overflow-hidden sm:grid-cols-5">
+      {/* Mobile: Full-width image with centered overlay text */}
+      <div className="relative h-[75vh] w-full sm:hidden">
+        <img
+          src="/images/banner-1.jpg"
+          alt="Meadowloom - Clothes that become more yours"
+          loading="eager"
+          className="h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-linear-to-t from-[#2B2620]/80 via-[#2B2620]/40 to-transparent" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 rounded-xl border border-[#FAF8F3]/20 bg-[#2B2620]/10">
+          <p className="text-center text-3xl font-serif text-[#FAF8F3] uppercase tracking-widest">
+            Autumn
+          </p>
+          <h1 className="text-center font-thin font-serif text-sm text-[#FAF8F3] sm:text-sm">
+            Discover our autumn collection, where cozy layers, graceful
+            silhouettes, and seasonal tones come together.
+          </h1>
+          <div className="flex gap-3 pt-2">
+            <a
+              href="#shop"
+              className="rounded-full border-2 uppercase border-primary-foreground/30 bg-transparent px-5 py-2 text-xs text-primary-foreground/70 transition-colors hover:bg-[#DDBBA4]"
+            >
+              Shop Now
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop: Text on left, image on right */}
+      <div className="sm:flex order-2 hidden sm:flex-col justify-center gap-6 px-6 py-6 sm:order-1 sm:col-span-2 sm:px-12 sm:py-24">
         <p className="text-sm text-[#5C6B4B]">The beauty of keeping</p>
         <h1 className="font-serif text-4xl leading-tight sm:text-5xl">
           Clothes that become more yours with every wear
@@ -170,10 +199,10 @@ function HeroSection() {
         </div>
       </div>
       <img
-        src={'/images/banner-1.jpg'}
-        alt="banner-1"
+        src="/images/banner-1.jpg"
+        alt="Meadowloom"
         loading="eager"
-        className="order-1 h-72 w-full sm:order-2 sm:col-span-3 sm:h-auto"
+        className="hidden h-72 w-full sm:block sm:order-2 sm:col-span-3 sm:h-auto"
       />
       {/* <div className="order-1 h-72 w-full bg-[linear-gradient(160deg,#C98F82_0%,#DDBBA4_45%,#E7DFCB_100%)] sm:order-2 sm:col-span-3 sm:h-auto" /> */}
     </section>
