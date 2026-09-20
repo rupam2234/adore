@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { formatPrice } from '@/utils/product-format';
 import { PinChecker, usePinCheck } from '@/components/shop/pin-checker';
 import { useAuthUser } from '@/components/auth/use-auth-user';
+import { PaymentBadges } from '@/components/checkout/payment-badges';
 import { useCart } from './cart-provider';
 
 export function CartDrawer() {
@@ -100,7 +101,9 @@ function PromoSection() {
   if (!loading && !user) {
     return (
       <div className="mt-4 flex items-center justify-between rounded-lg bg-[#E7DFCB]/50 px-3 py-2.5 text-xs">
-        <span className="text-[#2B2620]/60">Promo codes are for members</span>
+        <span className="text-[#2B2620]/60">
+          Apply Promo Code (Members Only)
+        </span>
         <Link
           href="/login"
           onClick={() => setDrawerOpen(false)}
@@ -300,7 +303,10 @@ function DrawerBody() {
             onClick={() => setDrawerOpen(false)}
             className="mt-4 block w-full cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-center text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
           >
-            Checkout
+            <span className="flex items-center justify-center gap-3">
+              Checkout
+              <PaymentBadges />
+            </span>
           </Link>
         ) : (
           <>
@@ -312,7 +318,10 @@ function DrawerBody() {
               title="Verify your delivery PIN first"
               className="mt-4 block w-full cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-center text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Checkout
+              <span className="flex items-center justify-center gap-3">
+                Checkout
+                <PaymentBadges />
+              </span>
             </button>
             <p className="mt-1.5 text-center text-xs text-[#2B2620]/50">
               {pinChecking

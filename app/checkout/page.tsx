@@ -35,6 +35,11 @@ export default async function CheckoutPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
+      {/* Warm the Razorpay hosts early — the script fetch and modal API calls
+          skip their DNS/TLS round-trips. */}
+      <link rel="preconnect" href="https://checkout.razorpay.com" />
+      <link rel="dns-prefetch" href="https://api.razorpay.com" />
+
       <SiteHeader />
       <main className="w-full flex-1 px-6 py-12 sm:px-12">
         <div className="mx-auto max-w-5xl">

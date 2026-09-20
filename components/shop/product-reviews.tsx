@@ -197,7 +197,9 @@ export default function ProductReviews({
               />
             ) : (
               <div className="py-2 text-center">
-                <p className="font-serif text-xl">Reviews are for members</p>
+                <p className="font-serif text-xl">
+                  Reviews are only available to verified buyers
+                </p>
                 <p className="mt-1 text-sm text-[#2B2620]/60">
                   Please log in with your Adore account to share your review.
                 </p>

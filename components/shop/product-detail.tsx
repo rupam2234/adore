@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type WheelEvent,
 } from 'react';
+import { Droplet, Leaf, Sparkles, Waves } from 'lucide-react';
 import { formatPrice, type ProductCardData } from '@/utils/product-format';
 import type { ReviewSummary } from '@/utils/review-format';
 import { useCart } from '@/components/cart/cart-provider';
@@ -50,7 +51,7 @@ export default function ProductDetail({
   const uniqueSizePrices = [...new Set(sizePrices.map(p => Number(p)))];
   const hasVaryingPrices = uniqueSizePrices.length > 1;
   const [openSection, setOpenSection] = useState<'details' | 'care' | null>(
-    null
+    'details'
   );
   const [qty, setQty] = useState(1);
   const { addItem, adding, error, setDrawerOpen } = useCart();
@@ -327,20 +328,31 @@ export default function ProductDetail({
             </div>
           )}
 
+          {product.material && (
+            <div className="flex items-center text-left text-[13px] font-semibold gap-2 text-[#2B2620]/80">
+              <Leaf className="h-4 w-4 text-[#2B2620]" aria-hidden="true" />
+              Made with {product.material}
+            </div>
+          )}
+
           {product.details.length > 0 && (
-            <div className="border-b border-[#2B2620]/10 pb-4">
+            <div className="">
               <button
                 type="button"
                 onClick={() =>
                   setOpenSection(s => (s === 'details' ? null : 'details'))
                 }
                 aria-expanded={openSection === 'details'}
-                className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
+                className="flex w-full cursor-pointer items-center gap-2 text-left text-[13px] font-semibold tracking-wide text-[#2B2620] transition-colors hover:text-[#5C6B4B]"
               >
-                Details
+                <Sparkles
+                  className="h-4 w-4 text-[#5C6B4B]"
+                  aria-hidden="true"
+                />
+                Product Highlight
                 <span
                   aria-hidden="true"
-                  className={`text-base leading-none transition-transform duration-300 ${
+                  className={`ml-auto text-base leading-none transition-transform duration-300 ${
                     openSection === 'details' ? 'rotate-45' : ''
                   }`}
                 >
@@ -363,31 +375,24 @@ export default function ProductDetail({
             </div>
           )}
 
-          {product.material && (
-            <div className="border-b border-[#2B2620]/10 pb-4">
-              <p className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-                Material:
-              </p>
-              <p className="mt-1.5 text-sm leading-relaxed text-[#2B2620]/70">
-                {product.material}
-              </p>
-            </div>
-          )}
-
           {product.careInstructions.length > 0 && (
-            <div className="border-b border-[#2B2620]/10 pb-4">
+            <div className="">
               <button
                 type="button"
                 onClick={() =>
                   setOpenSection(s => (s === 'care' ? null : 'care'))
                 }
                 aria-expanded={openSection === 'care'}
-                className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
+                className="flex w-full cursor-pointer items-center gap-2 text-left text-[13px] font-semibold tracking-wide text-[#2B2620] transition-colors hover:text-[#5C6B4B]"
               >
-                Cloth care
+                <Droplet
+                  className="h-4 w-4 text-[#5C6B4B]"
+                  aria-hidden="true"
+                />
+                Fabric and Care
                 <span
                   aria-hidden="true"
-                  className={`text-base leading-none transition-transform duration-300 ${
+                  className={`ml-auto text-base leading-none transition-transform duration-300 ${
                     openSection === 'care' ? 'rotate-45' : ''
                   }`}
                 >

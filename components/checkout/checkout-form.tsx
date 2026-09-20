@@ -13,6 +13,7 @@ import {
 } from '@/utils/checkout-format';
 import { PIN_STORAGE_KEY } from '@/components/shop/pin-checker';
 import { DEFAULT_WEIGHT_GRAMS } from '@/utils/admin-schema';
+import { PaymentBadges } from '@/components/checkout/payment-badges';
 
 /** Saved account address handed down from the server page. */
 export type CheckoutAddressOption = {
@@ -76,7 +77,15 @@ type PinState =
   | { kind: 'ok'; eta: string | null; freightCharge: number | null }
   | { kind: 'bad'; message: string };
 
-const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
+/**
+ * Razorpay Checkout.js (~150 KB) — preloaded once during idle time after the
+ * page is interactive (see the mount effect below), so by the time the shopper
+ * hits Pay the script is already in cache and the modal opens instantly.
+ * loadRazorpayScript() remains the awaited guarantee at pay time.
+ */
+const RAZORPAY_HOST = 'https://checkout.razorpay.com';
+
+const RAZORPAY_SCRIPT = `${RAZORPAY_HOST}/v1/checkout.js`;
 
 /** Inject Checkout.js once, resolve when `window.Razorpay` is ready. */
 function loadRazorpayScript(): Promise<boolean> {
@@ -240,6 +249,30 @@ export default function CheckoutForm({
     void checkPin(saved);
   }, []);
 
+  // Preload Checkout.js during idle time (never competes with initial render /
+  // LCP). By the time the shopper taps Pay, the script is cached and the
+  // payment modal opens without a network wait. Idempotent — the pay handler
+  // still awaits loadRazorpayScript() as the guarantee.
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.Razorpay) return;
+    const w = window as Window &
+      typeof globalThis & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        cancelIdleCallback?: (id: number) => void;
+      };
+    let idleId: number | undefined;
+    const timeoutId = window.setTimeout(() => void loadRazorpayScript(), 8000); // hard fallback
+    if (w.requestIdleCallback) {
+      idleId = w.requestIdleCallback(() => void loadRazorpayScript(), {
+        timeout: 5000,
+      });
+    }
+    return () => {
+      if (idleId !== undefined && w.cancelIdleCallback) w.cancelIdleCallback(idleId);
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
   /**
    * Release a stock reservation via the server (Razorpay checkout dismissed or
    * payment failed). The server-only `releaseOrderReservations` cannot be called
@@ -360,6 +393,15 @@ export default function CheckoutForm({
         order_id: session.razorpayOrderId,
         prefill: session.prefill,
         theme: { color: '#2B2620' },
+        // Only the methods shoppers actually use. Netbanking and EMI are
+        // hidden (Razorpay hides anything set to false or unconfigured).
+        method: {
+          upi: true,
+          card: true,
+          wallet: true,
+          netbanking: false,
+          emi: false,
+        },
         modal: {
           ondismiss: () => {
             setBusy(false);
@@ -630,9 +672,12 @@ export default function CheckoutForm({
             disabled={busy || loading}
             className="mt-6 w-full cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy
-              ? 'Opening secure payment…'
-              : `Pay ${formatPrice(String(totals.total), currency)}`}
+            <span className="flex items-center justify-center gap-3">
+              {busy
+                ? 'Opening secure payment…'
+                : `Pay ${formatPrice(String(totals.total), currency)}`}
+              {!busy && <PaymentBadges />}
+            </span>
           </button>
           <p className="mt-3 text-center text-xs text-[#2B2620]/50">
             Payments are processed securely by Razorpay. Your PIN is verified

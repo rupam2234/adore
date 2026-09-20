@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties, type MouseEvent } from 'react';
+import { Leaf } from 'lucide-react';
 import { formatPrice, type ProductCardData } from '@/utils/product-format';
 import { useCart } from '@/components/cart/cart-provider';
 
@@ -17,6 +18,8 @@ import { useCart } from '@/components/cart/cart-provider';
 export default function ProductCard({ product }: { product: ProductCardData }) {
   const [front, back] = product.images;
   const [quickViewOpen, setQuickViewOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [careOpen, setCareOpen] = useState(false);
 
   return (
     <>
@@ -309,14 +312,14 @@ function QuickViewModal({
             </div>
           )}
           {product.details.length > 0 && (
-            <div className="border-b border-[#2B2620]/10 pb-4">
+            <div className="">
               <button
                 type="button"
                 onClick={() => setDetailsOpen(open => !open)}
                 aria-expanded={detailsOpen}
                 className="flex w-full cursor-pointer items-center justify-between text-left text-[11px] uppercase tracking-wide text-[#2B2620]/50 transition-colors hover:text-[#2B2620]"
               >
-                Details
+                Product Highlights
                 <span
                   aria-hidden="true"
                   className={`text-base leading-none transition-transform duration-300 ${
@@ -340,9 +343,10 @@ function QuickViewModal({
             </div>
           )}
           {product.material && (
-            <p className="text-sm text-[#2B2620]/70">
-              Material: {product.material}
-            </p>
+            <div className="flex items-center gap-2 text-left text-xs text-[#2B2620]/60">
+              <Leaf className="h-3 w-3 text-[#5C6B4B]" aria-hidden="true" />
+              Made with {product.material}
+            </div>
           )}
           {product.careInstructions.length > 0 && (
             <div className="border-b border-[#2B2620]/10 pb-4">
