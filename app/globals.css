@@ -41,3 +41,22 @@
     font-family: Arial, Helvetica, sans-serif;
   }
 }
+
+/* Seamless marquee for promo ribbons — content must be rendered twice and the
+   track shifted by exactly half its width for a gap-free loop. */
+@keyframes ribbon-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.animate-ribbon-marquee {
+  animation: ribbon-marquee 22s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-ribbon-marquee {
+    animation: none;
+  }
+}

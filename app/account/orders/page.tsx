@@ -56,7 +56,7 @@ export default async function AccountOrdersPage() {
           >
             <div>
               <p className="font-roboto text-sm font-medium tracking-wide">
-              <CopyableOrderNumber orderNumber={order.orderNumber} />
+                <CopyableOrderNumber orderNumber={order.orderNumber} />
               </p>
               <p className="text-xs text-[#2B2620]/50">
                 Placed{' '}

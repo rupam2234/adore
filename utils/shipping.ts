@@ -25,6 +25,8 @@ export type PinCheckResult = {
   serviceable: boolean;
   etaDays: number | null;
   estimatedDelivery: string | null;
+  /** Cheapest available courier's freight charge (₹). Null when unknown. */
+  freightCharge: number | null;
   cod: boolean | null;
 };
 
@@ -91,6 +93,9 @@ type CourierCompany = {
   estimated_delivery_days?: string | number;
   etd?: string;
   cod?: number | boolean;
+  /** Courier freight charge (₹) for this PIN + weight combination. */
+  rate?: string | number;
+  freight_charge?: string | number;
   /** Older API shape, kept for compatibility. */
   eta?: string;
   estimated_delivery_date?: string;
@@ -252,7 +257,16 @@ async function loginForToken(): Promise<string | null> {
   return token;
 }
 
-async function fetchServiceability(pin: string): Promise<Response> {
+/** Shiprocket quotes per 0.5 kg slab — round up (min one slab). */
+function rateSlabKg(weightKg: number | null | undefined): number {
+  const w = weightKg != null && Number.isFinite(weightKg) && weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG;
+  return Math.min(50, Math.max(0.5, Math.ceil(w * 2) / 2));
+}
+
+async function fetchServiceability(
+  pin: string,
+  weightKg: number | null
+): Promise<Response> {
   const url =
     `${SHIPROCKET_BASE}/courier/serviceability/?` +
     new URLSearchParams({
@@ -261,7 +275,7 @@ async function fetchServiceability(pin: string): Promise<Response> {
       cod: '1',
       // The API expects `weight` (kg) — `order_weight` is rejected with
       // 400 "Weight Required".
-      weight: String(DEFAULT_WEIGHT_KG),
+      weight: String(rateSlabKg(weightKg)),
     });
   return fetch(url, {
     headers: { Authorization: await authHeader() },
@@ -269,8 +283,11 @@ async function fetchServiceability(pin: string): Promise<Response> {
   });
 }
 
-async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
-  let res = await fetchServiceability(pin);
+async function checkWithShiprocket(
+  pin: string,
+  weightKg: number | null
+): Promise<PinCheckResult> {
+  let res = await fetchServiceability(pin, weightKg);
 
   // Stale/expired/invalidated token → try email/password re-login once.
   // loginForToken() self-throttles via the back-off, so this is safe to
@@ -280,7 +297,7 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
     loginPromise = loginPromise ?? loginForToken();
     bearerOverride = await loginPromise;
     loginPromise = null;
-    if (bearerOverride) res = await fetchServiceability(pin);
+    if (bearerOverride) res = await fetchServiceability(pin, weightKg);
   }
 
   if (res.status === 401 || res.status === 403) {
@@ -303,13 +320,16 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
       serviceable: false,
       etaDays: null,
       estimatedDelivery: null,
+      freightCharge: null,
       cod: null,
     };
   }
 
   // Fastest courier = the best promise we can make the customer.
+  // Cheapest courier = the shipping rate we charge (freightCharge).
   let etaDays: number | null = null;
   let estimatedDelivery: string | null = null;
+  let freightCharge: number | null = null;
   let cod = false;
   for (const c of couriers) {
     const etaNum = Number(c.estimated_delivery_days ?? c.eta);
@@ -317,6 +337,12 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
       etaDays = etaNum;
       estimatedDelivery =
         c.etd ?? c.estimated_delivery_date ?? estimatedDelivery;
+    }
+    // Prefer `rate`, fall back to `freight_charge` (older API shape).
+    const rate = Number(c.rate ?? c.freight_charge);
+    if (Number.isFinite(rate) && rate > 0) {
+      freightCharge =
+        freightCharge === null ? rate : Math.min(freightCharge, rate);
     }
     if (
       c.cod === 1 ||
@@ -328,30 +354,35 @@ async function checkWithShiprocket(pin: string): Promise<PinCheckResult> {
     }
   }
 
-  return { serviceable: true, etaDays, estimatedDelivery, cod };
+  return { serviceable: true, etaDays, estimatedDelivery, freightCharge, cod };
 }
 
 export class ShippingUnavailableError extends Error {}
 
 export async function checkPinServiceability(
-  rawPin: string
+  rawPin: string,
+  weightKg?: number | null
 ): Promise<PinCheckResult> {
   const pin = rawPin.trim();
   if (!/^\d{6}$/.test(pin)) {
     throw new ShippingUnavailableError('PIN must be a 6-digit number');
   }
 
-  const hit = cache.get(pin);
+  // The quoted rate depends on the (slab-rounded) weight, so the cache key
+  // includes it — same PIN at a different weight is a different quote.
+  const slab = rateSlabKg(weightKg);
+  const cacheKey = `${pin}:${slab}`;
+  const hit = cache.get(cacheKey);
   if (hit && hit.expiresAt > Date.now()) return hit.result;
 
-  const result = await checkWithShiprocket(pin);
+  const result = await checkWithShiprocket(pin, slab);
 
   // Bounded cache — evict the oldest entry when full.
   if (cache.size >= CACHE_MAX_ENTRIES) {
     const oldest = cache.keys().next().value;
     if (oldest) cache.delete(oldest);
   }
-  cache.set(pin, { result, expiresAt: Date.now() + CACHE_TTL_MS });
+  cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS });
   return result;
 }
 
@@ -377,6 +408,8 @@ export type ShiprocketOrderInput = {
     sku: string;
     units: number;
     sellingPrice: number;
+    /** Packed weight per unit (grams); null → the 400g estimate applies. */
+    weightGrams?: number | null;
   }>;
   subTotal: number;
   discount: number;
@@ -408,7 +441,6 @@ export async function createShiprocketOrder(
   input: ShiprocketOrderInput
 ): Promise<ShiprocketOrderResult> {
   const { first, last } = splitName(input.customerName);
-  const totalUnits = input.items.reduce((sum, i) => sum + i.units, 0);
   const payload = {
     order_id: input.orderNumber,
     order_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
@@ -437,7 +469,15 @@ export async function createShiprocketOrder(
     length: PARCEL_LENGTH_CM,
     breadth: PARCEL_BREADTH_CM,
     height: PARCEL_HEIGHT_CM,
-    weight: PARCEL_WEIGHT_G_PER_UNIT * Math.max(1, totalUnits),
+    // Real per-product weights when the admin set them; 400g estimate otherwise.
+    weight: input.items.reduce(
+      (sum, i) =>
+        sum +
+        (i.weightGrams != null && i.weightGrams > 0
+          ? i.weightGrams
+          : PARCEL_WEIGHT_G_PER_UNIT) * i.units,
+      0
+    ),
   };
 
   const bearer = await authHeader();

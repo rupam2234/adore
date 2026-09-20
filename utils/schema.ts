@@ -66,6 +66,8 @@ export const products = pgTable('products', {
   careInstructions: text('care_instructions'),
   status: text('status').$type<ProductStatus>().notNull().default('DRAFT'),
   isFeatured: boolean('is_featured').notNull().default(false),
+  /** Packed weight per unit (grams) — feeds Shiprocket rate + order payloads. */
+  weightGrams: integer('weight_grams'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

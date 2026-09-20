@@ -5,9 +5,15 @@ import { useState, type FormEvent } from 'react';
 
 /**
  * Header search: pill-shaped input that submits to /shop?q=…
- * Reused in the desktop bar and at the top of the mobile menu.
+ * Reused in the desktop bar and above the hero on mobile.
  */
-export default function SearchBar({ className = '' }: { className?: string }) {
+export default function SearchBar({
+  className = '',
+  borderless = false,
+}: {
+  className?: string;
+  borderless?: boolean;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState('');
 
@@ -24,7 +30,13 @@ export default function SearchBar({ className = '' }: { className?: string }) {
       aria-label="Search products"
       className={className}
     >
-      <div className="flex items-center gap-2 rounded-full border border-[#2B2620]/20 bg-[#FAF8F3] px-4 py-2 transition-colors focus-within:border-[#2B2620]">
+      <div
+        className={
+          borderless
+            ? 'flex items-center gap-2 px-4 py-2'
+            : 'flex items-center gap-2 rounded-full border border-[#2B2620]/20 bg-[#FAF8F3] px-4 py-2 transition-colors focus-within:border-[#2B2620]'
+        }
+      >
         <svg
           aria-hidden="true"
           viewBox="0 0 24 24"

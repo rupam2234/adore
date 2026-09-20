@@ -12,6 +12,8 @@ import {
 } from 'react';
 import type { CartLine, CartSummary } from '@/utils/cart';
 import { computeDiscount } from '@/utils/promo-format';
+import { computeShippingAmount } from '@/utils/checkout-format';
+import { DEFAULT_WEIGHT_GRAMS } from '@/utils/admin-schema';
 
 type CartContextValue = {
   cart: CartSummary;
@@ -33,9 +35,12 @@ const EMPTY_CART: CartSummary = {
   itemCount: 0,
   subtotal: '0',
   discount: '0',
+  shipping: '0',
+  gst: '0',
   total: '0',
   promo: null,
   currency: null,
+  weightGrams: 0,
 };
 
 function summarize(
@@ -49,14 +54,24 @@ function summarize(
   const discount = promo
     ? computeDiscount(promo.discountType, promo.discountValue, subtotal)
     : '0';
+  const shipping = String(computeShippingAmount(Number(subtotal) - Number(discount)));
+  const total = String(Number(subtotal) - Number(discount) + Number(shipping));
+  const weightGrams = items.reduce(
+    (sum, item) =>
+      sum + (item.weightGrams ?? DEFAULT_WEIGHT_GRAMS) * item.quantity,
+    0
+  );
   return {
     items,
     itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
     subtotal,
     discount,
-    total: String(Number(subtotal) - Number(discount)),
+    shipping,
+    gst: '0', // Not applied currently
+    total,
     promo,
     currency: items[0]?.currency ?? currency,
+    weightGrams,
   };
 }
 

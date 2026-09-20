@@ -32,11 +32,16 @@ export type ProductPayload = {
   material: string | null;
   careInstructions: string | null;
   fit: string | null;
+  /** Packed weight per unit in grams. Null → 400g estimate is used. */
+  weightGrams: number | null;
   status: ProductStatus;
   isFeatured: boolean;
   categorySlugs: string[];
   variants: VariantInput[];
 };
+
+/** Fallback packed weight (grams/unit) when a product has none set. */
+export const DEFAULT_WEIGHT_GRAMS = 400;
 
 export type FieldErrors = Record<string, string>;
 
@@ -153,6 +158,16 @@ export function validateProductPayload(
     ? input.categorySlugs.map(c => str(c)).filter(Boolean)
     : [];
 
+  // weightGrams: optional packed weight per unit (grams). Blank → null
+  // (falls back to the 400g estimate); otherwise a sane positive integer.
+  let weightGrams: number | null = null;
+  const rawWeight = num(input.weightGrams);
+  if (rawWeight !== null) {
+    if (rawWeight <= 0 || rawWeight > 50_000)
+      errors.weightGrams = 'Weight must be between 1 and 50,000 grams.';
+    else weightGrams = Math.floor(rawWeight);
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   return {
@@ -166,6 +181,7 @@ export function validateProductPayload(
       material: optionalStr(input.material),
       careInstructions: optionalStr(input.careInstructions),
       fit: optionalStr(input.fit),
+      weightGrams,
       status,
       isFeatured: input.isFeatured === true,
       categorySlugs,
@@ -196,6 +212,8 @@ export type AdminProduct = {
   material: string | null;
   careInstructions: string | null;
   fit: string | null;
+  /** Packed weight per unit in grams. Null → 400g estimate is used. */
+  weightGrams: number | null;
   status: ProductStatus;
   isFeatured: boolean;
   categorySlugs: string[];

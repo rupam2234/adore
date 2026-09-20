@@ -6,7 +6,8 @@ export type PinResult = {
   serviceable: boolean;
   etaDays: number | null;
   estimatedDelivery: string | null;
-  cod: boolean | null;
+  /** Cheapest available courier's freight charge (₹). Null when unknown. */
+  freightCharge: number | null;
 };
 
 export type PinStatus =
@@ -54,7 +55,8 @@ export function usePinCheck() {
         serviceable: Boolean(data.serviceable),
         etaDays: data.etaDays ?? null,
         estimatedDelivery: data.estimatedDelivery ?? null,
-        cod: data.cod ?? null,
+        freightCharge:
+          typeof data.freightCharge === 'number' ? data.freightCharge : null,
       };
       // Only remember deliverable PINs — an unserviceable PIN must never be
       // carried into checkout as if it were verified.
@@ -101,8 +103,7 @@ export function PinChecker({
         return (
           <p className="mt-1.5 text-xs text-[#5C6B4B]">
             ✓ Delivery to {status.pin}
-            {eta ? ` ${eta}` : ''} ·{' '}
-            {result.cod ? 'Cash on Delivery available' : 'Prepaid orders only'}
+            {eta ? ` ${eta}` : ''}
           </p>
         );
       }

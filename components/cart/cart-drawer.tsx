@@ -278,13 +278,21 @@ function DrawerBody() {
               </span>
             </div>
           )}
+          {Number(cart.shipping) > 0 && (
+            <div className="flex items-center justify-between">
+              <span>Shipping</span>
+              <span className="font-medium">
+                {formatPrice(cart.shipping, cart.currency!)}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between border-t border-[#2B2620]/10 pt-2 text-base font-medium">
             <span>Total</span>
             <span>{formatPrice(cart.total, cart.currency!)}</span>
           </div>
         </div>
         <p className="mt-1 text-xs text-[#2B2620]/50">
-          Shipping and taxes calculated at checkout.
+          Delivery calculated at checkout.
         </p>
         {pinVerified ? (
           <Link

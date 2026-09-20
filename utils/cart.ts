@@ -5,6 +5,8 @@ import { getAttachedPromo, type AppliedPromo } from './promo';
 import { computeDiscount } from './promo-format';
 import { sweepReservations, releaseOrderReservations } from './reservations';
 import { getSessionUserId } from './request-user';
+import { computeShippingAmount } from './checkout-format';
+import { DEFAULT_WEIGHT_GRAMS } from './admin-schema';
 
 export const CART_COOKIE = 'adore_cart';
 export const CART_MAX_AGE = 60 * 60 * 24 * 90;
@@ -51,6 +53,8 @@ export type CartLine = {
   quantity: number;
   stock: number;
   lineTotal: string;
+  /** Packed weight per unit (grams); null → the 400g estimate applies. */
+  weightGrams: number | null;
 };
 
 export type CartSummary = {
@@ -58,9 +62,13 @@ export type CartSummary = {
   itemCount: number;
   subtotal: string;
   discount: string;
+  shipping: string;
+  gst: string;
   total: string;
   promo: AppliedPromo | null;
   currency: string | null;
+  /** Total packed weight (grams, incl. 400g fallback) for shipping quotes. */
+  weightGrams: number;
 };
 
 const EMPTY_CART: CartSummary = {
@@ -68,9 +76,12 @@ const EMPTY_CART: CartSummary = {
   itemCount: 0,
   subtotal: '0',
   discount: '0',
+  shipping: '0',
+  gst: '0',
   total: '0',
   promo: null,
   currency: null,
+  weightGrams: 0,
 };
 
 type CartRow = {
@@ -88,6 +99,7 @@ type CartRow = {
   currency: string;
   quantity: number;
   stock: number;
+  weight_grams: number | null;
 };
 
 function mapCart(
@@ -109,24 +121,34 @@ function mapCart(
     currency: row.currency,
     quantity: row.quantity,
     stock: row.stock,
+    weightGrams: row.weight_grams ?? null,
     lineTotal: String(Number(row.price) * row.quantity),
   }));
 
   const subtotal = String(
     items.reduce((sum, item) => sum + Number(item.lineTotal), 0)
   );
+  const weightGrams = items.reduce(
+    (sum, item) => sum + (item.weightGrams ?? DEFAULT_WEIGHT_GRAMS) * item.quantity,
+    0
+  );
   const discount = promo
     ? computeDiscount(promo.discountType, promo.discountValue, subtotal)
     : '0';
+  const shipping = String(computeShippingAmount(Number(subtotal) - Number(discount)));
+  const total = String(Number(subtotal) - Number(discount) + Number(shipping));
 
   return {
     items,
     itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
     subtotal,
     discount,
-    total: String(Number(subtotal) - Number(discount)),
+    shipping,
+    gst: '0', // Not applied currently
+    total,
     promo: promo ? { ...promo, discount } : null,
     currency: items[0]?.currency ?? null,
+    weightGrams,
   };
 }
 
@@ -287,7 +309,14 @@ export async function getCartDetail(
   // stranded at pay time.
   await sweepReservations();
   const [rows, promo] = await Promise.all([
-    rawQuery<CartRow>(sql`
+    cartRowsWithWeight(cartId),
+    getAttachedPromo(cartId, userId),
+  ]);
+  return mapCart(rows, promo);
+}
+
+/** Cart rows including per-product packed weight. */
+const CART_ROWS_SQL = sql`
     SELECT
       ci.id,
       ci.variant_id,
@@ -301,6 +330,56 @@ export async function getCartDetail(
       v.compare_at_price,
       v.currency,
       v.stock_quantity AS stock,
+      p.weight_grams AS weight_grams,
+      ci.quantity,
+      (
+        SELECT pi.public_id
+        FROM product_images pi
+        WHERE pi.product_id = p.id
+        ORDER BY pi.is_primary DESC, pi.sort_order ASC
+        LIMIT 1
+      ) AS public_id
+    FROM cart_items ci
+    JOIN product_variants v ON v.id = ci.variant_id AND v.is_active
+    JOIN products p ON p.id = v.product_id AND p.status = 'ACTIVE'
+    WHERE ci.cart_id = `;
+const CART_ROWS_ORDER = sql`
+    ORDER BY ci.created_at ASC
+  `;
+
+/**
+ * Weight-aware cart read. If the products table predates weight_grams
+ * (migration not run — see scripts/add-product-weight.sql), the query would
+ * error and break every cart operation; fall back to the legacy read with
+ * null weights (→ the 400g estimate applies).
+ */
+async function cartRowsWithWeight(
+  cartId: string
+): Promise<CartRow[]> {
+  try {
+    return await rawQuery<CartRow>(
+      sql`${CART_ROWS_SQL}${cartId}${CART_ROWS_ORDER}`
+    );
+  } catch (err) {
+    console.warn(
+      '[cart] weighted read failed (weight_grams column missing? run scripts/add-product-weight.sql) — falling back:',
+      err instanceof Error ? err.message : err
+    );
+    return rawQuery<CartRow>(sql`
+    SELECT
+      ci.id,
+      ci.variant_id,
+      p.id AS product_id,
+      p.slug,
+      p.name,
+      v.color,
+      v.color_hex,
+      v.size,
+      v.price,
+      v.compare_at_price,
+      v.currency,
+      v.stock_quantity AS stock,
+      NULL::integer AS weight_grams,
       ci.quantity,
       (
         SELECT pi.public_id
@@ -314,10 +393,8 @@ export async function getCartDetail(
     JOIN products p ON p.id = v.product_id AND p.status = 'ACTIVE'
     WHERE ci.cart_id = ${cartId}
     ORDER BY ci.created_at ASC
-  `),
-    getAttachedPromo(cartId, userId),
-  ]);
-  return mapCart(rows, promo);
+  `);
+  }
 }
 
 export async function addCartItem(

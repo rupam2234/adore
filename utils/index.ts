@@ -88,6 +88,7 @@ export type {
 export {
   computeCheckoutTotals,
   computeShippingAmount,
+  GST_RATE,
   toPaise,
   SHIPPING_FLAT,
   FREE_SHIPPING_THRESHOLD,

@@ -13,8 +13,8 @@
  *     automatically (best-effort — a Shiprocket outage never loses an order).
  */
 
-import { and, eq, sql } from 'drizzle-orm';
-import { db, rawQuery, orders, orderItems, customers } from './db';
+import { and, eq, inArray, sql } from 'drizzle-orm';
+import { db, rawQuery, orders, orderItems, customers, products } from './db';
 import {
   getCartShopper,
   getCartDetail,
@@ -27,7 +27,8 @@ import {
   ensureCustomerForUserId,
   listAddresses,
 } from './account';
-import { computeShippingAmount, type CheckoutAddress } from './checkout-format';
+import { computeShippingAmount } from './checkout-format';
+import type { CheckoutAddress } from './checkout-format';
 
 export {
   SHIPPING_FLAT,
@@ -264,7 +265,10 @@ export async function createCheckoutSession(
   const contactEmail = userId ? accountEmail : email;
 
   // --- Pre-payment Shiprocket verification (PIN serviceability) ------------
-  const pin = await checkPinServiceability(address.postalCode);
+  // Quote the rate for the cart's real packed weight (sum of product weights
+  // × quantities, with the 400g estimate for products without one).
+  const cartWeightKg = cart.weightGrams / 1000;
+  const pin = await checkPinServiceability(address.postalCode, cartWeightKg);
   if (!pin.serviceable) {
     throw new CheckoutError(
       `We don't deliver to ${address.postalCode} yet — we're expanding to new PIN codes soon.`,
@@ -273,10 +277,15 @@ export async function createCheckoutSession(
   }
 
   // --- Amounts --------------------------------------------------------------
+  // Shipping uses the real Shiprocket courier rate for this PIN when known,
+  // falling back to the flat rate if the API didn't return one.
   const subtotal = Number(cart.subtotal);
   const discount = Number(cart.discount);
-  const shipping = computeShippingAmount(subtotal);
-  const total = Math.max(0, Math.round((subtotal - discount + shipping) * 100));
+  const shipping = computeShippingAmount(
+    subtotal - discount,
+    pin.freightCharge
+  );
+  const total = Math.round((subtotal - discount + shipping) * 100);
 
   // --- Persist the order (PENDING until payment is verified) ----------------
   const orderNumber = generateOrderNumber();
@@ -294,7 +303,7 @@ export async function createCheckoutSession(
       subtotal: subtotal.toFixed(2),
       discountAmount: discount.toFixed(2),
       shippingAmount: shipping.toFixed(2),
-      taxAmount: '0',
+      taxAmount: '0', // Not applied currently
       totalAmount: (total / 100).toFixed(2),
       currency,
       shippingAddressId,
@@ -499,6 +508,21 @@ export async function pushToShiprocket(
     db.select().from(orderItems).where(eq(orderItems.orderId, orderId)),
   ]);
   const customer = customerRows[0];
+
+  // Per-product packed weights for the Shiprocket payload (one small query —
+  // order_items doesn't snapshot weight, products may be edited after the sale).
+  const weightRows = items.length
+    ? await db
+        .select({ id: products.id, weightGrams: products.weightGrams })
+        .from(products)
+        .where(
+          inArray(
+            products.id,
+            items.map(i => i.productId)
+          )
+        )
+    : [];
+  const weightById = new Map(weightRows.map(w => [w.id, w.weightGrams]));
   const snap = order.shippingAddressSnapshot ?? {};
   const customerName =
     snap.fullName ||
@@ -522,6 +546,7 @@ export async function pushToShiprocket(
       sku: item.sku,
       units: item.quantity,
       sellingPrice: Number(item.unitPrice),
+      weightGrams: weightById.get(item.productId) ?? null,
     })),
     subTotal: Number(order.subtotal),
     discount: Number(order.discountAmount),

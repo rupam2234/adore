@@ -110,6 +110,7 @@ export async function createProduct(payload: ProductPayload): Promise<{
       material: payload.material,
       careInstructions: payload.careInstructions,
       fit: payload.fit,
+      weightGrams: payload.weightGrams,
       status: 'DRAFT',
       isFeatured: payload.isFeatured,
     })
@@ -237,6 +238,7 @@ export async function updateProduct(
       material: payload.material,
       careInstructions: payload.careInstructions,
       fit: payload.fit,
+      weightGrams: payload.weightGrams,
       isFeatured: payload.isFeatured,
       updatedAt: new Date(),
     })
@@ -374,6 +376,7 @@ export async function getAdminProduct(productId: string) {
       material: products.material,
       care_instructions: products.careInstructions,
       fit: products.fit,
+      weight_grams: products.weightGrams,
       status: products.status,
       is_featured: products.isFeatured,
     })
@@ -431,6 +434,7 @@ export async function getAdminProduct(productId: string) {
     material: (p.material as string | null) ?? null,
     careInstructions: (p.care_instructions as string | null) ?? null,
     fit: (p.fit as string | null) ?? null,
+    weightGrams: (p.weight_grams as number | null) ?? null,
     status: p.status as ProductStatus,
     isFeatured: p.is_featured as boolean,
     categorySlugs: (categoryRows as { slug: string }[]).map(c => c.slug),

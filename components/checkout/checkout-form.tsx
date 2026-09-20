@@ -8,8 +8,11 @@ import {
   computeCheckoutTotals,
   FREE_SHIPPING_THRESHOLD,
   SHIPPING_FLAT,
+  AUTO_DISCOUNT_RATE,
+  AUTO_DISCOUNT_THRESHOLD,
 } from '@/utils/checkout-format';
 import { PIN_STORAGE_KEY } from '@/components/shop/pin-checker';
+import { DEFAULT_WEIGHT_GRAMS } from '@/utils/admin-schema';
 
 /** Saved account address handed down from the server page. */
 export type CheckoutAddressOption = {
@@ -70,7 +73,7 @@ type FieldErrors = Partial<Record<keyof AddressForm | 'email', string>>;
 type PinState =
   | { kind: 'idle' }
   | { kind: 'checking' }
-  | { kind: 'ok'; eta: string | null; cod: boolean | null }
+  | { kind: 'ok'; eta: string | null; freightCharge: number | null }
   | { kind: 'bad'; message: string };
 
 const RAZORPAY_SCRIPT = 'https://checkout.razorpay.com/v1/checkout.js';
@@ -114,7 +117,6 @@ function etaLine(pin: PinState): string | null {
   if (pin.kind !== 'ok') return null;
   const parts: string[] = [`Delivery to this PIN is available`];
   if (pin.eta) parts.push(pin.eta);
-  parts.push(pin.cod ? 'Cash on Delivery available' : 'Prepaid only');
   return parts.join(' · ');
 }
 export default function CheckoutForm({
@@ -152,11 +154,19 @@ export default function CheckoutForm({
     () =>
       computeCheckoutTotals(
         Number(cart.subtotal || 0),
-        Number(cart.discount || 0)
+        Number(cart.discount || 0),
+        pin.kind === 'ok' ? pin.freightCharge : null
       ),
-    [cart.subtotal, cart.discount]
+    [cart.subtotal, cart.discount, pin]
   );
   const freeShippingGap = FREE_SHIPPING_THRESHOLD - Number(cart.subtotal || 0);
+  // Total packed cart weight (kg) — product weights × qty, 400g fallback each.
+  const cartWeightKg =
+    cart.items.reduce(
+      (sum, item) =>
+        sum + (item.weightGrams ?? DEFAULT_WEIGHT_GRAMS) * item.quantity,
+      0
+    ) / 1000;
   const update = (key: keyof AddressForm, value: string) => {
     setForm(f => ({ ...f, [key]: value }));
     if (fieldErrors[key]) setFieldErrors(e => ({ ...e, [key]: undefined }));
@@ -172,9 +182,10 @@ export default function CheckoutForm({
     }
     setPin({ kind: 'checking' });
     try {
-      const res = await fetch(`/api/shipping/pin?pin=${value}`, {
-        cache: 'no-store',
-      });
+      const res = await fetch(
+        `/api/shipping/pin?pin=${value}&weight=${cartWeightKg}`,
+        { cache: 'no-store' }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const bad: PinState = {
@@ -200,7 +211,12 @@ export default function CheckoutForm({
         : data.etaDays
           ? `in ${data.etaDays} days`
           : null;
-      const ok: PinState = { kind: 'ok', eta, cod: data.cod ?? null };
+      const ok: PinState = {
+        kind: 'ok',
+        eta,
+        freightCharge:
+          typeof data.freightCharge === 'number' ? data.freightCharge : null,
+      };
       setPin(ok);
       return ok;
     } catch {
@@ -348,7 +364,7 @@ export default function CheckoutForm({
           ondismiss: () => {
             setBusy(false);
             setNotice(
-              "Payment cancelled — your bag is saved. Try again whenever you're ready."
+              'Payment cancelled. But don’t worry, your bag is still saved. Try again from your account order whenever you’re ready.'
             );
             // Release the reservation so stock returns immediately
             if (session.razorpayOrderId) {
@@ -626,6 +642,8 @@ export default function CheckoutForm({
       </form>
 
       <aside className="rounded-2xl border border-[#2B2620]/10 bg-white p-6 lg:sticky lg:top-28">
+        <PromoRibbon />
+
         <h2 className="font-serif text-xl">Order summary</h2>
 
         <ul className="mt-5 space-y-4">
@@ -687,7 +705,7 @@ export default function CheckoutForm({
 
         <div className="mt-5 flex justify-between border-t border-[#2B2620]/10 pt-5">
           <span className="font-medium">Total</span>
-          <span className="font-serif text-xl">
+          <span className="text-base font-medium">
             {formatPrice(String(totals.total), currency)}
           </span>
         </div>
@@ -705,6 +723,36 @@ export default function CheckoutForm({
 /** Shared field primitives (matches the login/account form styling). */
 const LABEL_CLASS =
   'mb-1.5 block text-xs uppercase tracking-[0.15em] text-[#2B2620]/60';
+
+/**
+ * Running promo ribbon at the top of the order summary card. Content is
+ * rendered twice so the -50% translate loops seamlessly; decorative only
+ * (the same info is readable in the shipping note below).
+ */
+function PromoRibbon() {
+  const messages = [
+    `Free Shipping on Orders Above ₹${FREE_SHIPPING_THRESHOLD}`,
+    `Shop above ₹${AUTO_DISCOUNT_THRESHOLD}, ${AUTO_DISCOUNT_RATE * 100}% discount auto applied`,
+  ];
+  return (
+    <div
+      aria-hidden="true"
+      className="-mx-6 -mt-6 mb-5 overflow-hidden rounded-t-2xl bg-[#2B2620] py-2 text-[#FAF8F3]"
+    >
+      <div className="animate-ribbon-marquee flex w-max">
+        {[...messages, ...messages].map((text, i) => (
+          <span
+            key={i}
+            className="flex items-center whitespace-nowrap px-6 text-xs tracking-wide"
+          >
+            <span className="mr-6 text-[#DDBBA4]">✦</span>
+            {text}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function inputClass(invalid?: string | boolean) {
   return `w-full rounded-lg border bg-white px-4 py-3 text-sm transition-colors placeholder:text-[#2B2620]/30 focus:outline-none ${
@@ -839,7 +887,7 @@ function AddressFields({
             data-testid="locked-pin"
           >
             <span>
-              <span className="text-[#5C6B4B]">✓</span> Delivering to{' '}
+              {/* <span className="text-[#5C6B4B]">✓</span> Delivering to{' '} */}
               <span className="font-medium tracking-widest">
                 {form.postalCode}
               </span>{' '}

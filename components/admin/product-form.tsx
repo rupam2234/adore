@@ -27,6 +27,8 @@ export type AdminProductFormValue = {
   fit: string;
   careInstructions: string;
   details: string; // one bullet per line
+  /** Packed weight per unit in grams (string for the input; '' = unset). */
+  weightGrams: string;
   isFeatured: boolean;
   categorySlugs: string[];
   variants: VariantRow[];
@@ -62,6 +64,7 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
       fit: '',
       careInstructions: '',
       details: '',
+      weightGrams: '',
       isFeatured: false,
       categorySlugs: [],
       variants: [{ ...EMPTY_VARIANT }],
@@ -110,6 +113,7 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
       fit: form.fit,
       careInstructions: form.careInstructions,
       details: form.details,
+      weightGrams: form.weightGrams,
       isFeatured: form.isFeatured,
       status,
       categorySlugs: form.categorySlugs,
@@ -253,6 +257,25 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
             onChange={e => set('fit', e.target.value)}
             placeholder="Relaxed"
           />
+        </div>
+        <div>
+          <label className={labelCls} htmlFor="pf-weight">
+            Weight (g)
+          </label>
+          <input
+            id="pf-weight"
+            type="number"
+            min="1"
+            max="50000"
+            inputMode="numeric"
+            className={inputCls}
+            value={form.weightGrams}
+            onChange={e => set('weightGrams', e.target.value)}
+            placeholder="400"
+          />
+          <p className="mt-1 text-xs text-[#2B2620]/50">
+            Packed weight per unit — used for shipping rates. Defaults to 400g.
+          </p>
         </div>
       </div>
 

@@ -8,7 +8,7 @@ export type CategorySlug =
   | 'kurti'
   | 'short-kurti'
   | 'long-kurti'
-  | 'ethnic-kurti';
+  | 'traditional-kurti';
 
 /** Static taxonomy: main classes with their sub-classes (children). */
 export type CategoryNode = {
@@ -57,8 +57,8 @@ export const CATEGORY_TREE: CategoryNode[] = [
         description: 'Full-length kurtis',
       },
       {
-        slug: 'ethnic-kurti',
-        name: 'Ethnic Kurti',
+        slug: 'traditional-kurti',
+        name: 'Traditional Kurti',
         description: 'Festive and traditional kurtis',
       },
     ],

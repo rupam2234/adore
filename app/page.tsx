@@ -1,4 +1,4 @@
-import { SiteHeader, Footer, ProductCard } from '@/components';
+import { SiteHeader, Footer, ProductCard, SearchBar } from '@/components';
 import { getProductsForSection } from '@/utils';
 
 export const revalidate = 300;
@@ -50,6 +50,11 @@ export default async function Home() {
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
       <SiteHeader />
+
+      {/* Mobile-only search, sitting just above the hero (borderless) */}
+      <div className="px-6 pt-4 pb-2 sm:hidden">
+        <SearchBar borderless />
+      </div>
 
       <HeroSection />
 

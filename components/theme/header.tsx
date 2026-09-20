@@ -25,12 +25,12 @@ export default function Header() {
           href="/"
           className="font-semibold text-3xl tracking-tight text-primary/80 transition-colors"
         >
-          {/* Adore */}
           <Image
             src={'/images/Adore_logo.png'}
             alt="Adore_tag"
             width={100}
             height={42}
+            loading={'eager'}
           />
         </Link>
         <nav
@@ -237,7 +237,6 @@ export default function Header() {
           aria-label="Mobile"
           className="border-t border-[#2B2620]/10 bg-[#FAF8F3] px-6 py-4 sm:hidden"
         >
-          <SearchBar className="mb-3" />
           <Link
             href="/"
             onClick={() => setMobileOpen(false)}
@@ -250,7 +249,7 @@ export default function Header() {
             onClick={() => setMobileOpen(false)}
             className="block py-2 text-sm font-medium"
           >
-            Our entire collection
+            Collection
           </Link>
           {CATEGORY_TREE.map(cat => (
             <div key={cat.slug} className="border-t border-[#2B2620]/10">
@@ -304,13 +303,6 @@ export default function Header() {
             className="block border-t border-[#2B2620]/10 py-2 text-sm font-medium"
           >
             {user ? 'My account' : 'Log in'}
-          </Link>
-          <Link
-            href="/#how-we-make-it"
-            onClick={() => setMobileOpen(false)}
-            className="block border-t border-[#2B2620]/10 py-2 text-sm font-medium"
-          >
-            How we make it
           </Link>
         </nav>
       )}
