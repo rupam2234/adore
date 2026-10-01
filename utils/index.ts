@@ -40,6 +40,8 @@ export {
 } from './categories';
 export type { CategoryNode, CategoryRow, CategorySlug } from './categories';
 export { formatPrice, normalizeCareInstructions } from './product-format';
+export { HERO_SLIDES, HERO_AUTOPLAY_MS } from './hero-slides';
+export type { HeroSlide } from './hero-slides';
 export type {
   ProductCardData,
   ProductCategory,

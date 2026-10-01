@@ -1,6 +1,7 @@
 export { default as SiteHeader } from './theme/header';
 export { default as Footer } from './theme/footer';
 export { default as SearchBar } from './theme/search-bar';
+export { default as HeroCarousel } from './theme/hero-carousel';
 export { default as ProductCard } from './shop/product-card';
 export { default as ProductDetail } from './shop/product-detail';
 export { default as FilterStripe } from './shop/filter-stripe';
