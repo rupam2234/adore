@@ -14,11 +14,9 @@ const LATEST_LIMIT = 8;
 const FAVOURITES_LIMIT = 4;
 
 /**
- * Homepage product data:
  * - "Latest arrivals" — newest products across all categories, one mixed grid.
- * - "Most loved" — featured products (excluding anything already shown above),
- *   with a newest-products fallback so the section is never empty on a
- *   stocked shop.
+ * - "Most loved" — featured products not already shown above, falling back to
+ *   newest so the section is never empty on a stocked shop.
  */
 async function getHomeProducts(): Promise<{
   latest: Awaited<ReturnType<typeof getProductsForSection>>;
@@ -68,13 +66,13 @@ export default async function Home() {
       <section id="shop" className="w-full px-6 py-5 sm:py-15 sm:px-12">
         <div className="text-center">
           <h2 className="font-serif text-xl sm:text-4xl">Latest arrivals</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm sm:italic leading-relaxed text-[#2B2620]/60">
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[#2B2620]/60 sm:italic">
             Every piece tells a story of the hands that shaped it and the
             moments it will witness with you.
           </p>
         </div>
 
-        <div className="sm:mt-10 mt-5">
+        <div className="mt-5 sm:mt-10">
           {latest.length > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -132,19 +130,23 @@ export default async function Home() {
               access to new drops.
             </p>
           </div>
-          <form className="flex w-full max-w-sm gap-2 sm:w-auto">
+          {/* Placeholder subscribe form. There is no newsletter endpoint yet, so
+              it renders inert rather than POSTing and reloading the page. Wire
+              `action` up when the API route exists. */}
+          <div className="flex w-full max-w-sm gap-2 sm:w-auto">
             <input
               type="email"
+              aria-label="Email address"
               placeholder="Your email"
               className="w-full rounded-full border border-[#FAF8F3]/30 bg-transparent px-5 py-3 text-sm placeholder:text-[#FAF8F3]/50 focus:border-[#FAF8F3] focus:outline-none"
             />
             <button
-              type="submit"
+              type="button"
               className="rounded-full bg-[#FAF8F3] px-6 py-3 text-sm text-[#2B2620] transition-colors hover:bg-[#DDBBA4]"
             >
               Sign up
             </button>
-          </form>
+          </div>
         </div>
       </section>
 

@@ -40,13 +40,7 @@ const LEGAL_LINKS = [
   { label: 'Terms of service', href: '/terms' },
 ] as const;
 
-/**
- * Site footer.
- *
- * Server component — no interactivity, so it stays static and fast.
- * Dark ink panel (#2B2620) to contrast with the cream page background,
- * reusing the same palette as the header's mega-menu.
- */
+/** Site footer — server component, no interactivity. */
 export default function Footer() {
   return (
     <footer className="mt-auto w-full bg-[#2B2620] text-[#FAF8F3]">

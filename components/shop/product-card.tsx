@@ -6,14 +6,9 @@ import { formatPrice, type ProductCardData } from '@/utils/product-format';
 import { useCart } from '@/components/cart/cart-provider';
 
 /**
- * Product card for shop sections.
- *
- * - Always has `p-2` so the hover border (border-transparent → dark) never
- *   causes layout shift.
- * - On hover, the front image smoothly fades out while the back image fades
- *   in with a subtle zoom — a soft pixel-smooth cross-fade, no rotation.
- * - On hover, a panel slides up at the bottom of the image listing available
- *   sizes and a "+ Quick View" button that opens a quick-view modal.
+ * - Always has `p-2` so the hover border never causes layout shift.
+ * - On hover the front image cross-fades to the back one, and a panel slides
+ *   up with sizes and a Quick View button.
  */
 export default function ProductCard({ product }: { product: ProductCardData }) {
   const [front, back] = product.images;

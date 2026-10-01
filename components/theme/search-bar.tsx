@@ -3,10 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
-/**
- * Header search: pill-shaped input that submits to /shop?q=…
- * Reused in the desktop bar and above the hero on mobile.
- */
+/** Pill-shaped search that submits to /shop?q=… Used in the header and above the hero on mobile. */
 export default function SearchBar({
   className = '',
   borderless = false,

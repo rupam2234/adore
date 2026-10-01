@@ -6,21 +6,45 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import {
   HERO_SLIDES,
   HERO_AUTOPLAY_MS,
+  resolveObjectPosition,
   type HeroSlide,
 } from '@/utils/hero-slides';
 
 /**
+ * Critical CSS for the hero's first paint.
+ *
+ * The hero's initial render must NOT depend on the Tailwind stylesheet
+ * arriving. In production that stylesheet is render-blocking, but `next dev`
+ * injects it via JavaScript — and until it lands the hero has no height and the
+ * slides are not absolutely positioned, so every image renders collapsed and
+ * `object-cover` crops a totally different region. When the stylesheet arrives
+ * the box snaps to 75vh and the framing changes, which reads as the carousel
+ * flashing between two different images.
+ *
+ * This <style> ships inside the initial HTML ahead of the slides, so it is
+ * parsed and applied before the browser paints. It deliberately mirrors the
+ * Tailwind classes (same values, same `lg` = 64rem breakpoint) — the stylesheet
+ * only adds the transition timing and the copy/dots layout on top.
+ */
+const HERO_CRITICAL_CSS = `
+[data-hero]{position:relative;width:100%;height:75vh;min-height:26.25rem;overflow:hidden;background:#E7DFCB}
+@media (min-width:40rem){[data-hero]{height:80vh}}
+@media (min-width:64rem){[data-hero]{height:calc(100vh - 5.5rem)}}
+[data-hero-slide]{position:absolute;inset:0;opacity:0}
+[data-hero-active]{opacity:1}
+`;
+
+/**
  * Full-width homepage hero with an auto-advancing carousel.
  *
- * - One layout at every breakpoint (the previous mobile hero): edge-to-edge
- *   image, centred copy, bottom gradient scrim for text legibility.
  * - Slides live in `utils/hero-slides.ts`; a single-slide list renders as a
  *   plain hero with no arrows or dots.
- * - Images come from next/image so they are responsive, lazy after the first,
- *   and served with a long-lived immutable cache header.
- * - Accessibility: arrows/dots are real buttons with labels, the region is
- *   arrow-key navigable and marked aria-roledescription="carousel", and
- *   auto-advance is switched off entirely under prefers-reduced-motion.
+ * - One slide set and one order for every screen — array order is play order.
+ *   Exactly one slide carries `data-hero-active` at any moment, at any width,
+ *   which is what keeps two banners from ever showing at once.
+ * - All slides stay mounted so the cross-fade has both layers to work with.
+ * - Accessibility: labelled buttons, arrow-key navigable, and auto-advance is
+ *   off under prefers-reduced-motion.
  */
 export default function HeroCarousel({
   slides = HERO_SLIDES,
@@ -31,11 +55,15 @@ export default function HeroCarousel({
   const [paused, setPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  // Focus-pause only applies to keyboard users. Clicking a dot leaves it
+  // focused, so without this the carousel would stay paused forever after one
+  // click — the buttons never blur on their own.
+  const keyboardFocus = useRef(false);
 
+  // One index drives the one slide set, at every width. Array order is play
+  // order, so there is no per-breakpoint variant to keep in sync.
   const count = slides.length;
-  // Guard against out-of-range when the slide list shrinks (e.g. hot reload).
-  const active = count > 0 ? Math.min(index, count - 1) : 0;
-
+  const active = count > 0 ? slides[index % count] : undefined;
   const goTo = useCallback(
     (nextIndex: number) => {
       if (count === 0) return;
@@ -44,27 +72,41 @@ export default function HeroCarousel({
     [count]
   );
 
-  const next = useCallback(() => goTo(active + 1), [active, goTo]);
-  const prev = useCallback(() => goTo(active - 1), [active, goTo]);
+  const step = useCallback(
+    (delta: number) => {
+      if (count === 0) return;
+      setIndex(i => (((i + delta) % count) + count) % count);
+    },
+    [count]
+  );
+
+  const next = useCallback(() => step(1), [step]);
+  const prev = useCallback(() => step(-1), [step]);
 
   // Auto-advance. Re-created whenever the active slide changes so the timer
-  // restarts after a manual advance, and suspended on hover/focus.
+  // restarts after a manual advance, and suspended while keyboard-focused.
   useEffect(() => {
     if (count < 2 || paused) return;
 
+    // Respect the OS setting. This is the other reason autoplay can look
+    // "broken" while the code is correct: `prefers-reduced-motion: reduce`
+    // disables it outright, so it is logged rather than failing silently.
     if (
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.info(
+          `[hero] autoplay off: prefers-reduced-motion is reduce (${HERO_AUTOPLAY_MS}ms timer not started)`
+        );
+      }
       return;
     }
 
-    const id = window.setInterval(() => {
-      setIndex(i => (i + 1) % count);
-    }, HERO_AUTOPLAY_MS);
+    const id = window.setInterval(() => step(1), HERO_AUTOPLAY_MS);
 
     return () => window.clearInterval(id);
-  }, [active, count, paused]);
+  }, [index, count, paused, step]);
 
   // Touch swipe — horizontal intent only, so vertical scrolling still works.
   const onTouchStart = (e: React.TouchEvent) => {
@@ -86,155 +128,201 @@ export default function HeroCarousel({
 
   if (count === 0) return null;
 
-  // Desktop hero fills the viewport minus the sticky header (~82px, so 5.5rem
-  // clears it) rather than using a plain vh fraction. A 4:3 source at 1920px
-  // wide renders 1440px tall, so this reveals ~69% of the image's height —
-  // up from ~64% at the original 85vh, which cut the dress off at the hem.
-  //
-  // This is the ceiling for these sources: to reveal more without side bars
-  // the image would have to shrink below full-bleed width, and the frame is
-  // full-bleed by design. Re-exporting the banners at ~2400x1200 (2:1) is what
-  // actually buys more of the dress — at that ratio a full-bleed render is
-  // 960px tall and the whole frame fits with room to spare.
+  // Desktop hero fills the viewport minus the sticky header (5.5rem clears its
+  // ~82px). All three heights use `vh`, never `dvh`/`svh`: dynamic units track
+  // the mobile browser toolbar, so a collapsing URL bar resized this box and
+  // rescaled the cover image — a literal zoom on every scroll.
   return (
-    <section
-      aria-roledescription="carousel"
-      aria-label="Featured collections"
-      className="relative h-[75vh] min-h-105 w-full overflow-hidden bg-[#E7DFCB] sm:h-[80vh] lg:h-[calc(100dvh-5.5rem)]"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      onKeyDown={e => {
-        if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          next();
-        } else if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          prev();
-        }
-      }}
-    >
-      {/* Slides — every slide stays mounted so the cross-fade has both layers
-          and the browser never has to decode an image mid-transition.
-          `duration-700` is a real step on Tailwind's scale (750ms). An earlier
-          `duration-900` generated no CSS at all, so the fade snapped instantly
-          and read as a flicker. */}
-      {slides.map((slide, i) => (
-        <div
-          key={slide.id}
-          role="group"
-          aria-roledescription="slide"
-          aria-label={`${i + 1} of ${count}`}
-          aria-hidden={i !== active}
-          className={`absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none ${
-            i === active ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
-        >
-          <Image
-            src={slide.image}
-            alt={slide.alt}
-            fill
-            // Every hero slide is eager: they all sit in the first viewport and
-            // there are only a few, so lazy-loading them caused a visible blank
-            // frame on advance. The first stays `priority` for the LCP element.
-            priority
-            loading="eager"
-            sizes="100vw"
-            style={{ objectPosition: slide.objectPosition ?? 'center' }}
-            className="object-cover"
-          />
-        </div>
-      ))}
-
-      {/* Scrim — directional, following the copy. On mobile the text is centred,
-          so the weight sits along the bottom; from `sm` up the copy moves to
-          the bottom-left corner, so the gradient rotates to run from that
-          corner and clears to fully transparent at the top-right. That keeps
-          the subject (centre-frame) and the upper image at full brightness. */}
-      <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-[#2B2620]/70 via-[#2B2620]/45 to-[#2B2620]/10 sm:bg-linear-to-tr sm:from-[#2B2620]/85 sm:via-[#2B2620]/40 sm:to-transparent" />
-
-      {/* Copy — centred on mobile (subject is centre-frame and there is no room
-          to spare), anchored bottom-left from `sm` up. Weight (600 Playfair)
-          carries the hierarchy with no panel, border or fill; text-shadow keeps
-          it legible over busy areas without dimming the image behind it.
-          The min-height holds the centred mobile block steady between slides. */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-6 py-16 text-center sm:items-start sm:justify-end sm:px-12 sm:pb-14 sm:pt-24 sm:text-left">
-        {/* Fixed measure at every breakpoint so the line count — and therefore
-            the block height — barely changes as the copy swaps. */}
-        <div className="flex w-full max-w-3xl flex-col items-center justify-center sm:min-h-0 sm:max-w-md sm:items-start">
-          <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-[#E7DFCB]/80 [text-shadow:0_1px_10px_rgba(43,38,32,0.55)] sm:text-xs">
-            {slides[active].eyebrow}
-          </p>
-          <h1 className="mt-3 w-full font-serif text-2xl font-semibold leading-tight text-[#FAF8F3] [text-shadow:0_2px_18px_rgba(43,38,32,0.6)] sm:mt-4 sm:text-3xl lg:text-4xl">
-            {slides[active].title}
-          </h1>
-          {/* No max-width here — the parent block sets the measure, so the line
-              count stays stable as the copy changes between slides. */}
-          <p className="mt-3 text-xs font-medium italic leading-relaxed text-[#FAF8F3]/75 [text-shadow:0_1px_12px_rgba(43,38,32,0.6)] sm:mt-4 sm:max-w-sm sm:text-sm">
-            {slides[active].quote}
-          </p>
-          {/* One primary action only — no secondary pill, so the hero stays
-              unambiguous about where it wants the visitor to go. */}
-          <div className="mt-6 flex justify-center sm:mt-7 sm:justify-start">
-            <a
-              href={slides[active].href}
-              className="rounded-full bg-[#FAF8F3] px-6 py-2.5 text-xs font-medium text-[#2B2620] transition-colors hover:bg-[#DDBBA4] sm:px-8 sm:py-3 sm:text-sm"
-            >
-              {slides[active].cta}
-            </a>
-          </div>
-        </div>
-      </div>
-      {/* Arrows — pointer devices only; touch users swipe and keyboard users
-          use the arrow keys, plus everyone has the dots. */}
-      {count > 1 && (
-        <>
-          <button
-            type="button"
-            onClick={prev}
-            aria-label="Previous slide"
-            className="absolute top-1/2 left-3 hidden -translate-y-1/2 cursor-pointer rounded-full border border-[#FAF8F3]/30 bg-[#2B2620]/55 p-2 text-[#FAF8F3] transition-colors hover:bg-[#2B2620]/75 lg:block"
-          >
-            <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-          <button
-            type="button"
-            onClick={next}
-            aria-label="Next slide"
-            className="absolute top-1/2 right-3 hidden -translate-y-1/2 cursor-pointer rounded-full border border-[#FAF8F3]/30 bg-[#2B2620]/55 p-2 text-[#FAF8F3] transition-colors hover:bg-[#2B2620]/75 lg:block"
-          >
-            <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
-          </button>
-        </>
-      )}
-
-      {/* Dots. An earlier auto-advance progress bar sat below these as a
-          1px track; once its fill completed the empty track stayed on screen
-          and read as a stray horizontal line under the pills, so it is gone.
-          The active pill's own width carries the position cue.
-          Centred under the mobile copy, but pushed to the bottom-right from
-          `sm` up so they never collide with the bottom-left text block. */}
-      {count > 1 && (
-        <div className="absolute inset-x-0 bottom-6 flex items-center justify-center sm:inset-x-auto sm:right-12 sm:bottom-10 sm:justify-end">
-          {slides.map((slide, i) => (
-            <button
+    <>
+      {/* Ahead of the section itself, so the hero's size and the slide
+          visibility are already correct when the section is parsed. */}
+      <style>{HERO_CRITICAL_CSS}</style>
+      <section
+        aria-roledescription="carousel"
+        aria-label="Featured collections"
+        data-hero=""
+        className="relative h-[75vh] min-h-105 w-full overflow-hidden bg-[#E7DFCB] sm:h-[80vh] lg:h-[calc(100vh-5.5rem)]"
+        // No hover-pause: the hero fills the viewport from `lg` up, so the
+        // cursor is almost always inside it and pausing on hover meant
+        // autoplay effectively never ran on desktop. Keyboard focus still
+        // pauses, so keyboard and screen-reader users are not surprised.
+        onPointerDown={() => {
+          keyboardFocus.current = false;
+        }}
+        onFocusCapture={() => {
+          if (keyboardFocus.current) setPaused(true);
+        }}
+        onBlurCapture={() => {
+          if (keyboardFocus.current) setPaused(false);
+        }}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onKeyDown={e => {
+          if (e.key === 'Tab') keyboardFocus.current = true;
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            next();
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            prev();
+          }
+        }}
+      >
+        {/* Every slide stays mounted so the cross-fade always has both layers and
+            the browser never decodes an image mid-transition. Which one is
+            visible is driven by the data attributes above, not by classes, so it
+            is correct on the very first paint. */}
+        {slides.map(slide => {
+          const position = slides.indexOf(slide) + 1;
+          // Exactly one slide is active, at every width. There is no
+          // per-breakpoint pair to keep in step any more, so a slide can never
+          // end up painted on top of another one.
+          const isActive = active?.id === slide.id;
+          return (
+            <div
               key={slide.id}
-              type="button"
-              onClick={() => goTo(i)}
-              aria-label={`Go to slide ${i + 1}: ${slide.title}`}
-              aria-current={i === active}
-              className={`mx-1 h-1.5 rounded-full transition-all duration-300 ${
-                i === active
-                  ? 'w-8 bg-[#FAF8F3]'
-                  : 'w-1.5 cursor-pointer bg-[#FAF8F3]/45 hover:bg-[#FAF8F3]/75'
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${position} of ${count}`}
+              aria-hidden={!isActive}
+              data-hero-slide=""
+              data-hero-active={isActive ? '' : undefined}
+              className={`absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none ${
+                isActive ? '' : 'pointer-events-none'
               }`}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+            >
+              <Image
+                src={slide.image}
+                alt={slide.alt}
+                fill
+                // Eager: these sit in the first viewport, and lazy-loading them
+                // caused a visible blank frame on advance. Only the opener is
+                // `priority`, so one image holds the LCP hint rather than all
+                // six competing for it.
+                priority={position === 1}
+                loading="eager"
+                sizes="100vw"
+                style={{
+                  objectPosition: resolveObjectPosition(slide.objectPosition),
+                }}
+                className="object-cover"
+              />
+            </div>
+          );
+        })}
+
+        {/* Bottom gradient scrim for text legibility. Mobile copy is centred so
+          the weight sits along the bottom; from `sm` up it moves bottom-left,
+          so the gradient rotates to run from that corner. */}
+        <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-[#2B2620]/70 via-[#2B2620]/45 to-[#2B2620]/10 sm:bg-linear-to-tr sm:from-[#2B2620]/85 sm:via-[#2B2620]/40 sm:to-transparent" />
+
+        {/* Copy — centred on mobile, anchored bottom-left from `sm` up. One
+          block, because every screen now shows the same slide in the same
+          position; the old per-breakpoint pair existed only to render two
+          different sets' copy. */}
+        {active && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center px-6 py-16 text-center sm:items-start sm:justify-end sm:px-12 sm:pb-14 sm:pt-24 sm:text-left">
+            <HeroCopy slide={active} />
+          </div>
+        )}
+
+        {/* Arrows — pointer devices only; touch swipes, keyboard uses arrow keys. */}
+        {count > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={prev}
+              aria-label="Previous slide"
+              className="absolute top-1/2 left-3 hidden -translate-y-1/2 cursor-pointer rounded-full border border-[#FAF8F3]/30 bg-[#2B2620]/55 p-2 text-[#FAF8F3] transition-colors hover:bg-[#2B2620]/75 lg:block"
+            >
+              <ChevronLeft className="h-5 w-5" strokeWidth={1.5} />
+            </button>
+            <button
+              type="button"
+              onClick={next}
+              aria-label="Next slide"
+              className="absolute top-1/2 right-3 hidden -translate-y-1/2 cursor-pointer rounded-full border border-[#FAF8F3]/30 bg-[#2B2620]/55 p-2 text-[#FAF8F3] transition-colors hover:bg-[#2B2620]/75 lg:block"
+            >
+              <ChevronRight className="h-5 w-5" strokeWidth={1.5} />
+            </button>
+          </>
+        )}
+
+        {/* Dots — one row for the one set. Centred under the mobile copy,
+          bottom-right from `sm` up so they clear the bottom-left text block. */}
+        {count > 1 && (
+          <div className="absolute inset-x-0 bottom-6 flex items-center justify-center sm:inset-x-auto sm:right-12 sm:bottom-10 sm:justify-end">
+            {slides.map((slide, i) => (
+              <Dot
+                key={slide.id}
+                slide={slide}
+                position={i + 1}
+                isActive={active?.id === slide.id}
+                onSelect={() => goTo(i)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+/** One carousel position pill. The active pill's own width is the cue. */
+function Dot({
+  slide,
+  position,
+  isActive,
+  onSelect,
+}: {
+  slide: HeroSlide;
+  position: number;
+  isActive: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`Go to slide ${position}: ${slide.title}`}
+      aria-current={isActive}
+      className={`mx-1 h-1.5 rounded-full transition-all duration-300 ${
+        isActive
+          ? 'w-8 bg-[#FAF8F3]'
+          : 'w-1.5 cursor-pointer bg-[#FAF8F3]/45 hover:bg-[#FAF8F3]/75'
+      }`}
+    />
+  );
+}
+
+/**
+ * Hero copy block, split out because it renders once per breakpoint — the two
+ * slide sets can be showing different slides, so each needs its own copy.
+ *
+ * The fixed measure holds the line count stable as the copy changes. No panel
+ * or fill; text-shadow keeps it legible without dimming the image behind it.
+ */
+function HeroCopy({ slide }: { slide: HeroSlide }) {
+  return (
+    <div className="flex w-full max-w-3xl flex-col items-center justify-center sm:min-h-0 sm:max-w-2xl sm:items-start">
+      <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-[#E7DFCB]/80 [text-shadow:0_1px_10px_rgba(43,38,32,0.55)] sm:text-xs">
+        {slide.eyebrow}
+      </p>
+      <h1 className="mt-3 w-full font-serif text-[26px] font-semibold leading-[1.12] tracking-[-0.01em] text-[#FAF8F3] [text-shadow:0_2px_18px_rgba(43,38,32,0.7)] sm:mt-4 sm:text-[34px] lg:text-[42px]">
+        {slide.title}
+      </h1>
+      <p className="mt-3 max-w-md text-sm font-medium italic leading-relaxed text-[#FAF8F3]/90 [text-shadow:0_1px_12px_rgba(43,38,32,0.75)] sm:mt-5 sm:max-w-lg sm:text-base sm:leading-relaxed">
+        {slide.quote}
+      </p>
+      {/* One primary action only — no secondary pill. */}
+      <div className="mt-6 flex justify-center sm:mt-7 sm:justify-start">
+        <a
+          href={slide.href}
+          className="rounded-full bg-[#FAF8F3] px-6 py-2.5 text-xs font-medium text-[#2B2620] transition-colors hover:bg-[#DDBBA4] sm:px-8 sm:py-3 sm:text-sm"
+        >
+          {slide.cta}
+        </a>
+      </div>
+    </div>
   );
 }

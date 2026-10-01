@@ -1,26 +1,23 @@
 /**
  * Homepage hero slides.
  *
- * Images are served from `public/images` (same origin) rather than Cloudinary
- * so the first paint of the hero does not depend on a third-party round trip.
+ * Most images are served from `public/images` (same origin) so the first paint
+ * does not wait on a CDN round trip. The one Cloudinary-hosted slide is
+ * whitelisted under `images.remotePatterns` in `next.config.ts`.
  *
- * - `image`      path under /public
- * - `width`      intrinsic width — required so next/image can reserve space
- * - `height`     intrinsic height
- * - `href`/`cta` the single call to action
- * - `quote`      short (~8 word) seasonal line shown under the title
- * - `objectPosition` CSS value used when the image is cropped to fill
+ * - `width`/`height` intrinsic, so next/image can reserve space.
+ * - `quote` short (~8 word) seasonal line under the title.
+ * - `objectPosition` crops the image to fill the frame. Only the vertical axis
+ *   matters — the frame is full-bleed, so x is always effectively "center".
+ *   Nudge every slide at once with HERO_FOCUS_Y_OFFSET.
  *
- * Copy rules: keep `title` to 7 words or fewer so it wraps to at most two
- * lines and the hero block height stays identical across slides. A single
- * `cta` only — no secondary button.
+ * Copy rules: keep `title` to 7 words or fewer so it wraps to at most two lines
+ * and the hero height stays identical across slides. A single `cta` only.
  *
- * Recommended export size: 2400px wide (2x for the widest desktop viewport),
- * JPEG quality ~80, under ~300 KB each.
+ * Export at 2400px wide, JPEG ~80, under ~300 KB.
  *
- * IMPORTANT (caching): public assets are served with a one-year immutable
- * cache, so always bump the filename when you swap an image
- * (banner-autumn.jpg → banner-winter.jpg) or visitors will keep the old one.
+ * Caching: public assets get a one-year immutable cache, so bump the filename
+ * when swapping an image or visitors keep seeing the old one.
  */
 export interface HeroSlide {
   id: string;
@@ -31,53 +28,125 @@ export interface HeroSlide {
   objectPosition?: string;
   eyebrow: string;
   title: string;
-  /**
-   * Short seasonal line (about 8 words) rendered under the title in italics.
-   * Kept deliberately brief so the hero stays scannable and the line count —
-   * and therefore the block height — barely changes between slides.
-   */
+  /** Short seasonal line under the title, kept brief so the hero height holds. */
   quote: string;
   cta: string;
   href: string;
 }
 
+/**
+ * One set, one order, every screen. Array order IS carousel order, so the
+ * slides are simply declared in the sequence they should play:
+ *
+ *   1. Banner-4   garden path
+ *   2. meadow     cosmos flowers
+ *   3. Banner-6   veranda
+ *   4. Cloudinary seaside promenade
+ *   5. Banner-7   garden steps
+ *   6. Banner-8   orchard
+ *   7. banner-3   wooden fence
+ *
+ * Previously desktop and mobile ran different subsets, which meant two orderings
+ * to keep in sync and a class of first-paint bugs where both sets' active
+ * slides could be visible at once. There is no longer a per-breakpoint split,
+ * so the component keeps a single index and a single active state.
+ */
 export const HERO_SLIDES: HeroSlide[] = [
   {
-    id: 'autumn',
-    image: '/images/banner-1.jpeg',
-    width: 2000,
-    height: 1500,
-    alt: 'A model wearing a white polka-dot dress, standing on a gravel riverbed in a green woodland',
-    // Woodland riverbed. 2000x1500, the tallest frame. The desktop hero reveals
-    // ~69% of the image's height, so this sits just above true centre: enough
-    // to keep her head off the top edge while the skirt stays in frame.
-    objectPosition: 'center 44%',
-    eyebrow: 'The beauty of keeping',
-    // Titles are capped at 7 words so they stay on one or two lines at every
-    // breakpoint and the block height never changes between slides.
-    title: 'Clothes that become more yours',
-    quote: 'Warm light, cool mornings, and cloth that breathes.',
+    // Banner 4 — opens the carousel. 1999x1167, the widest of the set, so the
+    // least height is cropped away and the garden path reads left-to-right.
+    id: 'garden',
+    image: '/images/Banner-4.jpg',
+    width: 1999,
+    height: 1167,
+    alt: 'A model in a white polka-dot dress walking along a gravel garden path with a green hillside behind her',
+    // She spans the full height of the frame, so keep this near centre —
+    // bias much either way and either her head or the hem leaves the frame.
+    objectPosition: 'center 65%',
+    eyebrow: 'Everyday, elevated',
+    title: 'Made for where the day takes you',
+    quote: 'Garden paths, open air, and cloth that moves.',
     cta: 'Explore the collection',
     href: '#shop',
   },
   {
-    // Flower meadow. 2000x1470, a shade shorter than the hero's crop window, so it
-    // needs a touch more upward bias than the riverbed frame.
+    // Flower meadow — 2000x1470, slightly shorter, so a touch more upward bias.
     id: 'meadow',
     image: '/images/banner-2-meadow.jpeg',
     width: 2000,
     height: 1470,
     alt: 'A model in a white polka-dot dress standing among pink and white cosmos flowers on a hillside',
     objectPosition: 'center 40%',
-    eyebrow: 'Autumn layers',
-    title: 'Winter, in the softest form',
-    quote: 'Monsoon leaves, festive evenings draw closer.',
+    eyebrow: 'Summer blooms',
+    title: 'Dresses for the long days',
+    quote: 'Cosmos in the breeze, and no hurry at all.',
     cta: 'Explore the collection',
     href: '#shop',
   },
   {
-    // Wooden fence. 2000x1489. The tightest crop of the three and her face sits
-    // highest in the frame, so this keeps the strongest upward bias of the set.
+    // Banner 6 — veranda. 2000x1218, another wide frame, so the crop is mild.
+    // She stands centre-right, clear of the bottom-left copy block.
+    id: 'veranda',
+    image: '/images/Banner-6.jpeg',
+    width: 2000,
+    height: 1218,
+    alt: 'A model in a white floral dress standing on a wooden veranda lined with potted plants',
+    objectPosition: 'center 30%',
+    eyebrow: 'Porch evenings',
+    title: 'The quiet luxury of staying in',
+    quote: 'Tea on the veranda, and a slow afternoon.',
+    cta: 'Explore the collection',
+    href: '#shop',
+  },
+  {
+    // Seaside promenade — the only remote slide, served by Cloudinary. 1947x1352.
+    // The `_a` param is Cloudinary's delivery token and must stay on the URL.
+    // She is centre-right and fairly small in frame, so hold near the middle.
+    id: 'promenade',
+    image:
+      'https://res.cloudinary.com/ejxjvxmb/image/upload/view-5?_a=BAMAAARk0',
+    width: 1947,
+    height: 1352,
+    alt: 'A model in a teal dress and straw hat standing on a seaside promenade lined with sea trees',
+    objectPosition: 'center 100%',
+    eyebrow: 'Coastal days',
+    title: 'Where the sea meets the day',
+    quote: 'Sea air, long walks, and the tide coming in.',
+    cta: 'Explore the collection',
+    href: '#shop',
+  },
+  {
+    // Banner 7 — garden steps. 2000x1307. She is seated and centre-left, and
+    // her face sits high in frame, so bias upward to keep it visible.
+    id: 'garden-steps',
+    image: '/images/Banner-7.jpeg',
+    width: 2000,
+    height: 1307,
+    alt: 'A model in a mint green floral dress sitting on garden steps in front of a wooden railing',
+    objectPosition: 'center 45%',
+    eyebrow: 'Afternoons outside',
+    title: 'Nothing to do, nowhere to be',
+    quote: 'Sun on the steps, and a whole afternoon ahead.',
+    cta: 'Explore the collection',
+    href: '#shop',
+  },
+  {
+    // Banner 8 — orchard. 2000x1281. She stands centre-right reaching for
+    // fruit, so hold near the middle to keep the raised arm in frame.
+    id: 'orchard',
+    image: '/images/Banner-8.jpeg',
+    width: 2000,
+    height: 1281,
+    alt: 'A model in a white polka-dot dress carrying a wicker basket under a fruit tree',
+    objectPosition: 'center 40%',
+    eyebrow: 'Picked fresh',
+    title: 'Clothes that roam with you',
+    quote: 'Orchard walks, wicker baskets, and open hills.',
+    cta: 'Explore the collection',
+    href: '#shop',
+  },
+  {
+    // Wooden fence — tightest crop of the set, face highest in frame.
     id: 'fence',
     image: '/images/banner-3-fence.jpeg',
     width: 2000,
@@ -93,4 +162,48 @@ export const HERO_SLIDES: HeroSlide[] = [
 ];
 
 /** Milliseconds each slide stays on screen before auto-advancing. */
-export const HERO_AUTOPLAY_MS = 6000;
+export const HERO_AUTOPLAY_MS = 3000;
+
+/**
+ * Global vertical framing offset in percentage points, applied on top of every
+ * slide's own `objectPosition`. The single dial for moving the homepage images
+ * up or down.
+ *
+ * The axis is inverted: negative moves the picture DOWN the frame. Roughly ±10
+ * is the practical limit — past that `object-cover` runs out of image and the
+ * opposite edge shows empty space.
+ */
+export const HERO_FOCUS_Y_OFFSET: number = -6;
+
+/** object-position keywords mapped to the percentage they resolve to. */
+const FOCUS_KEYWORDS: Record<string, number> = {
+  top: 0,
+  center: 50,
+  bottom: 100,
+};
+
+/**
+ * Applies HERO_FOCUS_Y_OFFSET to a slide's `objectPosition`, clamped to 0–100.
+ * A value the offset cannot be applied to (a px/rem length, a `calc()`) is
+ * returned untouched, so it degrades to "no offset" rather than breaking layout.
+ */
+export function resolveObjectPosition(position?: string): string {
+  const base = (position ?? 'center').trim();
+  if (HERO_FOCUS_Y_OFFSET === 0) return base;
+
+  const parts = base.split(/\s+/);
+  // A lone value is the horizontal axis; y stays at its initial `center`.
+  const x = parts[0];
+  const y = parts.length > 1 ? parts[1] : 'center';
+
+  let percent: number | undefined;
+  if (y.endsWith('%')) {
+    percent = Number.parseFloat(y);
+  } else if (y in FOCUS_KEYWORDS) {
+    percent = FOCUS_KEYWORDS[y];
+  }
+  if (percent === undefined || Number.isNaN(percent)) return base;
+
+  const shifted = Math.min(100, Math.max(0, percent + HERO_FOCUS_Y_OFFSET));
+  return `${x} ${shifted}%`;
+}
