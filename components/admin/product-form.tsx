@@ -254,12 +254,16 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
           <label className={labelCls} htmlFor="pf-fit">
             Fit
           </label>
-          <input
+          {/* Textarea, not input: fit is rendered as prose on the product page.
+              The column was varchar(50) until scripts/add-product-text-limits.sql
+              widened it, which is why longer copy used to fail the save. */}
+          <textarea
             id="pf-fit"
-            className={inputCls}
+            className={`${inputCls} min-h-[70px]`}
             value={form.fit}
             onChange={e => set('fit', e.target.value)}
-            placeholder="Relaxed"
+            placeholder="Relaxed fit. Three-quarter bell sleeves. Side slits at the hem."
+            rows={2}
           />
         </div>
         <div>

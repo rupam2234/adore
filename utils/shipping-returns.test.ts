@@ -17,9 +17,12 @@
  *
  * These tests cannot hit the network, so they assert the contract that a unit
  * test CAN check: that each adapter targets the documented path, and that the
- * pickup is keyed on a return SHIPMENT id rather than an rma_id. The live
- * verification lives in scripts/probe-shiprocket.mjs, which asserts the paths are
- * actually routed.
+ * pickup is keyed on a return SHIPMENT id rather than an rma_id.
+ *
+ * The endpoints were verified against the live API on 2026-10-02. Re-verify by
+ * hand after any change to these paths — there is no committed script for it
+ * (scripts/probe-shiprocket.mjs was removed in 8fd6a1a, along with the rest of
+ * the returns tooling).
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

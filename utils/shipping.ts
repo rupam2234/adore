@@ -621,8 +621,8 @@ export type RmaAddress = {
  * The v1/external catalogue documents `POST /orders/create/return`. An earlier
  * version of this adapter posted to `/orders/create/rma`, which does not exist —
  * it returns `{"message":"404 Not Found"}`. Every return would therefore have
- * failed at the first step. See scripts/probe-shiprocket.mjs, which asserts the
- * path is routed.
+ * failed at the first step. utils/shipping-returns.test.ts pins the corrected
+ * path; re-verify against the live API after changing it.
  *
  * The body is a FULL order payload, not a thin `{awb, reason}`: the return
  * parcel needs both endpoints (pickup = customer, shipping = our warehouse),

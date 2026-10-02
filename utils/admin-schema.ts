@@ -61,6 +61,24 @@ export function buildSku(slug: string, variant: VariantInput): string {
   return slugify(`${slug}-${variant.color}-${variant.size}`);
 }
 
+/**
+ * Postgres varchar limits on products, verified against the live DB.
+ *
+ * Drizzle's `text()` helper does not carry a length, so these exist only in the
+ * database and are enforced by nothing at the type level. When a value exceeds
+ * them Postgres aborts the INSERT with SQLSTATE 22001 ("value too long for type
+ * character varying(n)"), which used to surface as a bare 500 *after* the
+ * product row had already committed.
+ *
+ * Mirrored here so the user gets a 422 with a per-field message instead.
+ * Keep in sync with the note block in utils/schema.ts.
+ */
+export const PRODUCT_FIELD_LIMITS = {
+  name: 200,
+  slug: 180,
+  material: 150,
+} as const;
+
 /** Matches the DB's product_variants.valid_color_hex CHECK exactly. */
 const HEX_6 = /^#[0-9A-F]{6}$/;
 const HEX_3 = /^#[0-9A-F]{3}$/;
@@ -127,6 +145,12 @@ export function validateProductPayload(
 
   const slug = slugify(str(input.slug) || name);
   if (slug.length < 2) errors.slug = 'Slug is required.';
+  if (slug.length > PRODUCT_FIELD_LIMITS.slug)
+    errors.slug = `Slug must be at most ${PRODUCT_FIELD_LIMITS.slug} characters.`;
+
+  const material = str(input.material);
+  if (material.length > PRODUCT_FIELD_LIMITS.material)
+    errors.material = `Material must be at most ${PRODUCT_FIELD_LIMITS.material} characters.`;
 
   const status = PRODUCT_STATUSES.includes(input.status as ProductStatus)
     ? (input.status as ProductStatus)
@@ -224,7 +248,7 @@ export function validateProductPayload(
       shortDescription: optionalStr(input.shortDescription),
       details,
       story: optionalStr(input.story),
-      material: optionalStr(input.material),
+      material: material.length > 0 ? material : null,
       careInstructions: optionalStr(input.careInstructions),
       fit: optionalStr(input.fit),
       weightGrams,

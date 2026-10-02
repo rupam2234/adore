@@ -57,6 +57,15 @@ export const sessions = pgTable('sessions', {
 
 export const products = pgTable('products', {
   id: text('id').primaryKey().$defaultFn(randomId),
+  // Length notes (verified against the live DB — keep these in sync, they are
+  // NOT enforced by Drizzle, only by Postgres):
+  //   name     varchar(200)
+  //   slug     varchar(180)
+  //   material varchar(150)
+  //   fit      text (was varchar(50) — see scripts/add-product-text-limits.sql;
+  //            50 was too small for the prose rendered on product pages)
+  //   short_description / story / care_instructions are unlimited text.
+  // validateProductPayload() in utils/admin-schema.ts mirrors these limits.
   name: text('name').notNull(),
   slug: text('slug').notNull().unique(),
   shortDescription: text('short_description'),

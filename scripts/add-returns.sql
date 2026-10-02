@@ -300,7 +300,8 @@ CREATE INDEX IF NOT EXISTS idx_webhook_events_pending
 
 -- 8. Terminal states are terminal, enforced by Postgres.
 --
--- FINDING from scripts/verify-returns-flow.mjs: before this trigger, a plain
+-- FINDING from the returns-flow verification (script since removed): before this
+-- trigger, a plain
 -- `UPDATE return_requests SET status = 'REFUND_PENDING' WHERE status = 'REFUNDED'`
 -- SUCCEEDED. The status CHECK constrains which VALUES are legal, not which
 -- TRANSITIONS are — so the "REFUNDED has no exits" rule lived only in
