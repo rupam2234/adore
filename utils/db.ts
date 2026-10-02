@@ -51,5 +51,35 @@ export async function rawQuery<T = Record<string, unknown>>(
   }
 }
 
+/**
+ * Extract the actionable Postgres message from a Drizzle/driver error.
+ *
+ * Drizzle wraps driver failures in DrizzleQueryError, whose own `message` is
+ * only the SQL text. The real cause (Postgres message + SQLSTATE) lives in
+ * `.cause`. Callers use this so admin writes can report *why* they failed
+ * instead of a generic "something went wrong".
+ */
+export function describeDbError(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+
+  // Walk the cause chain — neon/drizzle can nest more than one level.
+  for (let i = 0; i < 5 && current instanceof Error; i++) {
+    parts.push(current.message);
+    current = current.cause;
+  }
+
+  // SQLSTATE is on the cause as `.code` (e.g. '23505' unique violation).
+  const code = (error as (Error & { code?: string }) | null)?.code;
+  if (typeof code === 'string' && !parts[0]?.includes(code)) {
+    parts.push(`[${code}]`);
+  }
+
+  // The top-level Drizzle message is just the SQL string — drop it if a more
+  // specific cause follows, so the log leads with the real reason.
+  const meaningful = parts.filter(p => !/^\s*(insert|select|update|delete) /i.test(p));
+  return (meaningful.length > 0 ? meaningful : parts).join(' → ');
+}
+
 // Re-export so callers can build SQL fragments without importing drizzle-orm.
 export { sql };

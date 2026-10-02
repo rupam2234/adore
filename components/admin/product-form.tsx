@@ -149,14 +149,18 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
         product?: { id: string };
         error?: string;
         fields?: FieldErrors;
+        detail?: string;
       };
 
       if (!res.ok) {
         if (data.fields) setFieldErrors(data.fields);
         setMessage({
           kind: 'error',
-          text:
-            data.error ?? 'Something went wrong — fix the errors and retry.',
+          // In development the API attaches the unwrapped Postgres cause, which
+          // turns an opaque "Failed to create product" into something actionable.
+          text: data.detail
+            ? `${data.error} — ${data.detail}`
+            : (data.error ?? 'Something went wrong — fix the errors and retry.'),
         });
         return;
       }

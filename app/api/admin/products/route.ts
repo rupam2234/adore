@@ -1,6 +1,7 @@
 import { isAdminRequest } from '@/utils/admin-auth';
 import { validateProductPayload } from '@/utils/admin-schema';
 import { createProduct, listAdminProducts } from '@/utils/admin-products';
+import { describeDbError } from '@/utils/db';
 import { NextResponse } from 'next/server';
 
 /**
@@ -52,9 +53,18 @@ export async function POST(request: Request) {
     const product = await createProduct(parsed.value);
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
-    console.error('admin create failed:', error);
+    // Log the unwrapped Postgres message — Drizzle's own `message` is just the
+    // SQL text, so without describeDbError() the console shows a query string
+    // and hides the actual SQLSTATE/message.
+    const detail = describeDbError(error);
+    console.error(`admin create failed: ${detail}`, error);
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      {
+        error: 'Failed to create product',
+        // Only in development: the detail can name columns/constraints. Never
+        // leak internal schema information to production clients.
+        detail: process.env.NODE_ENV === 'development' ? detail : undefined,
+      },
       { status: 500 }
     );
   }

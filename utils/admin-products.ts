@@ -12,6 +12,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import {
   db,
   rawQuery,
+  describeDbError,
   categories,
   productCategories,
   productImages,
@@ -117,8 +118,30 @@ export async function createProduct(payload: ProductPayload): Promise<{
     .returning({ id: products.id, slug: products.slug });
   const product = inserted[0];
 
-  await syncVariants(product.id, product.slug, payload.variants);
-  await syncCategories(product.id, payload.categorySlugs);
+  // The three writes below are NOT wrapped in a transaction: this project runs
+  // on neon's HTTP driver (utils/db.ts), which has no interactive-transaction
+  // support, so `db.transaction()` is unavailable. Without compensation, a
+  // failure in syncVariants/syncCategories leaves an orphaned DRAFT product
+  // row plus a consumed slug (`-2`, `-3`, …) — invisible to shoppers because
+  // the storefront only reads status = 'ACTIVE', but cluttering the admin list
+  // and making the next retry fail differently.
+  //
+  // So roll back the product row on any downstream failure, and re-throw the
+  // original error. Rollback itself is best-effort and never masks the cause.
+  try {
+    await syncVariants(product.id, product.slug, payload.variants);
+    await syncCategories(product.id, payload.categorySlugs);
+  } catch (error) {
+    try {
+      await db.delete(products).where(eq(products.id, product.id));
+    } catch (rollbackError) {
+      console.error(
+        `createProduct rollback failed for product ${product.id}:`,
+        describeDbError(rollbackError)
+      );
+    }
+    throw error;
+  }
 
   return product;
 }

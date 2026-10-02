@@ -61,6 +61,43 @@ export function buildSku(slug: string, variant: VariantInput): string {
   return slugify(`${slug}-${variant.color}-${variant.size}`);
 }
 
+/** Matches the DB's product_variants.valid_color_hex CHECK exactly. */
+const HEX_6 = /^#[0-9A-F]{6}$/;
+const HEX_3 = /^#[0-9A-F]{3}$/;
+
+/**
+ * Normalise a user-typed swatch value to the canonical `#RRGGBB` uppercase
+ * form the database accepts, or null when the input cannot be salvaged.
+ *
+ * The DB enforces `CHECK (color_hex IS NULL OR color_hex ~ '^#[0-9A-Fa-f]{6}$')`.
+ * That regex is case-insensitive but unforgiving about everything else: a
+ * missing `#`, a 3-digit shorthand, or an 8-digit hex with an alpha channel
+ * all abort the INSERT. Because the swatch field is a free-text input, those
+ * are the natural typos — and they used to surface only as a bare
+ * "Failed to create product" 500, long after the product row had committed.
+ *
+ * Normalising here keeps that user error inside the validation checkpoint,
+ * where it becomes a 422 with a per-field message instead.
+ */
+export function normalizeHex(value: unknown): string | null | undefined {
+  const raw = str(value);
+  if (raw.length === 0) return null;
+
+  // Tolerate what users actually type: stray spaces, a missing '#', and the
+  // 3-digit shorthand that every colour picker and Figma exports.
+  const cleaned = raw.replace(/\s+/g, '').toUpperCase();
+  const withHash = cleaned.startsWith('#') ? cleaned : `#${cleaned}`;
+  const digits = withHash.slice(1);
+
+  if (HEX_3.test(withHash)) {
+    return `#${digits[0]}${digits[0]}${digits[1]}${digits[1]}${digits[2]}${digits[2]}`;
+  }
+  if (HEX_6.test(withHash)) return withHash;
+
+  // Unsalvageable — caller reports it against the field.
+  return undefined;
+}
+
 function str(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -142,9 +179,18 @@ export function validateProductPayload(
       seen.add(key);
     }
 
+    // The swatch is free text in the form but CHECK-constrained in the DB, so
+    // it is validated here rather than trusted. `undefined` means the input was
+    // present but unusable; `null` is a genuinely blank field and stays unset.
+    const colorHex = normalizeHex(v.colorHex);
+    if (colorHex === undefined) {
+      errors[`${label}.colorHex`] =
+        'Swatch must be a hex colour like #D9C0B0 (6 digits, with #).';
+    }
+
     variants.push({
       color,
-      colorHex: optionalStr(v.colorHex),
+      colorHex: colorHex ?? null,
       size,
       price: price ?? 0,
       compareAtPrice,
