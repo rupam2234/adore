@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import { CATEGORY_TREE } from '@/utils/categories';
 
-/** Footer link columns — content only, rendering is shared below. */
 const FOOTER_COLUMNS = [
   {
     title: 'Shop',
@@ -30,9 +29,12 @@ const FOOTER_COLUMNS = [
 ] as const;
 
 const SOCIAL_LINKS = [
-  { label: 'Instagram', href: 'https://instagram.com' },
-  { label: 'Pinterest', href: 'https://pinterest.com' },
-  { label: 'Facebook', href: 'https://facebook.com' },
+  { label: 'Instagram', href: 'https://www.instagram.com/adore.inn' },
+  { label: 'Pinterest', href: '#' },
+  {
+    label: 'Facebook',
+    href: 'https://www.facebook.com/profile.php?id=61589366360877',
+  },
 ] as const;
 
 const LEGAL_LINKS = [
@@ -40,7 +42,6 @@ const LEGAL_LINKS = [
   { label: 'Terms of service', href: '/terms' },
 ] as const;
 
-/** Site footer — server component, no interactivity. */
 export default function Footer() {
   return (
     <footer className="mt-auto w-full bg-[#2B2620] text-[#FAF8F3]">
@@ -48,17 +49,11 @@ export default function Footer() {
         {/* Top: brand + link columns */}
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:grid-cols-5">
           <div className="col-span-2 sm:col-span-3 lg:col-span-2">
-            <Link
-              href="/"
-              className="font-serif text-3xl tracking-tight transition-colors hover:text-[#E7DFCB]"
-            >
-              Adore
-            </Link>
-            <p className="mt-3 max-w-xs text-sm leading-relaxed text-[#FAF8F3]/60">
-              Dresses and kurtis, thoughtfully made in small batches with
-              natural fabrics.
-            </p>
-            <div className="mt-6 flex gap-5">
+            <h4 className="font-serif text-xl tracking-tight transition-colors hover:text-[#E7DFCB]">
+              Find us at.
+            </h4>
+            {/* <p className="mt-3 max-w-xs text-sm leading-relaxed text-[#FAF8F3]/60"></p> */}
+            <div className="mt-3 flex gap-5">
               {SOCIAL_LINKS.map(({ label, href }) => (
                 <a
                   key={label}

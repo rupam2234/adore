@@ -10,22 +10,6 @@ import {
   type HeroSlide,
 } from '@/utils/hero-slides';
 
-/**
- * Critical CSS for the hero's first paint.
- *
- * The hero's initial render must NOT depend on the Tailwind stylesheet
- * arriving. In production that stylesheet is render-blocking, but `next dev`
- * injects it via JavaScript — and until it lands the hero has no height and the
- * slides are not absolutely positioned, so every image renders collapsed and
- * `object-cover` crops a totally different region. When the stylesheet arrives
- * the box snaps to 75vh and the framing changes, which reads as the carousel
- * flashing between two different images.
- *
- * This <style> ships inside the initial HTML ahead of the slides, so it is
- * parsed and applied before the browser paints. It deliberately mirrors the
- * Tailwind classes (same values, same `lg` = 64rem breakpoint) — the stylesheet
- * only adds the transition timing and the copy/dots layout on top.
- */
 const HERO_CRITICAL_CSS = `
 [data-hero]{position:relative;width:100%;height:75vh;min-height:26.25rem;overflow:hidden;background:#E7DFCB}
 @media (min-width:40rem){[data-hero]{height:80vh}}
@@ -34,18 +18,6 @@ const HERO_CRITICAL_CSS = `
 [data-hero-active]{opacity:1}
 `;
 
-/**
- * Full-width homepage hero with an auto-advancing carousel.
- *
- * - Slides live in `utils/hero-slides.ts`; a single-slide list renders as a
- *   plain hero with no arrows or dots.
- * - One slide set and one order for every screen — array order is play order.
- *   Exactly one slide carries `data-hero-active` at any moment, at any width,
- *   which is what keeps two banners from ever showing at once.
- * - All slides stay mounted so the cross-fade has both layers to work with.
- * - Accessibility: labelled buttons, arrow-key navigable, and auto-advance is
- *   off under prefers-reduced-motion.
- */
 export default function HeroCarousel({
   slides = HERO_SLIDES,
 }: {
@@ -55,13 +27,8 @@ export default function HeroCarousel({
   const [paused, setPaused] = useState(false);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
-  // Focus-pause only applies to keyboard users. Clicking a dot leaves it
-  // focused, so without this the carousel would stay paused forever after one
-  // click — the buttons never blur on their own.
   const keyboardFocus = useRef(false);
 
-  // One index drives the one slide set, at every width. Array order is play
-  // order, so there is no per-breakpoint variant to keep in sync.
   const count = slides.length;
   const active = count > 0 ? slides[index % count] : undefined;
   const goTo = useCallback(
@@ -83,14 +50,9 @@ export default function HeroCarousel({
   const next = useCallback(() => step(1), [step]);
   const prev = useCallback(() => step(-1), [step]);
 
-  // Auto-advance. Re-created whenever the active slide changes so the timer
-  // restarts after a manual advance, and suspended while keyboard-focused.
   useEffect(() => {
     if (count < 2 || paused) return;
 
-    // Respect the OS setting. This is the other reason autoplay can look
-    // "broken" while the code is correct: `prefers-reduced-motion: reduce`
-    // disables it outright, so it is logged rather than failing silently.
     if (
       typeof window !== 'undefined' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches

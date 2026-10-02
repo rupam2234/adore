@@ -283,6 +283,42 @@ async function fetchServiceability(
   });
 }
 
+/**
+ * Authenticated POST with the standard stale-token retry.
+ *
+ * Every Shiprocket mutation (forward order, RMA, pickup request) goes through
+ * here so the 401 → re-login → retry dance exists in exactly one place. That
+ * matters more than it looks: the token lives ~10 days, and a missed renewal in
+ * one endpoint would mean refunds silently failing while the rest of the
+ * checkout works fine.
+ */
+async function shiprocketPost(
+  path: string,
+  payload: Record<string, unknown>
+): Promise<Response> {
+  const send = (auth: string) =>
+    fetch(`${SHIPROCKET_BASE}${path}`, {
+      method: 'POST',
+      headers: { Authorization: auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+
+  let res = await send(await authHeader());
+
+  // Stale/expired/invalidated token → try email/password re-login once.
+  // loginForToken() self-throttles via the back-off, so this is safe to
+  // attempt on every 401 without risking a lock-out.
+  if (res.status === 401) {
+    bearerOverride = null;
+    loginPromise = loginPromise ?? loginForToken();
+    bearerOverride = await loginPromise;
+    loginPromise = null;
+    if (bearerOverride) res = await send(`Bearer ${bearerOverride}`);
+  }
+  return res;
+}
+
 async function checkWithShiprocket(
   pin: string,
   weightKg: number | null
@@ -480,27 +516,7 @@ export async function createShiprocketOrder(
     ),
   };
 
-  const bearer = await authHeader();
-  const createOnce = (auth: string) =>
-    fetch(`${SHIPROCKET_BASE}/orders/create/adhoc`, {
-      method: 'POST',
-      headers: { Authorization: auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-
-  let res = await createOnce(bearer);
-
-  // Stale/expired/invalidated token → try email/password re-login once.
-  // loginForToken() self-throttles via the back-off, so this is safe to
-  // attempt on every 401 without risking a lock-out.
-  if (res.status === 401) {
-    bearerOverride = null;
-    loginPromise = loginPromise ?? loginForToken();
-    bearerOverride = await loginPromise;
-    loginPromise = null;
-    if (bearerOverride) res = await createOnce(`Bearer ${bearerOverride}`);
-  }
+  const res = await shiprocketPost('/orders/create/adhoc', payload);
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -518,3 +534,238 @@ export async function createShiprocketOrder(
     shipmentId: body.shipment_id != null ? String(body.shipment_id) : null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reverse logistics — RMA and pickup scheduling
+//
+// A return is a second shipment in the opposite direction. Shiprocket models it
+// as an RMA ("Return Merchandise Authorisation") attached to the original AWB,
+// which is what lets a customer drop the parcel at a pickup point instead of
+// packing it and paying postage themselves.
+//
+// The pickup request is what actually books a rider; creating the RMA alone
+// only registers the intent. Both are required, in that order.
+// ---------------------------------------------------------------------------
+
+export class ShiprocketReturnError extends Error {
+  /** Machine-readable reason, safe to branch on in the state machine. */
+  code:
+    | 'NOT_FOUND'
+    | 'NOT_DELIVERED'
+    | 'ALREADY_RMA'
+    | 'PICKUP_UNAVAILABLE'
+    | 'PICKUP_EXISTS'
+    | 'GATEWAY_ERROR';
+  constructor(code: ShiprocketReturnError['code'], message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+export type CreateRmaInput = {
+  /** The original Shiprocket AWB the item shipped on. */
+  awb: string;
+  orderId: string;
+  customerName: string;
+  customerEmail: string;
+  /** Free-text; shows on the customer's dashboard. */
+  returnReason: string;
+  /** Our internal return-request id, for reconciliation. */
+  requestId: string;
+  items: Array<{ name: string; sku: string; units: number }>;
+};
+
+/**
+ * Register an RMA against the original AWB.
+ *
+ * `alreadyExisted` is returned when Shiprocket already has an open RMA on this
+ * AWB. The caller treats that as success (the return still exists, we just
+ * created it before), because a duplicate RMA would otherwise strand the
+ * customer with a request the courier can never fulfil.
+ */
+export async function createReturnRma(
+  input: CreateRmaInput
+): Promise<{ rmaId: string; alreadyExisted: boolean }> {
+  const res = await shiprocketPost('/orders/create/rma', {
+    awb: input.awb,
+    order_id: input.orderId,
+    customer_name: input.customerName,
+    customer_email: input.customerEmail,
+    return_reason: input.returnReason,
+    // Not a documented Shiprocket field, but echoed back on their dashboard and
+    // invaluable when reconciling our rows against theirs.
+    remarks: `return_request_id=${input.requestId}`,
+    return_order_items: input.items.map(i => ({
+      name: i.name,
+      sku: i.sku,
+      units: i.units,
+      selling_price: 0,
+      discount: 0,
+    })),
+  });
+
+  const body = (await res.json().catch(() => ({}))) as {
+    message?: string;
+    data?: { rma_id?: number | string; shipment_id?: number | string };
+    errors?: Record<string, string>;
+  };
+
+  if (!res.ok) {
+    const detail = JSON.stringify(body.errors ?? body.message ?? '').toLowerCase();
+    if (detail.includes('already')) {
+      return { rmaId: '', alreadyExisted: true };
+    }
+    if (detail.includes('delivered')) {
+      throw new ShiprocketReturnError(
+        'NOT_DELIVERED',
+        'The courier has not marked this shipment as delivered yet.'
+      );
+    }
+    if (detail.includes('not found') || res.status === 404) {
+      throw new ShiprocketReturnError(
+        'NOT_FOUND',
+        'The courier has no record of this shipment.'
+      );
+    }
+    throw new ShiprocketReturnError(
+      'GATEWAY_ERROR',
+      'The courier could not start the return. Please try again shortly.'
+    );
+  }
+
+  const rmaId = body.data?.rma_id;
+  if (rmaId == null) {
+    throw new ShiprocketReturnError(
+      'GATEWAY_ERROR',
+      'The courier accepted the return but returned no reference.'
+    );
+  }
+  return { rmaId: String(rmaId), alreadyExisted: false };
+}
+
+export type SchedulePickupInput = {
+  rmaId: string;
+  customerName: string;
+  /** 10-digit Indian mobile, digits only. */
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  email: string;
+  /** ISO date. Must be a working day with enough lead time for the courier. */
+  pickupDate: string;
+};
+
+/**
+ * Book the reverse pickup.
+ *
+ * This is the step that costs us money — a rider is allocated — so it is
+ * deliberately a separate call from createReturnRma. A crash between the two
+ * leaves an RMA with no rider, which is recoverable and cheap; the reverse
+ * (a rider booked against no RMA) leaves a customer standing outside with a
+ * parcel and no reference.
+ *
+ * PICKUP_UNAVAILABLE is a NORMAL outcome, not an error: large parts of India are
+ * outside reverse-pickup coverage, which is exactly why the published policy
+ * offers a self-ship fallback with reimbursement.
+ */
+export async function scheduleReversePickup(
+  input: SchedulePickupInput
+): Promise<{ pickupId: string; alreadyScheduled: boolean }> {
+  const res = await shiprocketPost('/orders/fetch_pickup_details', {
+    rma_id: input.rmaId,
+    pickup_customer_name: input.customerName,
+    pickup_customer_email: input.email,
+    pickup_customer_phone: input.phone.replace(/\D/g, '').slice(-10),
+    pickup_address_1: input.addressLine1,
+    pickup_address_2: input.addressLine2 ?? '',
+    pickup_city: input.city,
+    pickup_state: input.state,
+    pickup_pincode: input.pincode,
+    pickup_date: input.pickupDate,
+  });
+
+  const body = (await res.json().catch(() => ({}))) as {
+    message?: string;
+    success?: boolean;
+    data?: { pickup_id?: number | string };
+    errors?: Record<string, string>;
+  };
+
+  if (!res.ok || body.success === false) {
+    const detail = JSON.stringify(body.errors ?? body.message ?? '').toLowerCase();
+    if (detail.includes('already')) {
+      return { pickupId: '', alreadyScheduled: true };
+    }
+    if (
+      detail.includes('serviceable') ||
+      detail.includes('not available') ||
+      detail.includes('unserviceable') ||
+      res.status === 422
+    ) {
+      throw new ShiprocketReturnError(
+        'PICKUP_UNAVAILABLE',
+        'Reverse pickup is not available at this PIN code.'
+      );
+    }
+    throw new ShiprocketReturnError(
+      'GATEWAY_ERROR',
+      'We could not book the pickup. Please try again shortly.'
+    );
+  }
+
+  const pickupId = body.data?.pickup_id;
+  if (pickupId == null) {
+    throw new ShiprocketReturnError(
+      'GATEWAY_ERROR',
+      'The courier accepted the pickup but returned no reference.'
+    );
+  }
+  return { pickupId: String(pickupId), alreadyScheduled: false };
+}
+
+export type ReturnTrackingStatus =
+  | 'PICKUP_SCHEDULED'
+  | 'PICKUP_FAILED'
+  | 'IN_TRANSIT'
+  | 'RECEIVED';
+
+/**
+ * Read the live status of the return leg.
+ *
+ * Used to reconcile our database against the courier's system of record, and by
+ * the admin queue to spot a parcel that has gone quiet. We deliberately only
+ * interpret the handful of statuses the state machine knows about — anything
+ * else returns null, and the caller leaves the row alone rather than guessing
+ * and moving a customer's return forward on a misread.
+ */
+export async function fetchReturnTracking(
+  rmaId: string
+): Promise<{ status: ReturnTrackingStatus; awb: string | null } | null> {
+  const res = await shiprocketPost('/orders/track/rma', { rma_id: rmaId });
+  if (!res.ok) return null;
+
+  const body = (await res.json().catch(() => ({}))) as {
+    data?: {
+      awb?: string;
+      status?: number;
+    };
+  };
+
+  // Shiprocket's numeric status codes for the RMA leg. Undocumented and
+  // occasionally reordered, so the mapping is intentionally conservative: we
+  // only claim to know the four states the workflow acts on.
+  const statusMap: Record<number, ReturnTrackingStatus> = {
+    3: 'IN_TRANSIT',
+    4: 'RECEIVED',
+    6: 'PICKUP_FAILED',
+    9: 'RECEIVED',
+  };
+  const mapped = body.data?.status != null ? statusMap[body.data.status] : undefined;
+  if (!mapped) return null;
+
+  return { status: mapped, awb: body.data?.awb ?? null };
+}
+

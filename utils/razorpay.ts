@@ -134,3 +134,102 @@ export function verifyRazorpaySignature(input: {
   const b = Buffer.from(input.signature, 'utf8');
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
+
+// ---------------------------------------------------------------------------
+// Refunds
+// ---------------------------------------------------------------------------
+
+export type RazorpayRefund = {
+  id: string;
+  payment_id: string;
+  amount: number; // paise, actually refunded
+  currency: string;
+  status: 'pending' | 'processed' | 'failed';
+  receipt?: string | null;
+};
+
+/**
+ * Refund against an original payment.
+ *
+ * `amountPaise` is deliberately required and never defaulted to the full
+ * payment. A partial refund is the normal case in a returns flow (one item out
+ * of a three-item order), and a helper that "helpfully" defaults to the full
+ * amount is exactly how a ₹4,000 order gets fully refunded by accident.
+ *
+ * Razorpay's refund is asynchronous: `pending` means accepted, not sent. The
+ * caller must treat only `processed` as money gone. See returns-ops.ts, which
+ * persists the refund id BEFORE calling this and reconciles via the webhook.
+ */
+export async function createRazorpayRefund(input: {
+  paymentId: string;
+  amountPaise: number;
+  /** Razorpay caps this at 40 chars. */
+  receipt?: string;
+  notes?: Record<string, string>;
+}): Promise<RazorpayRefund> {
+  if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) {
+    // A zero or negative refund would be rejected by the gateway anyway;
+    // failing here keeps the reason in our logs where we can act on it.
+    throw new RazorpayError('Refund amount must be a positive whole number of paise', 400);
+  }
+
+  return razorpayFetch<RazorpayRefund>(
+    `/payments/${encodeURIComponent(input.paymentId)}/refund`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        amount: input.amountPaise,
+        ...(input.receipt ? { receipt: input.receipt.slice(0, 40) } : {}),
+        ...(input.notes ? { notes: input.notes } : {}),
+      }),
+    }
+  );
+}
+
+/** Read a refund back. Used to reconcile a crash mid-refund. */
+export async function fetchRazorpayRefund(
+  refundId: string
+): Promise<RazorpayRefund> {
+  return razorpayFetch<RazorpayRefund>(
+    `/refunds/${encodeURIComponent(refundId)}`
+  );
+}
+
+/**
+ * Signature verification for the Razorpay webhook.
+ *
+ * Razorpay signs with HMAC-SHA256 over the RAW request body and sends the hex
+ * digest in `x-razorpay-signature`.
+ *
+ * Two details that are easy to get wrong and expensive to get wrong:
+ *
+ *  - it must be the RAW body, not a re-serialised JSON.parse(JSON.stringify()),
+ *    because key order and whitespace change the bytes and the HMAC. The route
+ *    handler reads `request.text()` once and parses from that same string.
+ *  - the comparison must be timing-safe, same as the checkout signature.
+ */
+export function verifyWebhookSignature(
+  rawBody: string,
+  signature: string | null
+): boolean {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret || !signature) return false;
+  const expected = crypto
+    .createHmac('sha256', secret)
+    .update(rawBody)
+    .digest('hex');
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(signature, 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
+ * Build the signature a webhook body should carry. Exists so the test suite can
+ * sign a fixture and prove the verification round-trips, rather than asserting
+ * that a hard-coded string is "correct".
+ */
+export function signWebhookPayload(rawBody: string): string {
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET ?? '';
+  return crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+}
+

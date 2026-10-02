@@ -32,12 +32,12 @@ export default async function AccountOrdersPage() {
           Your order history and tracking will appear here once you place an
           order.
         </p>
-        <a
+        <Link
           href="/shop"
           className="mt-6 inline-block rounded-full bg-[#2B2620] px-6 py-2.5 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
         >
           Start shopping
-        </a>
+        </Link>
       </section>
     );
   }

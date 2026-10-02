@@ -36,6 +36,10 @@ export default function AdminLayout({
               Order ledger
               <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
             </Link>
+            <Link href="/admin/returns" className="group relative inline-block">
+              Returns
+              <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
+            </Link>
             <Link
               href="/admin/products/new"
               className="group relative inline-block"

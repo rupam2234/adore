@@ -1,10 +1,16 @@
 import { requireAccountPage } from '@/utils/account-session';
-import { ensureCustomerForUserId, getOrderDetail, checkOrderAvailability } from '@/utils/account';
+import {
+  ensureCustomerForUserId,
+  getOrderDetail,
+  checkOrderAvailability,
+} from '@/utils/account';
 import { formatPrice } from '@/utils/product-format';
 import { formatDistanceToNow } from 'date-fns';
 import { enIN } from 'date-fns/locale';
 
 import CopyableOrderNumber from '@/components/account/copyable-order-number';
+import ReturnRequestForm from '@/components/account/return-request-form';
+import { listExchangeVariants } from '@/utils/returns-db';
 import Link from 'next/link';
 import { retryCheckout } from './actions';
 
@@ -49,8 +55,41 @@ export default async function OrderDetailPage({
 
   const isPending = order.status === 'PENDING';
   const isStockAvailable =
-    isPending &&
-    (await checkOrderAvailability(id)).every(a => a.inStock);
+    isPending && (await checkOrderAvailability(id)).every(a => a.inStock);
+
+  /**
+   * Decide up front whether the return form can appear at all.
+   *
+   * This is UX ONLY. `createReturnRequest` re-runs the full check server-side,
+   * so hiding the button here is a courtesy, never the enforcement.
+   */
+  let returnDisabledReason: string | null = null;
+  if (order.status !== 'DELIVERED') {
+    returnDisabledReason =
+      order.status === 'SHIPPED' || order.status === 'PROCESSING'
+        ? 'This order is still on its way. You can return it once it has been delivered.'
+        : 'Only delivered orders can be returned or exchanged.';
+  } else if (!order.deliveredAt) {
+    returnDisabledReason =
+      'We could not verify the delivery date for this order yet. Please contact us and we will arrange your return.';
+  }
+
+  // Sibling variants power the exchange size picker. Only worth loading when
+  // the order can actually be returned.
+  const exchangeVariantsByItem = new Map<
+    string,
+    Awaited<ReturnType<typeof listExchangeVariants>>
+  >();
+  if (!returnDisabledReason) {
+    await Promise.all(
+      order.items.map(async item => {
+        exchangeVariantsByItem.set(
+          item.orderItemId,
+          await listExchangeVariants(item.variantId)
+        );
+      })
+    );
+  }
 
   return (
     <section className="space-y-6">
@@ -70,8 +109,8 @@ export default async function OrderDetailPage({
           {isStockAvailable ? (
             <div className="flex flex-col gap-3">
               <p className="text-amber-800">
-                Payment for this order wasn't completed, but your items are still
-                available. Want to try again?
+                Payment for this order wasn&rsquo;t completed, but your items
+                are still available. Want to try again?
               </p>
               <form action={retryCheckout} className="flex justify-end">
                 <input type="hidden" name="orderId" value={order.id} />
@@ -85,9 +124,9 @@ export default async function OrderDetailPage({
             </div>
           ) : (
             <p className="text-amber-800">
-              Payment for this order wasn't completed. Unfortunately, not all items
-              are available anymore — stock ran out while your payment was pending.
-              Please browse the store for alternatives.
+              Payment for this order wasn&rsquo;t completed. Unfortunately, not
+              all items are available anymore — stock ran out while your payment
+              was pending. Please browse the store for alternatives.
             </p>
           )}
         </div>
@@ -97,7 +136,8 @@ export default async function OrderDetailPage({
         <div className="flex flex-wrap items-center justify-between gap-3 bg-[#F3EFE6] px-6 py-4">
           <div>
             <p className="font-roboto text-sm font-medium tracking-wide">
-              Placed {formatDistanceToNow(new Date(order.createdAt), {
+              Placed{' '}
+              {formatDistanceToNow(new Date(order.createdAt), {
                 addSuffix: true,
                 locale: enIN,
               })}
@@ -107,7 +147,10 @@ export default async function OrderDetailPage({
 
         <div className="divide-y divide-[#2B2620]/10">
           {order.items.map((item, idx) => (
-            <div key={`${order.id}-${item.variantId}-${idx}`} className="px-6 py-4">
+            <div
+              key={`${order.id}-${item.variantId}-${idx}`}
+              className="px-6 py-4"
+            >
               <div className="flex items-start gap-4">
                 <div className="flex-1">
                   <div className="flex items-start justify-between">
@@ -122,6 +165,31 @@ export default async function OrderDetailPage({
                     </p>
                   </div>
                 </div>
+              </div>
+
+              {/* Return/exchange is per order LINE, not per order — a customer
+                  may keep one item and return another. */}
+              <div className="mt-3">
+                {item.returnedQty >= item.quantity ? (
+                  <p className="text-xs text-[#2B2620]/50">
+                    This item has already been returned in full.
+                  </p>
+                ) : (
+                  <ReturnRequestForm
+                    orderId={order.id}
+                    orderItemId={item.orderItemId}
+                    productName={item.productName}
+                    size={item.size}
+                    color={item.color}
+                    unitPrice={item.unitPrice}
+                    currency={order.currency}
+                    maxQty={item.quantity - item.returnedQty}
+                    exchangeVariants={
+                      exchangeVariantsByItem.get(item.orderItemId) ?? []
+                    }
+                    disabledReason={returnDisabledReason}
+                  />
+                )}
               </div>
             </div>
           ))}

@@ -1,5 +1,12 @@
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import { db, rawQuery, customerAddresses, customers, orders, orderItems } from './db';
+import {
+  db,
+  rawQuery,
+  customerAddresses,
+  customers,
+  orders,
+  orderItems,
+} from './db';
 import { finalizeReservations } from './reservations';
 
 export type CustomerAddress = {
@@ -343,10 +350,19 @@ export type OrderDetailItem = OrderSummary['items'][number] & {
   color: string;
   size: string;
   stockQuantity: number;
+  /** order_items.id — the unit a return is raised against. */
+  orderItemId: string;
+  /** How many of this line have already been returned. */
+  returnedQty: number;
 };
 
 export type OrderDetail = Omit<OrderSummary, 'items'> & {
   items: OrderDetailItem[];
+  /**
+   * From orders.delivered_at. Null until the Shiprocket DELIVERED webhook sets
+   * it — the returns flow refuses to guess a window without it.
+   */
+  deliveredAt: string | null;
 };
 
 export type ItemAvailability = {
@@ -452,6 +468,7 @@ export async function getOrderDetail(
     total_amount: string;
     currency: string;
     created_at: string;
+    delivered_at: string | null;
     shipping_address_snapshot: Record<string, string> | null;
     items: Array<{
       product_name: string;
@@ -463,6 +480,8 @@ export async function getOrderDetail(
       color: string;
       size: string;
       stock_quantity: number;
+      order_item_id: string;
+      returned_qty: number | null;
     }>;
   }>(sql`
     SELECT
@@ -476,6 +495,7 @@ export async function getOrderDetail(
       o.total_amount,
       o.currency,
       o.created_at,
+      o.delivered_at,
       o.shipping_address_snapshot,
       COALESCE(
         (
@@ -489,7 +509,9 @@ export async function getOrderDetail(
               'variant_id', oi.variant_id,
               'color', v.color,
               'size', v.size,
-              'stock_quantity', v.stock_quantity
+              'stock_quantity', v.stock_quantity,
+              'order_item_id', oi.id,
+              'returned_qty', oi.returned_qty
             )
             ORDER BY oi.product_name
           )
@@ -519,6 +541,9 @@ export async function getOrderDetail(
     totalAmount: order.total_amount,
     currency: order.currency,
     createdAt: new Date(order.created_at).toISOString(),
+    deliveredAt: order.delivered_at
+      ? new Date(order.delivered_at).toISOString()
+      : null,
     items: (order.items ?? []).map(item => ({
       productName: item.product_name,
       sku: item.sku,
@@ -529,6 +554,8 @@ export async function getOrderDetail(
       color: item.color,
       size: item.size,
       stockQuantity: item.stock_quantity,
+      orderItemId: item.order_item_id,
+      returnedQty: item.returned_qty ?? 0,
     })),
     shippingAddress: order.shipping_address_snapshot,
   };
@@ -537,7 +564,9 @@ export async function getOrderDetail(
 /**
  * Check if all items in a pending order are still available.
  */
-export async function checkOrderAvailability(orderId: string): Promise<ItemAvailability[]> {
+export async function checkOrderAvailability(
+  orderId: string
+): Promise<ItemAvailability[]> {
   const rows = await rawQuery<{
     variant_id: string;
     stock_quantity: number;
@@ -559,5 +588,3 @@ export async function checkOrderAvailability(orderId: string): Promise<ItemAvail
     inStock: r.stock_quantity >= r.quantity,
   }));
 }
-
-

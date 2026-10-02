@@ -1,0 +1,55 @@
+# Example environment for the returns flow.
+#
+# This file is documentation, not secrets — copy to .env.local (gitignored) and
+# fill in real values. Every variable the returns/exchanges flow reads is listed
+# here; the flow FAILS CLOSED if the security-critical ones are missing, so a
+# half-configured deployment refuses rather than leaking.
+
+# --- Database -------------------------------------------------------------
+# Neon Postgres. Drives orders, return_requests, refunds, return_events,
+# customer_risk, payment_disputes and webhook_events.
+adore_DATABASE_URL=
+
+# --- Auth -----------------------------------------------------------------
+# Signs session JWTs. ALSO acts as the admin bypass: if it is unset,
+# requireAdminPage() and isAdminRequest() return an admin WITHOUT a check.
+# That is fine locally and catastrophic in production — always set it.
+JWT_SECRET=
+
+# --- Payments (Razorpay) --------------------------------------------------
+RAZORPAY_API_KEY=
+RAZORPAY_API_SECRET=
+# HMAC secret for the refund.processed / payment.dispute.* webhook. The webhook
+# route returns 503 without it — it never accepts unsigned events.
+RAZORPAY_WEBHOOK_SECRET=
+
+# --- Courier (Shiprocket) -------------------------------------------------
+# Either a dashboard token OR email+password for auto re-login.
+SHIPROCKET_API=
+SHIPROCKET_EMAIL=
+SHIPROCKET_PASSWORD=
+# Warehouse pickup location name and PIN, used for rate quotes and RMA booking.
+SHIPROCKET_PICKUP_LOCATION=Primary
+SHIPROCKET_PICKUP_PINCODE=
+# Shared secret appended to the Shiprocket webhook URL as ?token=...
+# The delivery webhook fails CLOSED without it. Without this, anyone could mark
+# their own order delivered (opening a return window they should not have).
+SHIPROCKET_WEBHOOK_TOKEN=
+
+# --- Media ----------------------------------------------------------------
+# Evidence photos for damage / wrong-item claims.
+CLOUDINARY_URL=
+
+# --- Background jobs ------------------------------------------------------
+# Bearer token for GET /api/cron/reconcile-refunds. Set this AND schedule the
+# route (Vercel cron) — it resolves refunds that were claimed but whose gateway
+# result is unknown, by querying Razorpay rather than re-sending.
+CRON_SECRET=
+
+# --- Optional: shared Shiprocket token cache ------------------------------
+# On serverless the in-memory token dies every cold start, so each instance
+# would log in separately and risk a Shiprocket account lockout. Point these at
+# Upstash/Vercel KV to share one token across all instances. Without them the
+# app falls back to memory + a local disk cache (fine for single-instance dev).
+UPSTASH_REDIS_REST_URL=
+UPSTASH_REDIS_REST_TOKEN=

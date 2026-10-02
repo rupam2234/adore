@@ -105,9 +105,9 @@ export default function TermsPage() {
         </p>
         <ul className="list-disc space-y-2 pl-6">
           <li>
-            <strong>Wear-and-return ("wardrobing")</strong> — wearing an item
-            (including to an event) and returning it as unused. We may refuse
-            items showing signs of wear, washing, or dry-cleaning.
+            <strong>Wear-and-return (&ldquo;wardrobing&rdquo;)</strong> —
+            wearing an item (including to an event) and returning it as unused.
+            We may refuse items showing signs of wear, washing, or dry-cleaning.
           </li>
           <li>
             <strong>Item swapping</strong> — returning a different, used, or
@@ -167,8 +167,8 @@ export default function TermsPage() {
           </li>
         </ul>
         <p>
-          Making a false claim (for example, a false "not received" or
-          chargeback dispute on a delivered order) is fraud. We keep
+          Making a false claim (for example, a false &ldquo;not received&rdquo;
+          or chargeback dispute on a delivered order) is fraud. We keep
           delivery-confirmation records and will contest fraudulent chargebacks
           with that evidence.
         </p>
@@ -193,9 +193,9 @@ export default function TermsPage() {
 
       <Section title="9. Liability">
         <p>
-          To the fullest extent permitted by law, Adore's liability for any
-          claim relating to an order is limited to the amount you paid for the
-          item(s) concerned. We are not liable for indirect or consequential
+          To the fullest extent permitted by law, Adore&rsquo;s liability for
+          any claim relating to an order is limited to the amount you paid for
+          the item(s) concerned. We are not liable for indirect or consequential
           losses. Nothing in these terms limits your statutory consumer rights.
         </p>
       </Section>

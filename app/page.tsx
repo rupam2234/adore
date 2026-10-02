@@ -124,10 +124,14 @@ export default async function Home() {
       <section className="w-full border-t border-[#2B2620]/10 bg-[#2B2620] px-6 py-16 text-[#FAF8F3] sm:px-12">
         <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="font-serif text-2xl">Join the field notes</h2>
+            <h2 className="font-serif font-semibold text-2xl">
+              Wear what you adore
+            </h2>
             <p className="mt-2 max-w-sm text-sm text-[#FAF8F3]/70">
-              Stories from the farms and dye studios we work with, plus early
-              access to new drops.
+              At Adore, each dress is made to be cherished, worn beautifully,
+              and loved effortlessly. We believe clothing shold be personal,
+              something you adore the moment you see it, feel beautiful wearning
+              and feels like you.
             </p>
           </div>
           {/* Placeholder subscribe form. There is no newsletter endpoint yet, so

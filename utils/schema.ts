@@ -20,6 +20,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from 'drizzle-orm/pg-core';
 import type { ProductStatus } from './admin-schema';
 import type { FitFeedback } from './review-format';
@@ -347,3 +348,212 @@ export const stockReservations = pgTable('stock_reservations', {
     .notNull()
     .defaultNow(),
 });
+
+/**
+ * Returns & exchanges.
+ *
+ * Mirrors scripts/add-returns.sql (applied to production 2026-10-02). There is
+ * no drizzle-kit migration pipeline in this repo, so the .sql file is the
+ * runnable record — keep the two in sync.
+ *
+ * The unit of return is the ORDER LINE, not the order: a customer may keep one
+ * item and return another. `orderItems.returnedQty` tracks what has already
+ * come back, which is what allows partial returns.
+ */
+export const returnRequests = pgTable(
+  'return_requests',
+  {
+    id: text('id').primaryKey().$defaultFn(randomId),
+    orderId: text('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    orderItemId: text('order_item_id')
+      .notNull()
+      .references(() => orderItems.id, { onDelete: 'cascade' }),
+    customerId: text('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'cascade' }),
+
+    type: text('type').$type<'RETURN' | 'EXCHANGE'>().notNull(),
+    reason: text('reason').notNull(),
+    status: text('status')
+      .$type<
+        | 'REQUESTED'
+        | 'APPROVED'
+        | 'PICKUP_SCHEDULED'
+        | 'PICKUP_FAILED'
+        | 'SELF_SHIP_PENDING'
+        | 'IN_TRANSIT'
+        | 'RECEIVED'
+        | 'QC_PASSED'
+        | 'QC_FAILED'
+        | 'EXCHANGE_SHIPPED'
+        | 'EXCHANGE_FAILED'
+        | 'REFUND_PENDING'
+        | 'REFUNDED'
+        | 'REFUND_FAILED'
+        | 'REJECTED'
+        | 'CANCELLED'
+      >()
+      .notNull()
+      .default('REQUESTED'),
+
+    qty: integer('qty').notNull().default(1),
+    exchangeVariantId: text('exchange_variant_id').references(
+      () => productVariants.id,
+      { onDelete: 'set null' }
+    ),
+
+    fee: numeric('fee', { precision: 10, scale: 2 }).notNull().default('0'),
+    refundAmount: numeric('refund_amount', { precision: 10, scale: 2 })
+      .notNull()
+      .default('0'),
+    /** Gross − fee − shipping, clamped to the order-level headroom. */
+    netRefund: numeric('net_refund', { precision: 10, scale: 2 }),
+    /** The figure actually sent to Razorpay, in rupees. */
+    payoutAmount: numeric('payout_amount', { precision: 10, scale: 2 }),
+
+    shiprocketAwb: text('shiprocket_awb'),
+    shiprocketReturnAwb: text('shiprocket_return_awb'),
+    exchangeShiprocketOrderId: text('exchange_shiprocket_order_id'),
+    pickupAttempts: integer('pickup_attempts').notNull().default(0),
+    pickupExhausted: boolean('pickup_exhausted').notNull().default(false),
+    selfShip: boolean('self_ship').notNull().default(false),
+
+    photos: jsonb('photos').$type<string[]>(),
+    rejectionReason: text('rejection_reason'),
+    notes: text('notes'),
+
+    // Fraud signals. `riskScore` reorders the admin queue; `isBlocked` is the
+    // hard stop and is deliberately separate, so raising the score threshold can
+    // never start blocking customers by accident.
+    riskScore: integer('risk_score').notNull().default(0),
+    riskReasons: jsonb('risk_reasons').$type<string[]>(),
+    isBlocked: boolean('is_blocked').notNull().default(false),
+    blockedReason: text('blocked_reason'),
+
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  t => [
+    index('idx_return_requests_customer').on(t.customerId, t.createdAt),
+    index('idx_return_requests_status').on(t.status, t.createdAt),
+  ]
+);
+
+/**
+ * Append-only audit log for the return lifecycle.
+ *
+ * Every state change writes here. It is the source for the customer-facing
+ * timeline, the admin's per-request history, and the forensic record used when a
+ * refund is disputed — so it is deliberately append-only and never updated.
+ */
+export const returnEvents = pgTable(
+  'return_events',
+  {
+    id: text('id').primaryKey().$defaultFn(randomId),
+    returnRequestId: text('return_request_id')
+      .notNull()
+      .references(() => returnRequests.id, { onDelete: 'cascade' }),
+    event: text('event').notNull(),
+    fromStatus: text('from_status'),
+    toStatus: text('to_status'),
+    /** Admin email, 'customer', or 'system:<provider>'. */
+    actor: text('actor').notNull().default('system'),
+    data: jsonb('data').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  t => [index('idx_return_events_request').on(t.returnRequestId, t.createdAt)]
+);
+
+/**
+ * Per-customer abuse ledger, maintained by `refreshCustomerRisk`.
+ *
+ * A materialised summary rather than a live aggregate, because it is read on
+ * every return submission and the Neon HTTP driver charges per round-trip.
+ */
+export const customerRisk = pgTable('customer_risk', {
+  customerId: uuid('customer_id')
+    .primaryKey()
+    .references(() => customers.id, { onDelete: 'cascade' }),
+  totalReturns: integer('total_returns').notNull().default(0),
+  totalRefunded: numeric('total_refunded', { precision: 12, scale: 2 })
+    .notNull()
+    .default('0'),
+  recentReturns: integer('recent_returns').notNull().default(0),
+  recentValue: numeric('recent_value', { precision: 12, scale: 2 })
+    .notNull()
+    .default('0'),
+  declinedOrders: integer('declined_orders').notNull().default(0),
+  chargebackCount: integer('chargeback_count').notNull().default(0),
+  isBlocked: boolean('is_blocked').notNull().default(false),
+  blockedReason: text('blocked_reason'),
+  notes: text('notes'),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * Chargeback / dispute register.
+ *
+ * The single highest-value fraud input: a customer who refunds an item and also
+ * disputes the payment has taken the money twice. `evaluateHardBlocks` refuses
+ * any approval while a dispute is OPEN on the order.
+ */
+export const paymentDisputes = pgTable(
+  'payment_disputes',
+  {
+    id: text('id').primaryKey().$defaultFn(randomId),
+    razorpayPaymentId: text('razorpay_payment_id').notNull(),
+    orderId: uuid('order_id').references(() => orders.id, {
+      onDelete: 'cascade',
+    }),
+    amount: numeric('amount', { precision: 10, scale: 2 }).notNull().default('0'),
+    reason: text('reason'),
+    status: text('status')
+      .$type<'OPEN' | 'LOST' | 'WON' | 'WITHDRAWN'>()
+      .notNull()
+      .default('OPEN'),
+    won: boolean('won'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  t => [index('idx_disputes_payment').on(t.razorpayPaymentId)]
+);
+
+/**
+ * Webhook replay guard.
+ *
+ * Shiprocket and Razorpay both retry. Every inbound event id is claimed here
+ * first, so a duplicate is acknowledged and dropped rather than re-applied.
+ * Kept in the database rather than in process memory because on serverless a
+ * retry routinely lands on a different instance.
+ */
+export const webhookEvents = pgTable(
+  'webhook_events',
+  {
+    id: text('id').primaryKey(),
+    provider: text('provider').notNull(),
+    eventType: text('event_type').notNull(),
+    processed: boolean('processed').notNull().default(false),
+    payload: jsonb('payload'),
+    error: text('error'),
+    receivedAt: timestamp('received_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  t => [index('idx_webhook_events_pending').on(t.provider, t.receivedAt)]
+);
+
