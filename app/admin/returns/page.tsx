@@ -37,7 +37,10 @@ export default async function AdminReturnsPage() {
     needsPickup: requests.filter(r => r.status === 'APPROVED').length,
     refundDue: requests
       .filter(r => r.status === 'QC_PASSED' && r.type === 'RETURN')
-      .reduce((sum, r) => sum + Math.max(0, Number(r.refundAmount) - Number(r.fee)), 0),
+      .reduce(
+        (sum, r) => sum + Math.max(0, Number(r.refundAmount) - Number(r.fee)),
+        0
+      ),
     blocked: requests.filter(r => r.isBlocked).length,
     highRisk: requests.filter(r => r.riskScore >= 60).length,
   };
@@ -45,31 +48,58 @@ export default async function AdminReturnsPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Returns &amp; exchanges</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Returns &amp; exchanges
+        </h1>
         <p className="mt-1 text-sm text-[#2B2620]/60">
-          Ordered by what needs you first, then by risk. Money only moves after an
-          item has been received and inspected.
+          Ordered by what needs you first, then by risk. Money only moves after
+          an item has been received and inspected.
         </p>
       </header>
 
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         {[
-          { label: 'Needs review', value: String(counts.needsReview), tone: 'text-amber-700' },
-          { label: 'Needs QC', value: String(counts.needsQc), tone: 'text-purple-700' },
-          { label: 'Needs pickup', value: String(counts.needsPickup), tone: 'text-blue-700' },
+          {
+            label: 'Needs review',
+            value: String(counts.needsReview),
+            tone: 'text-amber-700',
+          },
+          {
+            label: 'Needs QC',
+            value: String(counts.needsQc),
+            tone: 'text-purple-700',
+          },
+          {
+            label: 'Needs pickup',
+            value: String(counts.needsPickup),
+            tone: 'text-blue-700',
+          },
           {
             label: 'Refunds due',
             value: formatPrice(String(counts.refundDue), 'INR'),
             tone: 'text-emerald-700',
           },
-          { label: 'Blocked', value: String(counts.blocked), tone: 'text-rose-700' },
-          { label: 'High risk', value: String(counts.highRisk), tone: 'text-rose-700' },
+          {
+            label: 'Blocked',
+            value: String(counts.blocked),
+            tone: 'text-rose-700',
+          },
+          {
+            label: 'High risk',
+            value: String(counts.highRisk),
+            tone: 'text-rose-700',
+          },
         ].map(card => (
-          <div key={card.label} className="rounded-xl border border-[#2B2620]/10 bg-white p-4">
+          <div
+            key={card.label}
+            className="rounded-xl border border-[#2B2620]/10 bg-white p-4"
+          >
             <dt className="text-xs uppercase tracking-wide text-[#2B2620]/50">
               {card.label}
             </dt>
-            <dd className={`mt-1 text-xl font-semibold ${card.tone}`}>{card.value}</dd>
+            <dd className={`mt-1 text-xl font-semibold ${card.tone}`}>
+              {card.value}
+            </dd>
           </div>
         ))}
       </dl>
@@ -86,7 +116,7 @@ export default async function AdminReturnsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-[#2B2620]/10 bg-white">
-          <table className="w-full min-w-[64rem] text-left text-sm">
+          <table className="w-full min-w-5xl text-left text-sm">
             <thead>
               <tr className="border-b border-[#2B2620]/10 text-xs uppercase tracking-wide text-[#2B2620]/50">
                 <th className="px-4 py-3 font-medium">Request</th>

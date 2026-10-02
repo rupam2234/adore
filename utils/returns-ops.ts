@@ -26,10 +26,11 @@
 import { rawQuery, sql } from '@/utils/db';
 import { createRazorpayRefund, fetchRazorpayRefund, RazorpayError } from '@/utils/razorpay';
 import {
-  createReturnRma,
+  createReturnOrder,
   scheduleReversePickup,
   fetchReturnTracking,
   ShiprocketReturnError,
+  type RmaAddress,
 } from '@/utils/shipping';
 import { toPaise } from '@/utils/checkout-format';
 import {
@@ -647,23 +648,54 @@ export async function bookReversePickup(
   }
 
   const address = await loadPickupAddress(row.order_id);
+  if (!address) {
+    return {
+      ok: false,
+      code: 'NO_ADDRESS',
+      message: 'We have no pickup address on file for this order.',
+    };
+  }
 
-  let rmaId: string | null = row.shiprocket_return_awb;
+  // Shiprocket's return shipment id. This replaces the previous `rma_id`
+  // concept: `/orders/create/return` returns a shipment_id, and
+  // `/courier/generate/pickup` books against THAT. Verified against the live API.
+  let shipmentId: string | null = row.shiprocket_return_awb;
   try {
-    if (!rmaId) {
-      const rma = await createReturnRma({
+    if (!shipmentId) {
+      const created = await createReturnOrder({
         awb,
         orderId: row.order_number,
-        customerName: address?.fullName ?? 'Customer',
-        customerEmail: address?.email ?? '',
+        pickup: {
+          fullName: address.fullName,
+          email: address.email,
+          phone: address.phone,
+          addressLine1: address.addressLine1,
+          addressLine2: address.addressLine2,
+          city: address.city,
+          state: address.state,
+          pincode: address.postalCode,
+        },
+        shipping: warehouseAddress(),
         returnReason: row.reason,
         requestId: returnId,
-        items: [{ name: row.product_name, sku: row.sku, units: row.qty }],
+        items: [
+          {
+            name: row.product_name,
+            sku: row.sku,
+            units: row.qty,
+            sellingPrice: Number(row.item_unit_price) || 0,
+          },
+        ],
+        lengthCm: 30,
+        breadthCm: 24,
+        heightCm: 6,
+        weightKg: 0.5,
       });
-      if (rma.alreadyExisted && !rma.rmaId) {
-        // Shiprocket already has an RMA on this AWB but would not tell us which.
-        // Stopping here is correct: booking a second rider costs real money and
-        // confuses the customer's tracking.
+
+      if (!created.shipmentId) {
+        // Shiprocket already has an open return on this AWB and would not tell
+        // us which. Booking a second rider costs real money and confuses the
+        // customer's tracking, so a human should look instead.
         return {
           ok: false,
           code: 'RMA_EXISTS',
@@ -671,39 +703,15 @@ export async function bookReversePickup(
             'A return already exists with the courier for this order. Our team will confirm the details.',
         };
       }
-      rmaId = rma.rmaId || null;
-      if (rmaId) {
-        await rawQuery(sql`
-          UPDATE return_requests
-          SET shiprocket_return_awb = ${rmaId}, updated_at = now()
-          WHERE id = ${returnId}
-        `);
-      }
+      shipmentId = created.shipmentId;
+      await rawQuery(sql`
+        UPDATE return_requests
+        SET shiprocket_return_awb = ${shipmentId}, updated_at = now()
+        WHERE id = ${returnId}
+      `);
     }
 
-    if (!address) {
-      return {
-        ok: false,
-        code: 'NO_ADDRESS',
-        message: 'We have no pickup address on file for this order.',
-      };
-    }
-
-    const pickup = await scheduleReversePickup({
-      rmaId: rmaId!,
-      customerName: address.fullName,
-      phone: address.phone,
-      email: address.email,
-      addressLine1: address.addressLine1,
-      addressLine2: address.addressLine2,
-      city: address.city,
-      state: address.state,
-      pincode: address.postalCode,
-      // Two days' lead time: same-day/next-day pickups are the single most
-      // common cause of a failed first attempt, and a failed attempt costs us a
-      // re-attempt fee and a day of the customer's patience.
-      pickupDate: pickupDateIn(2),
-    });
+    const pickup = await scheduleReversePickup({ shipmentId });
 
     // Only now do we commit the status. Everything above is safe to retry.
     const ok = await casStatus(returnId, row.status, 'PICKUP_SCHEDULED');
@@ -718,7 +726,7 @@ export async function bookReversePickup(
     await rawQuery(sql`
       UPDATE return_requests
       SET pickup_attempts = pickup_attempts + 1,
-          shiprocket_return_awb = COALESCE(${rmaId}, shiprocket_return_awb),
+          shiprocket_return_awb = COALESCE(${shipmentId}, shiprocket_return_awb),
           updated_at = now()
       WHERE id = ${returnId}
     `);
@@ -729,7 +737,7 @@ export async function bookReversePickup(
       toStatus: 'PICKUP_SCHEDULED',
       actor,
       data: {
-        rmaId,
+        shipmentId,
         pickupId: pickup.pickupId,
         alreadyScheduled: pickup.alreadyScheduled,
       },
@@ -738,7 +746,7 @@ export async function bookReversePickup(
     return {
       ok: true,
       status: 'PICKUP_SCHEDULED',
-      rmaId,
+      rmaId: shipmentId,
       alreadyScheduled: pickup.alreadyScheduled,
     };
   } catch (error) {
@@ -772,7 +780,7 @@ export async function bookReversePickup(
         return {
           ok: true,
           status: 'SELF_SHIP_PENDING',
-          rmaId,
+          rmaId: shipmentId,
           alreadyScheduled: false,
         };
       }
@@ -790,16 +798,31 @@ export async function bookReversePickup(
   }
 }
 
-/** ISO date N days out, skipping Sundays (couriers do not collect). */
-function pickupDateIn(days: number): string {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + days);
-  while (d.getUTCDay() === 0) d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
+/**
+ * Where return parcels are delivered TO — our warehouse.
+ *
+ * The reverse leg of the journey, and the mirror image of the customer pickup
+ * address. Kept in one function because the PIN and the contact number must
+ * agree across every return we book: a return address that differs from the
+ * warehouse the goods are inspected at is how a parcel ends up at a third-party
+ * sort centre that will refuse it.
+ */
+function warehouseAddress(): RmaAddress {
+  return {
+    fullName: process.env.SHIPROCKET_RETURN_NAME ?? 'Adore Returns',
+    email: process.env.SHIPROCKET_RETURN_EMAIL ?? 'returns@adore.ind.in',
+    phone: process.env.SHIPROCKET_RETURN_PHONE ?? '',
+    addressLine1: process.env.SHIPROCKET_RETURN_ADDRESS ?? '',
+    addressLine2: null,
+    city: process.env.SHIPROCKET_RETURN_CITY ?? '',
+    state: process.env.SHIPROCKET_RETURN_STATE ?? '',
+    pincode: process.env.SHIPROCKET_PICKUP_PINCODE ?? '560001',
+  };
 }
 
 /**
- * Mark a self-shipped return as received, and pay the published reimbursement.
+ * A customer's self-shipped return is marked received, and the published
+ * reimbursement recorded.
  *
  * The reimbursement is a real cost, so it is bounded three ways:
  *  - only from SELF_SHIP_PENDING (the only state where we asked for it);

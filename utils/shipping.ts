@@ -319,6 +319,25 @@ async function shiprocketPost(
   return res;
 }
 
+/** Authenticated GET, with the same single re-login retry as shiprocketPost. */
+async function shiprocketGet(path: string): Promise<Response> {
+  const send = (auth: string) =>
+    fetch(`${SHIPROCKET_BASE}${path}`, {
+      headers: { Authorization: auth },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+
+  let res = await send(await authHeader());
+  if (res.status === 401) {
+    bearerOverride = null;
+    loginPromise = loginPromise ?? loginForToken();
+    bearerOverride = await loginPromise;
+    loginPromise = null;
+    if (bearerOverride) res = await send(`Bearer ${bearerOverride}`);
+  }
+  return res;
+}
+
 async function checkWithShiprocket(
   pin: string,
   weightKg: number | null
@@ -565,55 +584,123 @@ export class ShiprocketReturnError extends Error {
 export type CreateRmaInput = {
   /** The original Shiprocket AWB the item shipped on. */
   awb: string;
+  /** Our human-readable order number. */
   orderId: string;
-  customerName: string;
-  customerEmail: string;
+  /** Collected FROM the customer. */
+  pickup: RmaAddress;
+  /** Delivered TO our warehouse. */
+  shipping: RmaAddress;
   /** Free-text; shows on the customer's dashboard. */
   returnReason: string;
-  /** Our internal return-request id, for reconciliation. */
+  /** Our internal return-request id, echoed for reconciliation. */
   requestId: string;
-  items: Array<{ name: string; sku: string; units: number }>;
+  items: Array<{ name: string; sku: string; units: number; sellingPrice: number }>;
+  /** Packed dimensions/weight for the return parcel. */
+  lengthCm: number;
+  breadthCm: number;
+  heightCm: number;
+  weightKg: number;
+};
+
+export type RmaAddress = {
+  fullName: string;
+  email: string;
+  phone: string;
+  addressLine1: string;
+  addressLine2?: string | null;
+  city: string;
+  state: string;
+  pincode: string;
+  country?: string;
 };
 
 /**
- * Register an RMA against the original AWB.
+ * Create the RETURN order — the first half of reverse logistics.
  *
- * `alreadyExisted` is returned when Shiprocket already has an open RMA on this
- * AWB. The caller treats that as success (the return still exists, we just
- * created it before), because a duplicate RMA would otherwise strand the
- * customer with a request the courier can never fulfil.
+ * ENDPOINT, CORRECTED AGAINST THE LIVE API
+ * The v1/external catalogue documents `POST /orders/create/return`. An earlier
+ * version of this adapter posted to `/orders/create/rma`, which does not exist —
+ * it returns `{"message":"404 Not Found"}`. Every return would therefore have
+ * failed at the first step. See scripts/probe-shiprocket.mjs, which asserts the
+ * path is routed.
+ *
+ * The body is a FULL order payload, not a thin `{awb, reason}`: the return
+ * parcel needs both endpoints (pickup = customer, shipping = our warehouse),
+ * line items, and dimensions for the courier to rate it. Omitting any of them
+ * returns 422 with the field list.
+ *
+ * Returns the Shiprocket `shipment_id`, which is what the pickup call keys on.
  */
-export async function createReturnRma(
+export async function createReturnOrder(
   input: CreateRmaInput
-): Promise<{ rmaId: string; alreadyExisted: boolean }> {
-  const res = await shiprocketPost('/orders/create/rma', {
-    awb: input.awb,
+): Promise<{ shipmentId: string; returnOrderId: string | null }> {
+  const addr = (a: RmaAddress) => ({
+    customer_name: a.fullName,
+    email: a.email,
+    phone: a.phone.replace(/\D/g, '').slice(-10),
+    address: [a.addressLine1, a.addressLine2].filter(Boolean).join(', '),
+    city: a.city,
+    state: a.state,
+    country: a.country ?? 'India',
+    pincode: a.pincode,
+  });
+
+  const payload = {
     order_id: input.orderId,
-    customer_name: input.customerName,
-    customer_email: input.customerEmail,
+    order_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    // A return parcel moves to us already paid for — we booked the pickup.
+    payment_method: 'Prepaid',
+    pickup_location: PICKUP_LOCATION,
+    pickup_customer_name: input.pickup.fullName,
+    pickup_address: addr(input.pickup).address,
+    pickup_address_2: input.pickup.addressLine2 ?? '',
+    pickup_city: input.pickup.city,
+    pickup_state: input.pickup.state,
+    pickup_country: input.pickup.country ?? 'India',
+    pickup_pincode: input.pickup.pincode,
+    pickup_phone: input.pickup.phone.replace(/\D/g, '').slice(-10),
+    pickup_email: input.pickup.email,
+
+    shipping_customer_name: input.shipping.fullName,
+    shipping_address: addr(input.shipping).address,
+    shipping_address_2: input.shipping.addressLine2 ?? '',
+    shipping_city: input.shipping.city,
+    shipping_state: input.shipping.state,
+    shipping_country: input.shipping.country ?? 'India',
+    shipping_pincode: input.shipping.pincode,
+    shipping_phone: input.shipping.phone.replace(/\D/g, '').slice(-10),
+
     return_reason: input.returnReason,
-    // Not a documented Shiprocket field, but echoed back on their dashboard and
-    // invaluable when reconciling our rows against theirs.
     remarks: `return_request_id=${input.requestId}`,
-    return_order_items: input.items.map(i => ({
+    order_items: input.items.map(i => ({
       name: i.name,
       sku: i.sku,
       units: i.units,
-      selling_price: 0,
+      selling_price: i.sellingPrice,
       discount: 0,
     })),
-  });
+    sub_total: input.items.reduce((s, i) => s + i.sellingPrice * i.units, 0),
+    length: input.lengthCm,
+    breadth: input.breadthCm,
+    height: input.heightCm,
+    weight: input.weightKg,
+  };
 
+  const res = await shiprocketPost('/orders/create/return', payload);
   const body = (await res.json().catch(() => ({}))) as {
     message?: string;
-    data?: { rma_id?: number | string; shipment_id?: number | string };
-    errors?: Record<string, string>;
+    errors?: Record<string, string[]>;
+    data?: {
+      shipment_id?: number | string;
+      id?: number | string;
+      return_order_id?: number | string;
+    };
   };
 
   if (!res.ok) {
     const detail = JSON.stringify(body.errors ?? body.message ?? '').toLowerCase();
-    if (detail.includes('already')) {
-      return { rmaId: '', alreadyExisted: true };
+    if (detail.includes('already') || detail.includes('rma')) {
+      return { shipmentId: '', returnOrderId: null }; // alreadyExisted
     }
     if (detail.includes('delivered')) {
       throw new ShiprocketReturnError(
@@ -621,7 +708,7 @@ export async function createReturnRma(
         'The courier has not marked this shipment as delivered yet.'
       );
     }
-    if (detail.includes('not found') || res.status === 404) {
+    if (res.status === 404) {
       throw new ShiprocketReturnError(
         'NOT_FOUND',
         'The courier has no record of this shipment.'
@@ -633,77 +720,80 @@ export async function createReturnRma(
     );
   }
 
-  const rmaId = body.data?.rma_id;
-  if (rmaId == null) {
+  const shipmentId = body.data?.shipment_id;
+  if (shipmentId == null) {
     throw new ShiprocketReturnError(
       'GATEWAY_ERROR',
-      'The courier accepted the return but returned no reference.'
+      'The courier accepted the return but returned no shipment reference.'
     );
   }
-  return { rmaId: String(rmaId), alreadyExisted: false };
+  return {
+    shipmentId: String(shipmentId),
+    returnOrderId: body.data?.return_order_id != null ? String(body.data.return_order_id) : null,
+  };
 }
 
 export type SchedulePickupInput = {
-  rmaId: string;
-  customerName: string;
-  /** 10-digit Indian mobile, digits only. */
-  phone: string;
-  addressLine1: string;
-  addressLine2?: string | null;
-  city: string;
-  state: string;
-  pincode: string;
-  email: string;
-  /** ISO date. Must be a working day with enough lead time for the courier. */
-  pickupDate: string;
+  /**
+   * Shiprocket's `shipment_id` for the RETURN order created by
+   * `createReturnOrder` — NOT an rma_id. Verified against the live API: the
+   * endpoint answers `{"message":"shipment_id is required"}`.
+   */
+  shipmentId: string;
+  /** Optional; lets an admin override the courier pickup location. */
+  pickupLocationId?: number;
 };
 
 /**
  * Book the reverse pickup.
  *
- * This is the step that costs us money — a rider is allocated — so it is
- * deliberately a separate call from createReturnRma. A crash between the two
- * leaves an RMA with no rider, which is recoverable and cheap; the reverse
- * (a rider booked against no RMA) leaves a customer standing outside with a
- * parcel and no reference.
+ * ENDPOINT, CORRECTED AGAINST THE LIVE API
+ * The previous implementation posted to `/orders/fetch_pickup_details`, which
+ * does not exist (404). The documented endpoint is
+ * `POST /courier/generate/pickup`, and it keys on the RETURN shipment id.
  *
- * PICKUP_UNAVAILABLE is a NORMAL outcome, not an error: large parts of India are
- * outside reverse-pickup coverage, which is exactly why the published policy
+ * The address and contact details come from the return order we just created,
+ * so they are not repeated here — which also removes a whole class of bug where
+ * the rider was sent to a different address than the parcel was booked with.
+ *
+ * This is the step that costs us money (a rider is allocated), so it stays
+ * separate from `createReturnOrder`. A crash between them leaves a return order
+ * with no rider — recoverable and cheap. The reverse would leave a rider booked
+ * against nothing.
+ *
+ * `PICKUP_UNAVAILABLE` is a NORMAL outcome, not an error: large parts of India
+ * are outside reverse-pickup coverage, which is exactly why the published policy
  * offers a self-ship fallback with reimbursement.
  */
 export async function scheduleReversePickup(
   input: SchedulePickupInput
 ): Promise<{ pickupId: string; alreadyScheduled: boolean }> {
-  const res = await shiprocketPost('/orders/fetch_pickup_details', {
-    rma_id: input.rmaId,
-    pickup_customer_name: input.customerName,
-    pickup_customer_email: input.email,
-    pickup_customer_phone: input.phone.replace(/\D/g, '').slice(-10),
-    pickup_address_1: input.addressLine1,
-    pickup_address_2: input.addressLine2 ?? '',
-    pickup_city: input.city,
-    pickup_state: input.state,
-    pickup_pincode: input.pincode,
-    pickup_date: input.pickupDate,
+  const res = await shiprocketPost('/courier/generate/pickup', {
+    shipment_id: input.shipmentId,
+    ...(input.pickupLocationId
+      ? { pickup_location_id: input.pickupLocationId }
+      : {}),
   });
 
   const body = (await res.json().catch(() => ({}))) as {
     message?: string;
     success?: boolean;
-    data?: { pickup_id?: number | string };
-    errors?: Record<string, string>;
+    data?: {
+      pickup_id?: number | string;
+      request_id?: number | string;
+    };
   };
 
   if (!res.ok || body.success === false) {
-    const detail = JSON.stringify(body.errors ?? body.message ?? '').toLowerCase();
+    const detail = String(body.message ?? '').toLowerCase();
     if (detail.includes('already')) {
       return { pickupId: '', alreadyScheduled: true };
     }
     if (
       detail.includes('serviceable') ||
-      detail.includes('not available') ||
+      detail.includes('not serviceable') ||
       detail.includes('unserviceable') ||
-      res.status === 422
+      detail.includes('not available')
     ) {
       throw new ShiprocketReturnError(
         'PICKUP_UNAVAILABLE',
@@ -716,7 +806,7 @@ export async function scheduleReversePickup(
     );
   }
 
-  const pickupId = body.data?.pickup_id;
+  const pickupId = body.data?.pickup_id ?? body.data?.request_id;
   if (pickupId == null) {
     throw new ShiprocketReturnError(
       'GATEWAY_ERROR',
@@ -735,37 +825,73 @@ export type ReturnTrackingStatus =
 /**
  * Read the live status of the return leg.
  *
- * Used to reconcile our database against the courier's system of record, and by
- * the admin queue to spot a parcel that has gone quiet. We deliberately only
- * interpret the handful of statuses the state machine knows about — anything
- * else returns null, and the caller leaves the row alone rather than guessing
- * and moving a customer's return forward on a misread.
+ * ENDPOINT, CORRECTED AGAINST THE LIVE API
+ * There is no `/orders/track/rma`. The documented endpoint is
+ * `GET /orders/processing/return`, which returns `{ data: [...], meta: {...} }`.
+ *
+ * Only ever moves FORWARD, and only within the goods-moving states. A courier
+ * status that goes backwards (a re-scan, a mis-keyed event) must not drag a
+ * customer's parcel out of "received" and back into "in transit" — that would
+ * make a refund that has already been paid look outstanding in the UI.
+ *
+ * We deliberately interpret only the handful of states the workflow acts on —
+ * anything unknown returns null and the caller leaves the row alone, rather than
+ * guessing and moving a customer's return forward on a misread.
  */
 export async function fetchReturnTracking(
-  rmaId: string
+  shipmentId: string
 ): Promise<{ status: ReturnTrackingStatus; awb: string | null } | null> {
-  const res = await shiprocketPost('/orders/track/rma', { rma_id: rmaId });
+  const res = await shiprocketGet(
+    `/orders/processing/return?return_status=ALL&per_page=100`
+  );
   if (!res.ok) return null;
 
   const body = (await res.json().catch(() => ({}))) as {
-    data?: {
+    data?: Array<{
+      shipment_id?: number | string;
       awb?: string;
-      status?: number;
-    };
+      return_status?: string;
+      status?: string;
+    }>;
   };
 
-  // Shiprocket's numeric status codes for the RMA leg. Undocumented and
-  // occasionally reordered, so the mapping is intentionally conservative: we
-  // only claim to know the four states the workflow acts on.
-  const statusMap: Record<number, ReturnTrackingStatus> = {
-    3: 'IN_TRANSIT',
-    4: 'RECEIVED',
-    6: 'PICKUP_FAILED',
-    9: 'RECEIVED',
-  };
-  const mapped = body.data?.status != null ? statusMap[body.data.status] : undefined;
+  const row = (body.data ?? []).find(
+    r => String(r.shipment_id ?? '') === String(shipmentId)
+  );
+  if (!row) return null;
+
+  const mapped = mapReturnStatus(
+    String(row.return_status ?? row.status ?? '').toUpperCase()
+  );
   if (!mapped) return null;
 
-  return { status: mapped, awb: body.data?.awb ?? null };
+  return { status: mapped, awb: row.awb ?? null };
+}
+
+/**
+ * Map Shiprocket's return status vocabulary onto our state machine.
+ *
+ * Unknown values return null on purpose. Silently defaulting to IN_TRANSIT would
+ * mean a parcel we know nothing about appears to be moving, and — worse — a
+ * future status we have not seen would be treated as progress.
+ */
+function mapReturnStatus(raw: string): ReturnTrackingStatus | null {
+  switch (raw) {
+    case 'PICKUP_SCHEDULED':
+    case 'PICKUP REQUESTED':
+      return 'PICKUP_SCHEDULED';
+    case 'PICKUP_FAILED':
+    case 'PICKUP CANCELLED':
+      return 'PICKUP_FAILED';
+    case 'IN_TRANSIT':
+    case 'SHIPPED':
+    case 'RMA_IN_TRANSIT':
+      return 'IN_TRANSIT';
+    case 'DELIVERED':
+    case 'RMA_DELIVERED':
+      return 'RECEIVED';
+    default:
+      return null;
+  }
 }
 
