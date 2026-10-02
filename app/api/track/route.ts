@@ -8,6 +8,7 @@ import {
   syncReturnFromCourier,
 } from '@/utils/returns-ops';
 import { rawQuery, sql } from '@/utils/db';
+import { mapReturnStatus, type ReturnTrackingStatus } from '@/utils/shipping';
 
 /**
  * POST /api/track — inbound tracking updates from the courier.
@@ -169,7 +170,10 @@ export async function POST(request: Request) {
       case 'IN_TRANSIT':
       case 'PICKED_UP':
       case 'RMA_IN_TRANSIT': {
-        await syncReturnsForReturnShipment(String(payload.shipment_id ?? ''));
+        await syncReturnsForReturnShipment(
+          String(payload.shipment_id ?? ''),
+          trackingFrom(payload.shipment_status, payload.awb)
+        );
         break;
       }
 
@@ -179,7 +183,10 @@ export async function POST(request: Request) {
       case 'DELIVERED_RTO':
       case 'RMA_DELIVERED':
       case 'RMA_RECEIVED': {
-        await syncReturnsForReturnShipment(String(payload.shipment_id ?? ''));
+        await syncReturnsForReturnShipment(
+          String(payload.shipment_id ?? ''),
+          trackingFrom(payload.shipment_status, payload.awb)
+        );
         break;
       }
 
@@ -216,8 +223,38 @@ export async function POST(request: Request) {
   }
 }
 
-/** Reconcile every open return attached to a return shipment. */
-async function syncReturnsForReturnShipment(shipmentId: string): Promise<void> {
+/**
+ * Build the tracking hint we hand to each sync from the inbound payload.
+ *
+ * Returns null for a status we don't recognise, which makes the sync fall back
+ * to asking the courier directly. That is the safe direction: an unrecognised
+ * event costs one API call, whereas a wrong guess would advance a customer's
+ * return on bad information.
+ */
+function trackingFrom(
+  rawStatus: unknown,
+  awb: unknown
+): { status: ReturnTrackingStatus; awb: string | null } | null {
+  const status = mapReturnStatus(
+    typeof rawStatus === 'string' ? rawStatus : null
+  );
+  if (!status) return null;
+  return { status, awb: typeof awb === 'string' ? awb : null };
+}
+
+/**
+ * Reconcile every open return attached to a return shipment.
+ *
+ * The inbound payload already carries the authoritative courier status, so it is
+ * threaded through to each sync. That matters at the limit: a shipment with five
+ * open returns used to make five IDENTICAL `GET /orders/processing/return`
+ * calls to the courier, each paging in 100 rows, purely to re-read a status we
+ * had just been told. We now make zero courier calls on the common path.
+ */
+async function syncReturnsForReturnShipment(
+  shipmentId: string,
+  tracking?: { status: ReturnTrackingStatus; awb: string | null } | null
+): Promise<void> {
   if (!shipmentId) return;
   const rows = await rawQuery<{ id: string }>(sql`
     SELECT id FROM return_requests
@@ -225,14 +262,19 @@ async function syncReturnsForReturnShipment(shipmentId: string): Promise<void> {
       AND status NOT IN ('REFUNDED','REJECTED','CANCELLED','QC_PASSED','QC_FAILED')
     LIMIT 5
   `);
-  for (const row of rows) {
-    try {
-      await syncReturnFromCourier(row.id);
-    } catch (error) {
-      // One bad return must not stop the others from syncing.
-      console.error(`[courier-webhook] sync failed for ${row.id}:`, error);
-    }
-  }
+  // Every row is independent, so reconcile them concurrently. Five sequential
+  // syncs meant five sequential write sequences on the request path; webhook
+  // endpoints have a response budget and a courier retry storm will eat it.
+  await Promise.all(
+    rows.map(async row => {
+      try {
+        await syncReturnFromCourier(row.id, tracking);
+      } catch (error) {
+        // One bad return must not stop the others from syncing.
+        console.error(`[courier-webhook] sync failed for ${row.id}:`, error);
+      }
+    })
+  );
 }
 
 /**

@@ -823,6 +823,56 @@ export type ReturnTrackingStatus =
   | 'RECEIVED';
 
 /**
+ * Map Shiprocket's return-leg vocabulary onto our state machine.
+ *
+ * ONE mapper, three call sites. It serves the tracking API response, the
+ * inbound webhook payload, and anything added later. That consolidation is the
+ * point: when the two API shapes disagreed, the API path and the webhook path
+ * could advance a customer's return differently from the same physical event —
+ * the webhook silently missing statuses the API knew about. Unknown values
+ * return null on purpose, so a parcel we know nothing about is left alone rather
+ * than appearing to move; defaulting to IN_TRANSIT would also treat every future
+ * status as progress.
+ *
+ * Aliases from BOTH surfaces are listed, including the space-separated spellings
+ * the tracking API returns alongside the underscore-separated webhook ones.
+ */
+export function mapReturnStatus(
+  raw: string | null | undefined
+): ReturnTrackingStatus | null {
+  switch ((raw ?? '').trim().toUpperCase()) {
+    case 'PICKUP_SCHEDULED':
+    case 'PICKUP REQUESTED':
+    case 'PICKUP_CONFIRMED':
+      return 'PICKUP_SCHEDULED';
+
+    case 'PICKUP_FAILED':
+    case 'PICKUP CANCELLED':
+    case 'CANCELLED':
+    case 'CANCELLED_BY_SELLER':
+    case 'RTO_INITIATED':
+      return 'PICKUP_FAILED';
+
+    case 'IN_TRANSIT':
+    case 'SHIPPED':
+    case 'PICKED_UP':
+    case 'RMA_IN_TRANSIT':
+      return 'IN_TRANSIT';
+
+    // Only ever reached on the RETURN leg — this function is never applied to a
+    // forward shipment, where "DELIVERED" means something entirely different.
+    case 'DELIVERED':
+    case 'DELIVERED_RTO':
+    case 'RMA_DELIVERED':
+    case 'RMA_RECEIVED':
+      return 'RECEIVED';
+
+    default:
+      return null;
+  }
+}
+
+/**
  * Read the live status of the return leg.
  *
  * ENDPOINT, CORRECTED AGAINST THE LIVE API
@@ -866,32 +916,5 @@ export async function fetchReturnTracking(
   if (!mapped) return null;
 
   return { status: mapped, awb: row.awb ?? null };
-}
-
-/**
- * Map Shiprocket's return status vocabulary onto our state machine.
- *
- * Unknown values return null on purpose. Silently defaulting to IN_TRANSIT would
- * mean a parcel we know nothing about appears to be moving, and — worse — a
- * future status we have not seen would be treated as progress.
- */
-function mapReturnStatus(raw: string): ReturnTrackingStatus | null {
-  switch (raw) {
-    case 'PICKUP_SCHEDULED':
-    case 'PICKUP REQUESTED':
-      return 'PICKUP_SCHEDULED';
-    case 'PICKUP_FAILED':
-    case 'PICKUP CANCELLED':
-      return 'PICKUP_FAILED';
-    case 'IN_TRANSIT':
-    case 'SHIPPED':
-    case 'RMA_IN_TRANSIT':
-      return 'IN_TRANSIT';
-    case 'DELIVERED':
-    case 'RMA_DELIVERED':
-      return 'RECEIVED';
-    default:
-      return null;
-  }
 }
 

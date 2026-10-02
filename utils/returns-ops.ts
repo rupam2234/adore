@@ -31,6 +31,7 @@ import {
   fetchReturnTracking,
   ShiprocketReturnError,
   type RmaAddress,
+  type ReturnTrackingStatus,
 } from '@/utils/shipping';
 import { toPaise } from '@/utils/checkout-format';
 import {
@@ -1844,31 +1845,36 @@ export async function getAdminReturnDetail(
   }>;
 }> {
   const rows = await rawQuery<AdminReturnRow>(ADMIN_SELECT_WHERE_ID(returnId));
-  const events = await rawQuery<{
-    event: string;
-    from_status: string | null;
-    to_status: string | null;
-    actor: string;
-    created_at: string;
-  }>(sql`
-    SELECT event, from_status, to_status, actor, created_at
-    FROM return_events
-    WHERE return_request_id = ${returnId}
-    ORDER BY created_at ASC
-  `);
-
-  const refunds = await rawQuery<{
-    id: string;
-    amount: string;
-    status: string;
-    razorpay_refund_id: string | null;
-    created_at: string;
-  }>(sql`
-    SELECT id, amount::text, status, razorpay_refund_id, created_at
-    FROM refunds
-    WHERE return_request_id = ${returnId}
-    ORDER BY created_at ASC
-  `);
+  // The two detail queries run in parallel rather than in series. On the Neon
+  // HTTP driver each round-trip costs ~120ms, and they are completely
+  // independent, so serialising them doubled the latency of the admin drawer
+  // for no reason.
+  const [events, refunds] = await Promise.all([
+    rawQuery<{
+      event: string;
+      from_status: string | null;
+      to_status: string | null;
+      actor: string;
+      created_at: string;
+    }>(sql`
+      SELECT event, from_status, to_status, actor, created_at
+      FROM return_events
+      WHERE return_request_id = ${returnId}
+      ORDER BY created_at ASC
+    `),
+    rawQuery<{
+      id: string;
+      amount: string;
+      status: string;
+      razorpay_refund_id: string | null;
+      created_at: string;
+    }>(sql`
+      SELECT id, amount::text, status, razorpay_refund_id, created_at
+      FROM refunds
+      WHERE return_request_id = ${returnId}
+      ORDER BY created_at ASC
+    `),
+  ]);
 
   return {
     request: rows[0] ? mapAdminReturn(rows[0]) : null,
@@ -1988,15 +1994,20 @@ export async function handleOrderDelivered(input: {
 /**
  * Sync one return's state from the courier's tracking.
  *
+ * `tracking` MAY be supplied by the caller. This exists because the webhook
+ * handler already has the authoritative status in the inbound payload, and
+ * without this parameter the handler would re-fetch the SAME 100-row return list
+ * from the courier once per affected return — five identical API round-trips to
+ * learn one fact we were just told. Passing it in removes that entirely.
+ *
  * Only ever moves FORWARD, and only within the goods-moving states. A courier
  * status that goes backwards (a re-scan, a mis-keyed event) must not drag a
  * customer's parcel out of "received" and back into "in transit" — that would
  * make a refund that has already been paid look outstanding in the UI.
- *
- * Returns what it did, so the caller can decide whether to notify.
  */
 export async function syncReturnFromCourier(
-  returnId: string
+  returnId: string,
+  tracking?: { status: ReturnTrackingStatus; awb: string | null } | null
 ): Promise<{ changed: boolean; status?: string }> {
   const row = await loadOpsRow(returnId);
   if (!row) return { changed: false };
@@ -2010,24 +2021,25 @@ export async function syncReturnFromCourier(
     return { changed: false };
   }
 
-  const tracking = await fetchReturnTracking(row.shiprocket_return_awb);
-  if (!tracking) return { changed: false };
+  // Fall back to asking the courier only when the caller could not tell us.
+  const known = tracking ?? (await fetchReturnTracking(row.shiprocket_return_awb));
+  if (!known) return { changed: false };
 
   // Only IN_TRANSIT is applied automatically. PICKUP_FAILED needs a human to
   // choose between a retry and the self-ship fallback, and RECEIVED still has to
   // pass QC before it means anything — so both are surfaced, not enacted.
-  if (tracking.status === 'PICKUP_FAILED') {
+  if (known.status === 'PICKUP_FAILED') {
     await recordEvent({
       returnRequestId: returnId,
       event: 'courier_pickup_failed',
       fromStatus: row.status,
-      actor: 'system:shiprocket-webhook',
-      data: { rmaId: row.shiprocket_return_awb },
+      actor: 'system:courier-webhook',
+      data: { shipmentId: row.shiprocket_return_awb },
     });
     return { changed: false, status: 'PICKUP_FAILED' };
   }
 
-  if (tracking.status === 'IN_TRANSIT') {
+  if (known.status === 'IN_TRANSIT') {
     const ok = await casStatus(returnId, row.status, 'IN_TRANSIT');
     if (ok) {
       await recordEvent({
@@ -2035,18 +2047,18 @@ export async function syncReturnFromCourier(
         event: 'in_transit',
         fromStatus: row.status,
         toStatus: 'IN_TRANSIT',
-        actor: 'system:shiprocket-webhook',
-        data: { awb: tracking.awb },
+        actor: 'system:courier-webhook',
+        data: { awb: known.awb },
       });
       return { changed: true, status: 'IN_TRANSIT' };
     }
   }
 
-  if (tracking.status === 'RECEIVED') {
+  if (known.status === 'RECEIVED') {
     const outcome = await markReceived(
       returnId,
-      'system:shiprocket-webhook',
-      tracking.awb ?? undefined
+      'system:courier-webhook',
+      known.awb ?? undefined
     );
     return { changed: outcome.ok, status: outcome.ok ? 'RECEIVED' : undefined };
   }
