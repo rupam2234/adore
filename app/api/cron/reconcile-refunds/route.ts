@@ -12,8 +12,17 @@ import { reconcileRefunds } from '@/utils/returns-ops';
  * sending another refund. That distinction is the whole point: a retry loop that
  * re-sends on every timeout is how a business pays the same customer twice.
  *
+ * SCHEDULE (vercel.json): daily at 03:00 UTC. The project is on the Hobby plan,
+ * which allows cron jobs but only once per day — a 15-minute schedule would be
+ * rejected at deploy time. Daily is also the right cadence here anyway: this
+ * only resolves refunds whose process died mid-call, so an hour of delay costs
+ * a customer one extra day at worst. Move to Pro for tighter intervals.
+ *
  * Auth: a bearer token compared in constant time. Cron endpoints are public URLs,
  * and an unauthenticated one here would let anyone trigger gateway calls.
+ *
+ * Vercel sends `Authorization: Bearer $CRON_SECRET` automatically for scheduled
+ * runs, so no manual token plumbing is needed once CRON_SECRET is set.
  */
 
 const CRON_SECRET = process.env.CRON_SECRET ?? '';

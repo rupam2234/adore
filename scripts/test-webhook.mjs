@@ -6,8 +6,13 @@
 // exact bytes you send, and the handler can find the ids it needs.
 //
 // Usage:
-//   node scripts/test-webhook.mjs refund
+//   node scripts/test-webhook.mjs refund            # against http://localhost:3000
 //   node scripts/test-webhook.mjs dispute
+//
+// Against a deployed site (needs the secret; do NOT run this with the production
+// secret on an untrusted machine, and remember the test ids match no real row):
+//   WEBHOOK_TARGET=https://adore.ind.in/api/webhooks/razorpay \
+//   RAZORPAY_WEBHOOK_SECRET=whsec_xxx node scripts/test-webhook.mjs refund
 //
 // Run your app first (npm run dev). Expect 401 if RAZORPAY_WEBHOOK_SECRET is
 // unset, and 200 if the signature checks out.
@@ -19,6 +24,9 @@ const target =
   process.env.WEBHOOK_TARGET ?? 'http://localhost:3000/api/webhooks/razorpay';
 
 function env(name) {
+  // The environment wins over .env.local, so the same script works locally and
+  // against a deployment without editing it.
+  if (process.env[name]) return process.env[name];
   const line = readFileSync('.env.local', 'utf8')
     .split('\n')
     .find(l => l.trim().startsWith(`${name}=`));
