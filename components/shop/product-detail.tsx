@@ -43,6 +43,8 @@ export default function ProductDetail({
     ? (product.sizes.find(s => s.size === selectedSize) ?? null)
     : null;
   const displayPrice = selectedVariant?.price ?? product.price;
+  /* An unreviewed product is new, not broken — it still shows the star scale. */
+  const hasReviews = !!reviewSummary && reviewSummary.count > 0;
   const displayCompareAtPrice =
     selectedVariant?.compareAtPrice ?? product.compareAtPrice;
   const sizePrices = product.sizes
@@ -245,28 +247,41 @@ export default function ProductDetail({
       <div className="order-2 mt-2 min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
         <div className="flex flex-col gap-3 lg:sticky lg:top-25 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-2 scrollbar-thin">
           <div>
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <h1 className="font-serif text-3xl font-semibold tracking-tight">
                 {product.name}
               </h1>
-              {reviewSummary && reviewSummary.count > 0 && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    document
-                      .getElementById('reviews')
-                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }
-                  aria-label={`Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`}
-                  title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? '' : 's'}. Jump to reviews`}
-                  className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
-                >
-                  <Stars value={reviewSummary.average} />
-                  <span className="text-xs text-[#2B2620]/50 underline-offset-4 group-hover:underline">
-                    {reviewSummary.average.toFixed(1)} ({reviewSummary.count})
-                  </span>
-                </button>
-              )}
+              {/* Stars render for EVERY product, reviewed or not. A product with no
+                  rating yet should still show the scale, so shoppers know reviews
+                  exist and what the maximum is. `count > 0` previously removed
+                  the control entirely, which made an unreviewed product look
+                  broken rather than new. */}
+              <button
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById('reviews')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                aria-label={
+                  hasReviews
+                    ? `Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`
+                    : 'No reviews yet. Jump to reviews to be the first to review.'
+                }
+                title={
+                  hasReviews
+                    ? `${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? '' : 's'}. Jump to reviews`
+                    : 'No reviews yet. Jump to reviews'
+                }
+                className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
+              >
+                <Stars value={hasReviews ? reviewSummary.average : 0} />
+                {/* <span className="text-xs text-[#2B2620]/50 underline-offset-4 group-hover:underline">
+                  {hasReviews
+                    ? `${reviewSummary.average.toFixed(1)} (${reviewSummary.count})`
+                    : 'No reviews yet'}
+                </span> */}
+              </button>
             </div>
             {product.shortDescription && (
               <p className="mt-2 text-sm text-[#2B2620]/60">
@@ -275,11 +290,11 @@ export default function ProductDetail({
             )}
           </div>
 
-          <p className="text-sm text-[#2B2620]/60">
+          <p className="text-xl font-semibold tracking-tight text-[#2B2620]">
             {displayCompareAtPrice &&
             Number(displayCompareAtPrice) > Number(displayPrice) ? (
               <>
-                <span className="mr-2 text-[#2B2620]/40 line-through">
+                <span className="mr-2 text-base font-normal text-[#2B2620]/40 line-through">
                   {formatPrice(displayCompareAtPrice, product.currency)}
                 </span>
                 <span className="text-[#A45A4B]">
@@ -290,7 +305,7 @@ export default function ProductDetail({
               formatPrice(displayPrice, product.currency)
             )}
             {!selectedVariant && hasVaryingPrices && (
-              <span className="ml-2 text-xs text-[#2B2620]/40">
+              <span className="ml-2 text-xs font-normal text-[#2B2620]/40">
                 · varies by size
               </span>
             )}

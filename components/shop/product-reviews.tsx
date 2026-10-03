@@ -221,25 +221,36 @@ export default function ProductReviews({
               </div>
             </>
           ) : (
-            <p className="text-sm text-[#2B2620]/60">
-              No reviews yet. Be the first to share your love.
-            </p>
+            /* An empty scale beats the absence of one: the shopper can see the
+               1-5 range exists and knows there is nothing yet, which invites
+               the first review instead of implying the feature is unavailable. */
+            <div>
+              {/* <Stars value={0} /> */}
+              <p className="mt-1 px-0.5 text-sm text-[#2B2620]/60">
+                No reviews yet. Yours could be the first.
+              </p>
+            </div>
           )}
-          {/*
-            The CTA tracks eligibility so the section never invites a review
-            the API would reject. While `eligibility` is null we show nothing
-            rather than guessing — a wrong "Write a review" is worse than a
-            button that appears a moment later.
-          */}
-          {eligibility === 'eligible' && (
-            <button
-              type="button"
-              onClick={openForm}
-              className="ml-auto cursor-pointer rounded-full border border-[#2B2620] px-6 py-3 text-sm transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3]"
-            >
-              Write a review
-            </button>
-          )}
+          {/* The CTA is ALWAYS visible. Eligibility is enforced at submit time
+              by the API, not by hiding the control: a shopper who bought the
+              item should never wonder whether they are allowed to review, and a
+              visitor who has not should still see that reviews exist and what
+              they require. Non-buyers click, and are told why they cannot post,
+              instead of the feature silently not existing for them.
+              `eligibility === null` means "still checking", so the link renders
+              in a neutral state rather than guessing. */}
+          <button
+            type="button"
+            onClick={openForm}
+            aria-disabled={eligibility === null}
+            className={`ml-auto rounded-full border border-[#2B2620] px-6 py-3 text-sm transition-colors ${
+              eligibility === null
+                ? 'cursor-wait border-[#2B2620]/30 text-[#2B2620]/40'
+                : 'cursor-pointer hover:bg-[#2B2620] hover:text-[#FAF8F3]'
+            }`}
+          >
+            Write a review
+          </button>
         </div>
         {formOpen && (
           <div
@@ -261,26 +272,31 @@ export default function ProductReviews({
                 <p className="mt-1 text-sm text-[#2B2620]/60">
                   {eligibility === 'already_reviewed'
                     ? REVIEW_BLOCK_MESSAGES.already_reviewed
-                    : REVIEW_BLOCK_MESSAGES.not_purchased}
+                    : eligibility === 'logged_out'
+                      ? REVIEW_BLOCK_MESSAGES.logged_out
+                      : REVIEW_BLOCK_MESSAGES.not_purchased}
                 </p>
-                {eligibility !== 'already_reviewed' && (
-                  <>
+                {eligibility !== 'already_reviewed' &&
+                  /* A signed-out visitor's only useful next step is to sign in —
+                     logging in may reveal they DID buy the item. Offering
+                     "View your orders" to someone with no account is a dead end. */
+                  (eligibility === 'logged_out' ? (
+                    <a
+                      href={`/login?next=${encodeURIComponent(
+                        `/products/${slug}`
+                      )}`}
+                      className="mt-4 inline-block cursor-pointer rounded-full bg-[#2B2620] px-6 py-3 text-sm text-[#FAF8F3] transition-colors hover:bg-[#5C6B4B]"
+                    >
+                      Log in to write a review
+                    </a>
+                  ) : (
                     <a
                       href={ORDERS_PATH}
                       className="mt-4 inline-block cursor-pointer rounded-full border border-[#2B2620] px-6 py-3 text-sm transition-colors hover:bg-[#2B2620] hover:text-[#FAF8F3]"
                     >
                       View your orders
                     </a>
-                    <a
-                      href={`/login?next=${encodeURIComponent(
-                        `/products/${slug}`
-                      )}`}
-                      className="mt-4 ml-3 inline-block cursor-pointer text-sm underline underline-offset-4"
-                    >
-                      Not you? Log in
-                    </a>
-                  </>
-                )}
+                  ))}
               </div>
             )}
           </div>

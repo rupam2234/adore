@@ -67,7 +67,7 @@ export default function Header() {
               </span>
               <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
             </Link>
-            {/* Dropdown — anchored to this item, floats over content. */}
+
             <div
               aria-hidden={!megaOpen}
               className={`absolute left-1/2 top-full z-50 w-[min(40rem,88vw)] -translate-x-1/2 pt-3 transition-[opacity,transform] duration-200 ease-out ${megaOpen ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-1 opacity-0'}`}
@@ -157,10 +157,10 @@ export default function Header() {
             </div>
           </div>
           <Link
-            href="/#how-we-make-it"
+            href="/#journal"
             className="group relative inline-block hover:text-[#5C6B4B]"
           >
-            How we make it
+            Journal
             <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
           </Link>
         </nav>
@@ -231,6 +231,7 @@ export default function Header() {
           </button>
         </div>
       </div>
+
       {/* Mobile menu */}
       {mobileOpen && (
         <nav
