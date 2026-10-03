@@ -91,7 +91,7 @@ export default async function Home() {
             </>
           ) : (
             <p className="text-center text-sm text-[#2B2620]/60">
-              No pieces yet — check back soon.
+              No pieces yet. Check back soon.
             </p>
           )}
         </div>

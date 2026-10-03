@@ -37,20 +37,20 @@ export default function PrivacyPolicyPage() {
         </p>
         <ul className="list-disc space-y-2 pl-6">
           <li>
-            <strong>Order information</strong> — name, shipping and billing
+            <strong>Order information</strong>: name, shipping and billing
             address, email, phone number, and order history.
           </li>
           <li>
-            <strong>Payment information</strong> — handled by our payment
+            <strong>Payment information</strong>: handled by our payment
             processors. We never store full card numbers, CVV codes, or payment
             credentials on our servers.
           </li>
           <li>
-            <strong>Account information</strong> — email address and password
+            <strong>Account information</strong>: email address and password
             (stored only as a secure hash) if you create an account.
           </li>
           <li>
-            <strong>Usage data</strong> — pages viewed, cart activity, and
+            <strong>Usage data</strong>: pages viewed, cart activity, and
             device/browser information, used to improve the shopping experience.
           </li>
         </ul>
@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
       <Section title="4. Sharing your information">
         <p>
           We only share data with service providers who need it to run the store
-          — payment processors, delivery carriers, and email delivery services —
+          with payment processors, delivery carriers, and email delivery services
           under agreements that require them to protect your data. We never sell
           your personal information.
         </p>

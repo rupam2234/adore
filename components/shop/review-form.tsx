@@ -11,19 +11,21 @@ import { StarInput } from './stars';
 type Props = {
   slug: string;
   sizes: string[];
-  /** Account display name when logged in — read-only for members, editable for guests. */
-  authorName: string | null;
+  /** Account display name — always present, since only signed-in buyers get here. */
+  authorName: string;
   onPosted: (review: ProductReview) => void;
 };
 
+/**
+ * Review form for a VERIFIED BUYER.
+ *
+ * The parent only renders this once the server has confirmed eligibility, and
+ * the POST route re-checks independently, so this component assumes an account:
+ * there is no guest name field, and no "held for moderation" state — every
+ * review that reaches the API is published immediately.
+ */
 export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
-  const isLoggedIn = authorName !== null;
-
   const [rating, setRating] = useState(0);
-  const [reviewerName, setReviewerName] = useState(
-    isLoggedIn ? authorName! : ''
-  );
-  const [reviewerEmail, setReviewerEmail] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [sizePurchased, setSizePurchased] = useState('');
@@ -31,7 +33,6 @@ export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formOk, setFormOk] = useState(false);
-  const [pending, setPending] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,7 +57,6 @@ export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Submit failed');
       if (data.review) onPosted(data.review);
-      setPending(data.approved === false);
       setRating(0);
       setTitle('');
       setBody('');
@@ -75,16 +75,14 @@ export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
       <div className="py-2 text-center">
         <p className="font-serif text-xl">Thank you! ♥</p>
         <p className="mt-1 text-sm text-[#2B2620]/60">
-          {pending
-            ? "Your review has been submitted and will appear once it's approved."
-            : 'Your review is live below.'}
+          Your review is live below.
         </p>
         <button
           type="button"
           onClick={() => setFormOk(false)}
           className="mt-3 cursor-pointer text-sm underline underline-offset-4"
         >
-          Write another
+          Back to the form
         </button>
       </div>
     );
@@ -100,30 +98,14 @@ export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
         <StarInput value={rating} onChange={setRating} />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {isLoggedIn ? (
-          <div className="flex flex-col gap-1.5 text-sm">
-            <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-              Posting as
-            </span>
-            <p className="border border-dashed border-[#2B2620]/20 bg-transparent px-3 py-2.5 text-sm text-[#2B2620]/70">
-              {authorName}
-            </p>
-          </div>
-        ) : (
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
-              Your name *
-            </span>
-            <input
-              value={reviewerName}
-              onChange={e => setReviewerName(e.target.value)}
-              placeholder="How should we call you?"
-              maxLength={100}
-              required
-              className="border border-[#2B2620]/20 bg-[#FAF8F3] px-3 py-2.5 text-sm outline-none placeholder:text-[#2B2620]/35 focus:border-[#2B2620]"
-            />
-          </label>
-        )}
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
+            Posting as
+          </span>
+          <p className="border border-dashed border-[#2B2620]/20 bg-transparent px-3 py-2.5 text-sm text-[#2B2620]/70">
+            {authorName}
+          </p>
+        </div>
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
             Headline
@@ -137,11 +119,12 @@ export function ReviewForm({ slug, sizes, authorName, onPosted }: Props) {
           />
         </label>
       </div>
-      {!isLoggedIn && (
-        <p className="text-xs text-[#2B2620]/50">
-          Guest reviews are held for moderation before they appear publicly.
-        </p>
-      )}
+      {/* Verified buyers only — stated up front so nobody expects a moderation
+          wait, and so the restriction reads as a feature rather than a bug. */}
+      <p className="text-xs text-[#2B2620]/50">
+        You&apos;re reviewing as a verified buyer, so your review will be
+        published straight away.
+      </p>
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="text-[11px] uppercase tracking-wide text-[#2B2620]/50">
           Your review *

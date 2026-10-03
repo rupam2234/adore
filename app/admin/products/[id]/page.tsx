@@ -5,7 +5,7 @@ import { ImageManager } from '@/components/admin/image-manager';
 import { requireAdminPage } from '@/utils/admin-session';
 
 export const metadata = {
-  title: 'Edit product — Admin',
+  title: 'Edit product | Admin',
   robots: { index: false, follow: false },
 };
 

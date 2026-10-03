@@ -3,10 +3,17 @@ import { db, productReviews } from '@/utils';
 import {
   getApprovedReviews,
   getProductIdBySlug,
+  getReviewAuthorName,
   getReviewSummary,
+  hasAlreadyReviewedProduct,
   hasPurchasedProduct,
   type ReviewSort,
 } from '@/utils/reviews';
+import {
+  evaluateReviewEligibility,
+  REVIEW_BLOCK_MESSAGES,
+  type ReviewEligibility,
+} from '@/utils/review-format';
 import { getSessionUserId } from '@/utils/request-user';
 import { getUserById } from '@/utils/auth';
 
@@ -30,7 +37,13 @@ function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
-/** GET /api/products/[slug]/reviews?page=1&limit=5&sort=recent|helpful */
+/** GET /api/products/[slug]/reviews?page=1&limit=5&sort=recent|helpful
+ *
+ * Also reports `eligibility` for the current viewer so the client knows whether
+ * to render the form or the "verified buyers only" notice. It is resolved from
+ * the session here (not in the ISR-cached page) so the cached product shell
+ * stays cacheable while the gate stays per-viewer.
+ */
 export async function GET(request: Request, { params }: RouteContext) {
   const { slug } = await params;
   const productId = await getProductIdBySlug(slug);
@@ -47,9 +60,10 @@ export async function GET(request: Request, { params }: RouteContext) {
   const sort: ReviewSort =
     url.searchParams.get('sort') === 'helpful' ? 'helpful' : 'recent';
 
-  const [summary, { reviews, total }] = await Promise.all([
+  const [summary, { reviews, total }, eligibility] = await Promise.all([
     getReviewSummary(productId),
     getApprovedReviews(productId, { page, limit, sort }),
+    resolveEligibility(productId),
   ]);
 
   return NextResponse.json({
@@ -59,13 +73,49 @@ export async function GET(request: Request, { params }: RouteContext) {
     limit,
     total,
     totalPages: Math.max(1, Math.ceil(total / limit)),
+    eligibility,
+  });
+}
+
+/**
+ * Eligibility of the caller for this product.
+ *
+ * A signed-out visitor is reported as `logged_out` WITHOUT a DB round-trip:
+ * there is no user id to check purchases against anyway.
+ */
+async function resolveEligibility(
+  productId: string
+): Promise<ReviewEligibility> {
+  const userId = await getSessionUserId();
+  if (!userId) return 'logged_out';
+
+  const user = await getUserById(userId);
+  if (!user) return 'logged_out';
+
+  const [hasPurchased, alreadyReviewed] = await Promise.all([
+    hasPurchasedProduct(userId, productId),
+    hasAlreadyReviewedProduct(
+      userId,
+      productId,
+      getReviewAuthorName(user)
+    ),
+  ]);
+
+  return evaluateReviewEligibility({
+    loggedIn: true,
+    hasPurchased,
+    alreadyReviewed,
   });
 }
 
 /** POST /api/products/[slug]/reviews — submit a review.
  *
- * Logged-in users: verified purchases are auto-approved; others held for
- * moderation. Guest reviews are always held for moderation (name is required).
+ * Reviews are RESTRICTED TO VERIFIED BUYERS: the session must resolve to an
+ * account AND that account must have a non-cancelled, non-refunded order
+ * containing this product. Non-buyers get 403 and nothing is written.
+ *
+ * Every accepted review is a verified purchase, so it is auto-approved — there
+ * is no longer a moderation queue to hold non-buyers in.
  */
 export async function POST(request: Request, { params }: RouteContext) {
   const { slug } = await params;
@@ -75,20 +125,38 @@ export async function POST(request: Request, { params }: RouteContext) {
   // Reviews require an account.
   const userId = await getSessionUserId();
   if (!userId) {
-    return error('Please log in to write a review.', 401);
+    return error(REVIEW_BLOCK_MESSAGES.logged_out, 401);
   }
   const user = await getUserById(userId);
   if (!user) {
-    return error('Your session has expired — please log in again.', 401);
+    return error('Your session has expired. Please log in again.', 401);
   }
 
-  // Verified purchase → auto-approve; otherwise hold for moderation.
-  const verifiedPurchase = await hasPurchasedProduct(userId, productId);
+  // THE GATE: a verified purchase is required. This runs before the body is
+  // even parsed so a non-buyer cannot burn rate-limit budget or probe
+  // validation by posting repeatedly.
+  const authorName = getReviewAuthorName(user);
+  const [hasPurchased, alreadyReviewed] = await Promise.all([
+    hasPurchasedProduct(userId, productId),
+    hasAlreadyReviewedProduct(userId, productId, authorName),
+  ]);
+
+  const eligibility = evaluateReviewEligibility({
+    loggedIn: true,
+    hasPurchased,
+    alreadyReviewed,
+  });
+  if (eligibility === 'not_purchased') {
+    return error(REVIEW_BLOCK_MESSAGES.not_purchased, 403);
+  }
+  if (eligibility === 'already_reviewed') {
+    return error(REVIEW_BLOCK_MESSAGES.already_reviewed, 409);
+  }
 
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   if (isRateLimited(ip)) {
-    return error('Too many reviews — please try again later.', 429);
+    return error('Too many reviews. Please try again later.', 429);
   }
 
   let data: unknown;
@@ -107,9 +175,6 @@ export async function POST(request: Request, { params }: RouteContext) {
 
   const rating = Number(b.rating);
   const body = typeof b.body === 'string' ? b.body.trim() : '';
-  // Author name comes from the account; ignore any client-supplied value.
-  const authorName =
-    user.name?.trim() || user.email.split('@')[0] || 'Customer';
   const title = typeof b.title === 'string' ? b.title.trim() : '';
   const sizePurchased =
     typeof b.sizePurchased === 'string' && b.sizePurchased.trim() !== ''
@@ -139,7 +204,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       body,
       authorName,
       sizePurchased,
-      isApproved: verifiedPurchase,
+      // Every review that reaches this point is from a verified buyer.
+      isApproved: true,
       fitFeedback: fitFeedback as
         'runs_small' | 'true_to_size' | 'runs_large' | null,
     })
@@ -159,7 +225,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   return NextResponse.json(
     {
       ok: true,
-      approved: verifiedPurchase,
+      approved: true,
+      eligibility: 'eligible',
       review: {
         id: r.id,
         rating: Number(r.rating),

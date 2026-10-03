@@ -554,7 +554,7 @@ export default function CheckoutForm({
           )}
           {member && addresses.length === 0 && (
             <p className="mt-4 rounded-lg bg-[#E7DFCB]/50 px-3 py-2.5 text-xs text-[#2B2620]/60">
-              No saved addresses yet — enter one below and we&apos;ll keep it on
+              No saved addresses yet. Enter one below and we&apos;ll keep it on
               your account.
             </p>
           )}
@@ -613,7 +613,7 @@ export default function CheckoutForm({
               {!member && (
                 <div className="mt-4">
                   <label htmlFor="checkout-email" className={LABEL_CLASS}>
-                    Email (optional — for delivery updates)
+                    Email (optional, for delivery updates)
                   </label>
                   <input
                     id="checkout-email"

@@ -34,7 +34,7 @@ export function DeleteProductButton({ id, name }: DeleteProductButtonProps) {
       router.refresh();
     } catch (err) {
       console.error('Delete product error:', err);
-      setError('Network error — is the server running?');
+      setError('Network error. Is the server running?');
     } finally {
       setDeleting(false);
     }

@@ -17,13 +17,13 @@ import { formatPrice } from '@/utils/product-format';
 
 const STATUS_LABELS: Record<string, string> = {
   REQUESTED: 'Needs review',
-  APPROVED: 'Approved — book pickup',
+  APPROVED: 'Approved, book pickup',
   PICKUP_SCHEDULED: 'Pickup booked',
   PICKUP_FAILED: 'Pickup failed',
   SELF_SHIP_PENDING: 'Waiting on customer',
   IN_TRANSIT: 'In transit to us',
-  RECEIVED: 'Received — needs QC',
-  QC_PASSED: 'Passed QC — refund due',
+  RECEIVED: 'Received, needs QC',
+  QC_PASSED: 'Passed QC, refund due',
   QC_FAILED: 'Failed QC',
   EXCHANGE_SHIPPED: 'Exchange dispatched',
   EXCHANGE_FAILED: 'Exchange failed',

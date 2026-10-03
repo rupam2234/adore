@@ -8,7 +8,7 @@ import {
 import { requireAdminPage } from '@/utils/admin-session';
 
 export const metadata = {
-  title: 'Order ledger — Admin',
+  title: 'Order ledger | Admin',
   robots: { index: false, follow: false },
 };
 
@@ -65,7 +65,7 @@ export default async function AdminLedgerPage() {
     stats = grouped.stats;
     summary = ledgerSummary(orders);
   } catch {
-    error = 'Could not load the ledger — check the database connection.';
+    error = 'Could not load the ledger. Check the database connection.';
   }
 
   const todayKey = currentPrepDayKey();
@@ -95,7 +95,7 @@ export default async function AdminLedgerPage() {
             sub: `${summary.todayOrders} order${summary.todayOrders === 1 ? '' : 's'} in today's batch`,
           },
           {
-            label: 'Revenue — latest paid orders',
+            label: 'Revenue, latest paid orders',
             value: `₹${stats.totalRevenue.toFixed(2)}`,
             sub: `${stats.totalOrders} paid order${stats.totalOrders === 1 ? '' : 's'} · ${stats.totalItems} items · refunds excluded`,
           },
@@ -125,7 +125,7 @@ export default async function AdminLedgerPage() {
 
       {days.length === 0 && !error && (
         <p className="mt-10 text-sm text-[#2B2620]/50">
-          No paid orders yet — the ledger fills up as orders are confirmed.
+          No paid orders yet. The ledger fills up as orders are confirmed.
         </p>
       )}
 

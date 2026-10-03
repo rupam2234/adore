@@ -40,8 +40,8 @@ export default function OrderReceipt({
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm text-[#2B2620]/60">
           We have your order, but couldn&apos;t load the receipt just now. Keep
-          this order number handy and write to us if anything looks off —
-          we&apos;ll sort it out.
+          this order number handy and write to us if anything looks off.
+          We&apos;ll sort it out.
         </p>
         <Link
           href="/shop"
@@ -102,8 +102,8 @@ export default function OrderReceipt({
 
         {confirmation.shiprocketError && (
           <p className="mt-4 rounded-lg bg-[#E7DFCB]/60 px-3 py-2 text-xs text-[#2B2620]/70">
-            Your order is safe and paid. Courier booking is retrying on our side
-            — no action needed.
+            Your order is safe and paid. Courier booking is retrying on our side.
+            No action needed.
           </p>
         )}
       </section>

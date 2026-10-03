@@ -155,7 +155,7 @@ export async function reserveCartItems(
       const available = rows[0]?.stock ?? 0;
       throw new StockUnavailableError(
         available > 0
-          ? `Only ${available} left — someone else just reserved this item.`
+          ? `Only ${available} left. Someone else just reserved this item.`
           : 'Too popular. Looks like someone else just purchased this item.',
         item.variantId,
         available

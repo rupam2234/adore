@@ -418,7 +418,7 @@ function QuickViewModal({
             {adding
               ? 'Adding…'
               : matchedVariant
-                ? `Add to bag — ${selectedSize}`
+                ? `Add to bag (${selectedSize})`
                 : 'Select a size'}
           </button>
           {error && <p className="mt-2 text-xs text-[#A45A4B]">{error}</p>}

@@ -144,7 +144,7 @@ export default function ReturnRequestForm({
     <div className="space-y-4 rounded-2xl border border-[#2B2620]/12 bg-[#FAF8F3] p-5">
       <div>
         <p className="text-sm font-medium">
-          Return or exchange — {productName}
+          Return or exchange: {productName}
         </p>
         <p className="text-xs text-[#2B2620]/50">
           {color} · {size} · {formatPrice(unitPrice, currency)} each
@@ -211,7 +211,7 @@ export default function ReturnRequestForm({
             <option value="">Choose a size…</option>
             {exchangeVariants.map(v => (
               <option key={v.id} value={v.id}>
-                {v.color} — {v.size}
+                {v.color} in {v.size}
               </option>
             ))}
           </select>

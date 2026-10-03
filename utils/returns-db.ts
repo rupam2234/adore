@@ -542,7 +542,7 @@ const CUSTOMER_EVENT_COPY: Record<string, string> = {
   exchange_failed: 'We could not send the replacement',
   refunded: 'Your refund has been issued',
   refund_pending: 'Your refund is being processed',
-  refund_failed: 'We could not process your refund — our team is on it',
+  refund_failed: 'We could not process your refund. Our team is on it',
   cancelled: 'This request was cancelled',
   blocked: 'This request is being reviewed',
 };

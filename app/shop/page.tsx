@@ -16,9 +16,9 @@ import {
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Shop all — dresses & kurtis',
+  title: 'Shop all | dresses & kurtis',
   description:
-    'Browse the full Adore collection — dresses and kurtis, thoughtfully made in small batches.',
+    'Browse the full Adore collection: dresses and kurtis, thoughtfully made in small batches.',
   alternates: { canonical: '/shop' },
 };
 

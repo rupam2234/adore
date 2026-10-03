@@ -41,7 +41,7 @@ export default function LoginForm({ next }: LoginFormProps) {
       window.location.href = next;
     } catch (err) {
       console.error('Login error:', err);
-      setError('Network error — is the server running?');
+      setError('Network error. Is the server running?');
     } finally {
       setBusy(false);
     }

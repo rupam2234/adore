@@ -85,19 +85,19 @@ const STATUS_COPY: Record<string, { label: string; detail: string; tone: string 
     tone: 'bg-indigo-50 text-indigo-900 border-indigo-200',
   },
   RECEIVED: {
-    label: 'Received — being checked',
+    label: 'Received, being checked',
     detail: 'Your parcel reached us and is waiting for inspection.',
     tone: 'bg-purple-50 text-purple-900 border-purple-200',
   },
   QC_PASSED: {
-    label: 'Checked — refund in progress',
+    label: 'Checked, refund in progress',
     detail: 'Your item passed inspection and your refund is being processed.',
     tone: 'bg-emerald-50 text-emerald-900 border-emerald-200',
   },
   QC_FAILED: {
     label: 'Did not pass inspection',
     detail:
-      'We could not accept the item. The reason is below — reply to us and a person, not an automated rule, will review it.',
+      'We could not accept the item. The reason is below. Reply to us and a person, not an automated rule, will review it.',
     tone: 'bg-rose-50 text-rose-900 border-rose-200',
   },
   EXCHANGE_SHIPPED: {
@@ -125,7 +125,7 @@ const STATUS_COPY: Record<string, { label: string; detail: string; tone: string 
   REFUND_FAILED: {
     label: 'Refund issue',
     detail:
-      'We could not process the refund automatically. Our team is on it — you do not need to do anything.',
+      'We could not process the refund automatically. Our team is on it. You do not need to do anything.',
     tone: 'bg-rose-50 text-rose-900 border-rose-200',
   },
   REJECTED: {

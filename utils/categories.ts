@@ -121,7 +121,7 @@ export function categoryPageMetadata(slug: string): {
     `Shop ${category.name.toLowerCase()} styles from the Adore collection.`;
 
   return {
-    title: `${category.name} — dresses & kurtis`,
+    title: `${category.name} | Dresses & Kurtis`,
     description: `${/[.!?]$/.test(base) ? base : `${base}.`}${detail}`,
   };
 }

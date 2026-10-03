@@ -109,7 +109,7 @@ export function PinChecker({
       }
       return (
         <p className="mt-1.5 text-xs text-[#A45A4B]">
-          Not serviceable at {status.pin} yet — we&apos;re expanding to new PIN
+          Not serviceable at {status.pin} yet. We&apos;re expanding to new PIN
           codes soon.
         </p>
       );

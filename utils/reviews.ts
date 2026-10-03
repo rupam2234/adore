@@ -136,9 +136,35 @@ export async function getProductIdBySlug(slug: string): Promise<string | null> {
 }
 
 /**
- * True when the user has at least one non-cancelled order containing this
- * product (verified-purchase check). Returns false rather than throwing so
- * review submission never fails because of it.
+ * The single rule for what name a review is posted under.
+ *
+ * Lives here so the POST route and the duplicate check can never disagree —
+ * if they did, a customer could be blocked for a review they never wrote.
+ * Client-supplied names are ignored entirely: the account is the only source.
+ */
+export function getReviewAuthorName(user: {
+  name?: string | null;
+  email: string;
+}): string {
+  return user.name?.trim() || user.email.split('@')[0] || 'Customer';
+}
+
+/**
+ * Order statuses that disqualify a purchase from counting as "verified".
+ *
+ * A cancelled order was never paid for, and a refunded one has been taken back
+ * — neither is a genuine experience of the product. Everything else (PENDING
+ * through DELIVERED) counts, so a shopper can review immediately after buying
+ * rather than having to wait for delivery.
+ */
+export const NON_VERIFIED_ORDER_STATUSES = ['CANCELLED', 'REFUNDED'] as const;
+
+/**
+ * True when the user has at least one non-cancelled/non-refunded order
+ * containing this product (the verified-purchase check).
+ *
+ * This is now an AUTHORIZATION gate, not just an auto-approve hint, so it must
+ * fail closed: any DB error returns `false` (deny), never `true`.
  */
 export async function hasPurchasedProduct(
   userId: string,
@@ -154,12 +180,45 @@ export async function hasPurchasedProduct(
         and(
           eq(customers.userId, userId),
           eq(orderItems.productId, productId),
-          notInArray(orders.status, ['CANCELLED', 'REFUNDED'])
+          notInArray(orders.status, [...NON_VERIFIED_ORDER_STATUSES])
         )
       )
       .limit(1);
     return rows.length > 0;
   } catch {
+    // Fail closed — an unreachable DB must not grant review rights.
+    return false;
+  }
+}
+
+/**
+ * True when this user has already reviewed this product.
+ *
+ * Reviews are stored without a user id (the table predates accounts), so this
+ * matches on the author name the account would produce. That is a deliberate
+ * soft check: it stops the common double-post without pretending to be a hard
+ * identity guarantee. See `getReviewAuthorName` below for the shared rule.
+ */
+export async function hasAlreadyReviewedProduct(
+  userId: string,
+  productId: string,
+  authorName: string
+): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ id: productReviews.id })
+      .from(productReviews)
+      .where(
+        and(
+          eq(productReviews.productId, productId),
+          eq(productReviews.authorName, authorName)
+        )
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch {
+    // Fail OPEN here: this is an anti-spam nicety, not the purchase gate, and
+    // refusing to review because of a transient DB blip is worse.
     return false;
   }
 }

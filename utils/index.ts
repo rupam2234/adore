@@ -57,9 +57,15 @@ export type {
 export {
   getApprovedReviews,
   getProductIdBySlug,
+  getReviewAuthorName,
   getReviewSummary,
 } from './reviews';
 export type { ReviewSort } from './reviews';
+export {
+  evaluateReviewEligibility,
+  REVIEW_BLOCK_MESSAGES,
+} from './review-format';
+export type { ReviewEligibility } from './review-format';
 export { slugify } from './admin-schema';
 export { parseShopFilters, preservedParams } from './filter-params';
 export type { ParsedShopFilters } from './filter-params';

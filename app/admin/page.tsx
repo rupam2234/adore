@@ -5,7 +5,7 @@ import { requireAdminPage } from '@/utils/admin-session';
 import { DeleteProductButton } from '@/components/admin/delete-product-button';
 
 export const metadata = {
-  title: 'Products — Admin',
+  title: 'Products | Admin',
   robots: { index: false, follow: false },
 };
 
@@ -29,7 +29,7 @@ export default async function AdminProductsPage({
   try {
     products = await listAdminProducts(query);
   } catch {
-    error = 'Could not load products — check the database connection.';
+    error = 'Could not load products. Check the database connection.';
   }
 
   return (
@@ -116,7 +116,7 @@ export default async function AdminProductsPage({
                 >
                   {query
                     ? 'No products match your search. Try another name, slug, or SKU.'
-                    : 'No products yet — create the first one.'}
+                    : 'No products yet. Create the first one.'}
                 </td>
               </tr>
             )}

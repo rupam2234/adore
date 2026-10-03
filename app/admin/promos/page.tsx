@@ -4,7 +4,7 @@ import { requireAdminPage } from '@/utils/admin-session';
 import PromoForm, { PromoRowActions } from './promo-form';
 
 export const metadata = {
-  title: 'Promo Codes — Admin',
+  title: 'Promo Codes | Admin',
   robots: { index: false, follow: false },
 };
 
@@ -16,7 +16,7 @@ export default async function AdminPromosPage() {
   try {
     promos = await listPromos();
   } catch {
-    error = 'Could not load promo codes — check the database connection.';
+    error = 'Could not load promo codes. Check the database connection.';
   }
 
   return (

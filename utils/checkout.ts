@@ -187,7 +187,7 @@ export async function createCheckoutSession(
   const outOfStock = cart.items.find(i => i.quantity > i.stock);
   if (outOfStock) {
     throw new CheckoutError(
-      `${outOfStock.name} (${outOfStock.size}) only has ${outOfStock.stock} left — please update your bag.`,
+      `${outOfStock.name} (${outOfStock.size}) only has ${outOfStock.stock} left. Please update your bag.`,
       409
     );
   }
@@ -216,7 +216,7 @@ export async function createCheckoutSession(
     if (saved) {
       if (!saved.phone?.trim()) {
         throw new CheckoutError(
-          'That address has no phone number — please add one in your account.'
+          'That address has no phone number. Please add one in your account.'
         );
       }
       address = {
@@ -271,7 +271,7 @@ export async function createCheckoutSession(
   const pin = await checkPinServiceability(address.postalCode, cartWeightKg);
   if (!pin.serviceable) {
     throw new CheckoutError(
-      `We don't deliver to ${address.postalCode} yet — we're expanding to new PIN codes soon.`,
+      `We don't deliver to ${address.postalCode} yet. We're expanding to new PIN codes soon.`,
       422
     );
   }
@@ -615,7 +615,7 @@ export async function verifyAndConfirmPayment(
     payment.amount !== expectedPaise
   ) {
     throw new CheckoutError(
-      "That payment doesn't match this order — please contact support.",
+      "That payment doesn't match this order. Please contact support.",
       409
     );
   }

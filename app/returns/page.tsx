@@ -15,7 +15,7 @@ import {
 export const metadata: Metadata = {
   title: 'Returns & Exchanges',
   description:
-    'How to return or exchange an Adore order — eligibility, the reverse pickup process, timelines, and your refund.',
+    'How to return or exchange an Adore order: eligibility, the reverse pickup process, timelines, and your refund.',
 };
 
 function Section({
@@ -42,7 +42,7 @@ const STEPS = [
   },
   {
     title: 'We approve &amp; book pickup',
-    body: 'We check eligibility, then schedule a reverse pickup from your address — usually within 24 hours.',
+    body: 'We check eligibility, then schedule a reverse pickup from your address, usually within 24 hours.',
   },
   {
     title: 'Quality check',
@@ -61,7 +61,7 @@ const SUMMARY = [
   },
   {
     topic: 'Exchanges',
-    detail: `Yes — same size or a different one, subject to stock. The first ${FREE_EXCHANGES_PER_ORDER} exchange per order is free, then ₹${EXCHANGE_FEE} each.`,
+    detail: `Yes, same size or a different one, subject to stock. The first ${FREE_EXCHANGES_PER_ORDER} exchange per order is free, then ₹${EXCHANGE_FEE} each.`,
   },
   {
     topic: 'Returns',
@@ -86,12 +86,12 @@ const SUMMARY = [
   },
   {
     topic: 'Sale items',
-    detail: 'Exchange or store credit only — no refund on sale purchases.',
+    detail: 'Exchange or store credit only. No refund on sale purchases.',
   },
   {
     topic: 'Start a return',
     detail:
-      'Everything is raised from your account — there is no separate portal or app to install.',
+      'Everything is raised from your account. There is no separate portal or app to install.',
   },
 ] as const;
 
@@ -156,7 +156,7 @@ export default function ReturnsPage() {
           section 6.
         </p>
         <p>
-          Pickups occasionally fail — your PIN code may be outside reverse
+          Pickups occasionally fail. Your PIN code may be outside reverse
           pickup coverage, the rider may be unable to reach you, or the first
           attempt may simply miss you. We try up to{' '}
           {SELF_SHIP.maxPickupAttempts} attempts. If pickup still can&rsquo;t
@@ -331,7 +331,7 @@ export default function ReturnsPage() {
             arrived with.
           </li>
           <li>
-            The handover details are wrong — the wrong item is handed to the
+            The handover details are wrong. The wrong item is handed to the
             rider, or the parcel is left unattended where it can be lost or
             rained on.
           </li>
@@ -341,7 +341,7 @@ export default function ReturnsPage() {
           </li>
         </ul>
         <p>
-          We&rsquo;re not trying to catch people out here — we simply
+          We&rsquo;re not trying to catch people out here. We simply
           can&rsquo;t refund an item we never received. If something here
           applies to you, tell us and we&rsquo;ll almost always find a way to
           sort it out.
@@ -370,7 +370,7 @@ export default function ReturnsPage() {
           </li>
           <li>
             For an exchange, choose the size you want. Damage or wrong-item
-            claims ask for a photo of the parcel — we can&rsquo;t verify those
+            claims ask for a photo of the parcel. We can&rsquo;t verify those
             without one.
           </li>
           <li>Submit, and we&rsquo;ll confirm by email within 24 hours.</li>

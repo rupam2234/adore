@@ -22,6 +22,8 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+// `sql` lives in drizzle-orm proper; only used for the partial index predicate.
+import { sql } from 'drizzle-orm';
 import type { ProductStatus } from './admin-schema';
 import type { FitFeedback } from './review-format';
 
@@ -542,12 +544,102 @@ export const paymentDisputes = pgTable(
 );
 
 /**
+ * Transactional outbox for outbound email.
+ *
+ * WHY THIS EXISTS, AND WHY IT IS NOT JUST "a queue"
+ * -------------------------------------------------
+ * Sending email inline from a request has two failure modes that both lose mail:
+ *
+ *   1. If the process dies AFTER the order is committed but BEFORE the send
+ *      completes, the email is gone. Nothing retries, nothing remembers.
+ *   2. If Resend accepts the request and then the response times out, a naive
+ *      retry sends the customer TWO order confirmations.
+ *
+ * So the job is written to the database first, as the durable record, and the
+ * send happens later from a worker. The row is the ledger; the queue (Vercel
+ * Queues) is only the courier that tells us to go look at it. If the queue
+ * message is lost, the daily backstop cron still finds the row.
+ *
+ * `dedupeKey` is the second half of the story: it is sent to Resend as the
+ * `Idempotency-Key` header, so even an at-least-once delivery cannot produce a
+ * duplicate email. Resend retains those keys for 24 hours.
+ *
+ * This mirrors `webhook_events` above, which solves the same problem for
+ * INBOUND events.
+ */
+export const emailJobs = pgTable(
+  'email_jobs',
+  {
+    id: text('id').primaryKey().$defaultFn(randomId),
+
+    /**
+     * Which template to render. Kept as a closed set of literals rather than
+     * free text so a typo cannot enqueue a job that can never be dispatched.
+     */
+    flow: text('flow').$type<EmailFlow>().notNull(),
+
+    /** Recipient. Stored so a retry does not have to re-derive it. */
+    to: text('to').notNull(),
+
+    /** Everything the template needs, as JSON. */
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+
+    /**
+     * Stable identity for this logical email, e.g. `order_confirmed/AD-1001`.
+     * Unique, so enqueueing the same email twice is a no-op rather than a
+     * duplicate. This is also the Resend idempotency key.
+     */
+    dedupeKey: text('dedupe_key').notNull().unique(),
+
+    status: text('status')
+      .$type<'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'DEAD'>()
+      .notNull()
+      .default('PENDING'),
+
+    /** Send attempts so far. Drives the backoff and the DEAD threshold. */
+    attempts: integer('attempts').notNull().default(0),
+
+    /** Earliest time this job may be retried. Backoff writes into this. */
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    /** Resend's message id, kept so a delivery webhook can find the job. */
+    providerId: text('provider_id'),
+
+    lastError: text('last_error'),
+
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+  },
+  t => [
+    // The claim query's exact predicate: pending, and due. Partial so the index
+    // stays small even after the table fills with SENT history.
+    index('idx_email_jobs_due').on(t.nextAttemptAt).where(sql`status = 'PENDING'`),
+    // Lets the Resend bounce webhook find the job by provider id.
+    index('idx_email_jobs_provider').on(t.providerId),
+  ]
+);
+
+/** The closed set of emails this app can send. */
+export type EmailFlow =
+  | 'order_confirmed'
+  | 'order_shipped'
+  | 'return_rejected'
+  | 'refund_processed'
+  | 'refund_failed';
+
+/**
  * Webhook replay guard.
  *
  * Shiprocket and Razorpay both retry. Every inbound event id is claimed here
  * first, so a duplicate is acknowledged and dropped rather than re-applied.
  * Kept in the database rather than in process memory because on serverless a
  * retry routinely lands on a different instance.
+ *
+ * Also used for Resend's delivery webhooks, for the same reason.
  */
 export const webhookEvents = pgTable(
   'webhook_events',

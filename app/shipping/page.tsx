@@ -8,7 +8,7 @@ import {
 export const metadata: Metadata = {
   title: 'Shipping Policy',
   description:
-    'How Adore processes, dispatches and delivers your order — timelines, charges, tracking, and what to do if something goes wrong.',
+    'How Adore processes, dispatches and delivers your order: timelines, charges, tracking, and what to do if something goes wrong.',
 };
 
 function Section({
@@ -61,7 +61,7 @@ const SUMMARY = [
   {
     topic: 'Address changes',
     detail:
-      'Possible before dispatch — contact us quickly. We cannot promise an edit once the parcel is with the courier.',
+      'Possible before dispatch. Contact us quickly. We cannot promise an edit once the parcel is with the courier.',
   },
   {
     topic: 'International orders',
@@ -95,7 +95,7 @@ export default function ShippingPolicyPage() {
           </dl>
         </div>
         <p className="text-sm text-[#2B2620]/60">
-          This summary is for convenience — the detailed terms below apply in
+          This summary is for convenience. The detailed terms below apply in
           full.
         </p>
       </Section>
@@ -122,7 +122,7 @@ export default function ShippingPolicyPage() {
           We ship across all serviceable PIN codes in India. Before you pay, we
           check your PIN code against live courier availability and the weight
           of your parcel. If your PIN code is not serviceable we will tell you
-          straight away rather than take your money — a pickup point may be a
+          straight away rather than take your money. A pickup point may be a
           better option.
         </p>
       </Section>
@@ -160,7 +160,7 @@ export default function ShippingPolicyPage() {
         <p>
           The most accurate estimate for your address is the delivery date shown
           in your bag once you enter your PIN code, and again at checkout before
-          you pay. Timelines are estimates, not guarantees — couriers operate on
+          you pay. Timelines are estimates, not guarantees. Couriers operate on
           their own schedules, and weather, road conditions, strikes, public
           holidays and logistics congestion can extend them. Risk of loss passes
           to you when the parcel is delivered to the address you gave us.
@@ -191,7 +191,7 @@ export default function ShippingPolicyPage() {
         </ul>
         <p>
           Shipping charges are not refundable once an order has been dispatched,
-          except where an item is defective or incorrect — in which case we
+          except where an item is defective or incorrect. In which case we
           cover the cost of returning it. Our returns and exchange terms live in
           section 3 of our{' '}
           <a
@@ -209,7 +209,7 @@ export default function ShippingPolicyPage() {
           Adore is a prepaid store. We open a secure payment window for your
           order total, and your parcel is booked with our courier partner only
           after the payment is confirmed. We never ask for card details over
-          email, message or phone — if anyone claiming to be from Adore does,
+          email, message or phone. If anyone claiming to be from Adore does,
           please{' '}
           <a
             href="/contact"
@@ -236,7 +236,7 @@ export default function ShippingPolicyPage() {
         <ul className="list-disc space-y-2 pl-6">
           <li>
             Please check your name, phone number, address and PIN code carefully
-            before paying — couriers deliver to whatever address we give them.
+            before paying. Couriers deliver to whatever address we give them.
           </li>
           <li>
             <strong>Before dispatch.</strong> If something is wrong, email us
@@ -251,7 +251,7 @@ export default function ShippingPolicyPage() {
           <li>
             An undeliverable parcel returned to us (RTO) due to an incorrect
             address may be refunded less the original shipping charge and any
-            re-shipping fee we have incurred. Please double-check your details —
+            re-shipping fee we have incurred. Please double-check your details;
             it saves everyone time.
           </li>
           <li>
@@ -295,7 +295,7 @@ export default function ShippingPolicyPage() {
       <Section title="12. Delays beyond our control">
         <p>
           We are not liable for shipping or delivery delays caused by events
-          outside our reasonable control — courier failures, logistics
+          outside our reasonable control: courier failures, logistics
           congestion, strikes, natural disasters, epidemic or pandemic measures,
           government action, transport disruption, cyberattacks or platform
           outages. Where we can, we will offer a full refund instead of a
@@ -314,7 +314,7 @@ export default function ShippingPolicyPage() {
       <Section title="14. Contact us">
         <p>
           Questions about a delivery? Send us your order number and we will look
-          into it straight away — the more detail you share (order ID, contact
+          into it straight away. The more detail you share (order ID, contact
           number, email and screenshots of the tracking page), the faster we can
           help. Use the{' '}
           <a

@@ -1,10 +1,10 @@
 /**
- * Returns operations — the back half of the flow.
+ * Returns operations â€” the back half of the flow.
  *
- * utils/returns.ts      → is this customer ALLOWED to ask?   (pure, customer-facing)
- * utils/returns-state.ts→ what may happen NEXT, may money move? (pure, the rules)
- * utils/returns-fraud.ts→ who is gaming us?                   (pure, the signals)
- * THIS FILE             → does it, against the DB, calling the 3rd parties.
+ * utils/returns.ts      â†’ is this customer ALLOWED to ask?   (pure, customer-facing)
+ * utils/returns-state.tsâ†’ what may happen NEXT, may money move? (pure, the rules)
+ * utils/returns-fraud.tsâ†’ who is gaming us?                   (pure, the signals)
+ * THIS FILE             â†’ does it, against the DB, calling the 3rd parties.
  *
  * The design rule that shapes everything here: **the database is the source of
  * truth for state, and third parties are called for effect, never for truth.**
@@ -13,7 +13,7 @@
  *
  *   1. Read the current row.
  *   2. Ask the pure layer whether the transition is legal.
- *   3. Write the new state, guarded by `WHERE status = <what we read>` — so if
+ *   3. Write the new state, guarded by `WHERE status = <what we read>` â€” so if
  *      anything changed underneath us, zero rows are affected and we bail out
  *      rather than overwrite it.
  *   4. THEN call the third party, and record the outcome.
@@ -53,6 +53,8 @@ import {
   SELF_SHIP,
 } from './returns';
 import { recordEvent } from './returns-audit';
+import { enqueueAndNotify } from './email-queue';
+import { buildDedupeKey } from './email-lifecycle';
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -77,7 +79,7 @@ export class ReturnsOpsError extends Error {
  *
  * The Neon HTTP driver costs ~120ms per round-trip, so serialising "read the
  * request, then the order, then the customer risk, then the dispute" would add
- * ~360ms to every admin click. One wide join keeps it to a single round-trip —
+ * ~360ms to every admin click. One wide join keeps it to a single round-trip â€”
  * and forces us to be explicit about exactly what each decision depends on.
  *
  * Note `order_already_refunded`: the sum of PROCESSED refunds on this order
@@ -125,6 +127,16 @@ type OpsRow = {
   open_dispute: boolean;
   shiprocket_awb: string | null;
   shiprocket_return_awb: string | null;
+  /**
+   * Customer contact, for outbound notifications.
+   *
+   * `customer` here is the CUSTOMER profile, not the login account: a guest
+   * checkout creates a customers row with user_id = NULL, and a rejection email
+   * has to reach that person too. Name can be null because it is split from the
+   * address at checkout and is best-effort.
+   */
+  customer_name: string | null;
+  customer_email: string | null;
 };
 
 /** A return request as shown in the admin queue. */
@@ -203,10 +215,22 @@ export async function loadOpsRow(returnId: string): Promise<OpsRow | null> {
         WHERE o2.id = r.order_id AND d.status = 'OPEN'
       ) AS open_dispute,
       NULL::text AS shiprocket_awb,
-      r.shiprocket_return_awb
+      r.shiprocket_return_awb,
+      -- Joined for outbound email only. LEFT JOIN because the admin queue must
+      -- still load a row if a customer record ever goes missing; a null email
+      -- simply means no notification is sent, and the rejection still stands.
+      --
+      -- There is no customers.name column: the name is stored split across
+      -- first_name/last_name (utils/account.ts splits it at checkout), so the
+      -- greeting is assembled here. COALESCE keeps a customer who only has a
+      -- first name from producing an empty greeting.
+      TRIM(BOTH ' ' FROM COALESCE(c.first_name, '') || ' ' || COALESCE(c.last_name, ''))
+        AS customer_name,
+      c.email AS customer_email
     FROM return_requests r
     JOIN orders o       ON o.id = r.order_id
     JOIN order_items oi ON oi.id = r.order_item_id
+    LEFT JOIN customers c        ON c.id = r.customer_id
     LEFT JOIN customer_risk cr ON cr.customer_id = r.customer_id
     WHERE r.id = ${returnId}
     LIMIT 1
@@ -223,7 +247,7 @@ export async function loadOpsRow(returnId: string): Promise<OpsRow | null> {
 export { recordEvent, type ReturnEventInput } from './returns-audit';
 
 // ---------------------------------------------------------------------------
-// The guarded write — the concurrency primitive
+// The guarded write â€” the concurrency primitive
 // ---------------------------------------------------------------------------
 
 /**
@@ -269,7 +293,7 @@ function buildRiskSignals(row: OpsRow, now: Date): RiskSignals {
   const requestValue = Number(row.item_unit_price) * row.qty;
 
   // Hours since delivery. Null when we genuinely do not know (legacy orders
-  // with no delivered_at) — the scorer treats null as "no signal" rather than
+  // with no delivered_at) â€” the scorer treats null as "no signal" rather than
   // guessing, because inventing a delivery date would manufacture suspicion.
   let hoursSinceDelivery: number | null = null;
   if (row.delivered_at) {
@@ -354,9 +378,80 @@ export type ReviewOutcome =
  *
  * This is the first gate a claim passes, and the last point at which refusing
  * is cheap. Everything after this point has consumed courier effort, warehouse
- * time, or goodwill — so the abuse checks are front-loaded here rather than at
+ * time, or goodwill â€” so the abuse checks are front-loaded here rather than at
  * settlement.
  */
+
+/**
+ * Tell a customer their return was refused.
+ *
+ * WHY THIS EXISTS
+ * ---------------
+ * app/returns/page.tsx promises, in public policy copy, "we will email you the
+ * reason with photographs where relevant". Until now that promise was unkept:
+ * a rejection was visible only if the customer happened to open their account.
+ * Silence on a refusal is what turns into a chargeback, because the customer has
+ * no idea it happened at all.
+ *
+ * WHY IT GOES THROUGH THE QUEUE AND NOT sendReturnRejected DIRECTLY
+ * -----------------------------------------------------------------
+ * Both callers are admin actions that return an HTTP response to the admin UI.
+ * Neither may fail because Resend did. `enqueueAndNotify` writes a durable row
+ * first and treats the send as best-effort, so a provider outage delays the
+ * email instead of failing the admin's click.
+ *
+ * WHY IT IS CALLED FROM HERE, NOT FROM THE API ROUTE
+ * --------------------------------------------------
+ * `reviewReturn` and `recordQcVerdict` are the only two places a rejection is
+ * committed, and both are reachable from more than one caller. Enqueueing inside
+ * them means no future caller can reject a return without also notifying the
+ * customer â€” the failure mode of putting it in the route handler.
+ *
+ * Never throws: the worst case is a missing email, not a failed rejection.
+ */
+async function notifyReturnRejected(row: {
+  id: string;
+  customerEmail: string | null;
+  customerName: string | null;
+  orderNumber: string;
+  photos: string[] | null;
+  reason: string;
+}): Promise<void> {
+  // No address means no email. That is not an error worth retrying, and the
+  // rejection itself has already been committed — so log it and move on rather
+  // than failing the admin's action over a notification.
+  if (!row.customerEmail) {
+    console.warn(
+      `[email] return ${row.id} rejected but no customer email on file; not notifying`
+    );
+    return;
+  }
+
+  try {
+    await enqueueAndNotify({
+      flow: 'return_rejected',
+      to: row.customerEmail,
+      // Keyed on the RETURN id, not the order: one order can have several
+      // return requests (the unit of return is the order LINE), and each is a
+      // distinct email the customer must receive separately.
+      dedupeKey: buildDedupeKey('return_rejected', row.id),
+      payload: {
+        // Falls back to a neutral greeting when the name was never captured.
+        customerName: row.customerName ?? 'there',
+        orderNumber: row.orderNumber,
+        reason: row.reason,
+        // Only photos the customer themselves uploaded; the warehouse's own
+        // inspection images are not stored against the request.
+        photoUrls: row.photos ?? [],
+      },
+    });
+  } catch (err) {
+    // Already swallowed inside enqueueAndNotify, but belt-and-braces: this runs
+    // inside a money-critical state transition.
+    console.error('[email] failed to enqueue return rejection:', err);
+  }
+}
+
 export async function reviewReturn(
   returnId: string,
   actor: string,
@@ -369,7 +464,7 @@ export async function reviewReturn(
 
   const now = new Date();
 
-  // 1. Score — advisory only. Persisted so the queue can sort on it.
+  // 1. Score â€” advisory only. Persisted so the queue can sort on it.
   const risk = scoreReturnRisk(buildRiskSignals(row, now));
   await rawQuery(sql`
     UPDATE return_requests
@@ -415,6 +510,19 @@ export async function reviewReturn(
       actor,
       data: { riskScore: risk.score, reason },
     });
+
+    // Notify AFTER the state is committed and the audit event is written. If the
+    // enqueue fails the rejection still stands — a refusal that silently failed
+    // to save would be far worse than a refusal whose email is late.
+    await notifyReturnRejected({
+      id: returnId,
+      customerEmail: row.customer_email,
+      customerName: row.customer_name,
+      orderNumber: row.order_number,
+      photos: row.photos,
+      reason,
+    });
+
     return { ok: true, status: 'REJECTED', riskScore: risk.score, riskReasons: risk.reasons };
   }
 
@@ -492,7 +600,7 @@ export async function reviewReturn(
  *
  * Deliberately a full recompute rather than an increment. An increment drifts
  * the moment one code path forgets to update, and a fraud-detection counter that
- * under-counts is worse than no counter — it gives false confidence. This is
+ * under-counts is worse than no counter â€” it gives false confidence. This is
  * one indexed aggregate, cheap enough to run on every review.
  *
  * `is_blocked` is NOT set here. Blocking is a human decision; this only
@@ -578,7 +686,7 @@ async function anyReturnForCustomer(customerId: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Reverse logistics — book the pickup with Shiprocket
+// 2. Reverse logistics â€” book the pickup with Shiprocket
 // ---------------------------------------------------------------------------
 
 export type PickupOutcome =
@@ -589,11 +697,11 @@ export type PickupOutcome =
  * Book the reverse pickup for an APPROVED return.
  *
  * Order of operations is deliberate and matches the failure costs:
- *   APPROVED → create RMA → schedule pickup → PICKUP_SCHEDULED
+ *   APPROVED â†’ create RMA â†’ schedule pickup â†’ PICKUP_SCHEDULED
  *
  * We move the status to APPROVED first (already done by review), call Shiprocket,
  * and only then write PICKUP_SCHEDULED. If Shiprocket is down we stay in
- * APPROVED, which is a safe, retryable, human-visible state — not a customer
+ * APPROVED, which is a safe, retryable, human-visible state â€” not a customer
  * left believing a rider is coming.
  *
  * `PICKUP_UNAVAILABLE` is a normal outcome (PIN outside reverse coverage) and
@@ -629,7 +737,7 @@ export async function bookReversePickup(
   }
 
   // We need the original AWB to raise the RMA. If we never captured it, the
-  // return cannot be booked automatically and a human must sort it out —
+  // return cannot be booked automatically and a human must sort it out â€”
   // guessing an AWB would create an orphan RMA the courier cannot match.
   const awb = row.shiprocket_awb;
   if (!awb) {
@@ -753,7 +861,7 @@ export async function bookReversePickup(
   } catch (error) {
     if (error instanceof ShiprocketReturnError) {
       // PIN outside reverse coverage: a normal, published outcome. Offer the
-      // self-ship fallback and WAIVE the fee — we published that promise, and
+      // self-ship fallback and WAIVE the fee â€” we published that promise, and
       // refusing here is an instant bad-review generator for something that is
       // not the customer's fault.
       if (error.code === 'PICKUP_UNAVAILABLE') {
@@ -800,7 +908,7 @@ export async function bookReversePickup(
 }
 
 /**
- * Where return parcels are delivered TO — our warehouse.
+ * Where return parcels are delivered TO â€” our warehouse.
  *
  * The reverse leg of the journey, and the mirror image of the customer pickup
  * address. Kept in one function because the PIN and the contact number must
@@ -830,7 +938,7 @@ function warehouseAddress(): RmaAddress {
  *  - only once per request (a `self_ship_reimbursed` event guards the second);
  *  - at the published flat rate, never a percentage of the order.
  *
- * We do NOT let a customer claim reimbursement for a parcel we never received —
+ * We do NOT let a customer claim reimbursement for a parcel we never received â€”
  * the transition requires the status to already be SELF_SHIP_PENDING, and a
  * human moves it to RECEIVED after physically scanning the parcel.
  */
@@ -904,7 +1012,7 @@ type PickupAddress = {
  *
  * Read from the order's shipping-address snapshot, NOT the customer's current
  * default address. If a customer edits their address after ordering, a pickup
- * booked to the new one sends a rider to the wrong place — and sometimes to a
+ * booked to the new one sends a rider to the wrong place â€” and sometimes to a
  * different state entirely, which the courier will refuse to serve.
  */
 async function loadPickupAddress(
@@ -940,7 +1048,7 @@ async function loadPickupAddress(
 }
 
 // ---------------------------------------------------------------------------
-// 3. Warehouse — receipt and quality control
+// 3. Warehouse â€” receipt and quality control
 // ---------------------------------------------------------------------------
 
 export type QcOutcome =
@@ -951,7 +1059,7 @@ export type QcOutcome =
  * Record the bench decision on a parcel that has reached the warehouse.
  *
  * `markReceived` is separate because receipt and inspection are different events
- * in real life — a parcel is scanned in the morning and inspected after. It
+ * in real life â€” a parcel is scanned in the morning and inspected after. It
  * also means a courier webhook that fires "delivered" cannot skip QC, which is
  * the single most valuable control in the whole flow: it is what stops a refund
  * being issued for goods that never arrived.
@@ -964,7 +1072,7 @@ export async function markReceived(
   const row = await loadOpsRow(returnId);
   if (!row) throw new ReturnsOpsError('NOT_FOUND', 'Return not found.', 404);
 
-  // Idempotent — couriers retry, and a double "received" is harmless. Checked
+  // Idempotent â€” couriers retry, and a double "received" is harmless. Checked
   // BEFORE the transition guard so a replayed webhook doesn't surface as an
   // error to the courier (which would make them retry again).
   if (row.status === 'RECEIVED') {
@@ -1076,15 +1184,28 @@ export async function recordQcVerdict(
       WHERE id = ${row.order_item_id}
     `);
     // The partial unique index on return_requests excludes REFUNDED, so once we
-    // settle, this line becomes claimable again — but `returned_qty` (now
+    // settle, this line becomes claimable again â€” but `returned_qty` (now
     // bumped) is what stops the customer claiming the same physical units a
     // second time. Both guards are needed.
   } else {
+    const qcReason = (opts.reason ?? '').trim();
     await rawQuery(sql`
       UPDATE return_requests
-      SET rejection_reason = ${(opts.reason ?? '').trim()}, updated_at = now()
+      SET rejection_reason = ${qcReason}, updated_at = now()
       WHERE id = ${returnId}
     `);
+    // A QC failure is the MORE important of the two refusals to notify: the
+    // customer has already waited for the courier and the item has physically
+    // come back to us. Silence here is what produces a chargeback rather than a
+    // support ticket, because the parcel arrived and nothing further happened.
+    await notifyReturnRejected({
+      id: returnId,
+      customerEmail: row.customer_email,
+      customerName: row.customer_name,
+      orderNumber: row.order_number,
+      photos: row.photos,
+      reason: qcReason,
+    });
   }
 
   await recordEvent({
@@ -1104,7 +1225,7 @@ export async function recordQcVerdict(
 }
 
 // ---------------------------------------------------------------------------
-// 4. Settlement — where money actually moves
+// 4. Settlement â€” where money actually moves
 // ---------------------------------------------------------------------------
 
 export type SettleOutcome =
@@ -1125,7 +1246,7 @@ export type SettleOutcome =
  *
  *   1. STATE.  Only a QC_PASSED return may be claimed for settlement. This is
  *      what makes "refund without receiving the goods" structurally impossible.
- *   2. CLAIM.  `UPDATE ... WHERE status = 'QC_PASSED'` → `REFUND_PENDING`.
+ *   2. CLAIM.  `UPDATE ... WHERE status = 'QC_PASSED'` â†’ `REFUND_PENDING`.
  *      Exactly one concurrent caller can win this. A duplicate click, a retried
  *      job, or two admins pressing the same button all lose here, before any
  *      money moves.
@@ -1133,7 +1254,7 @@ export type SettleOutcome =
  *      partial unique index (one non-FAILED row per request) means that even if
  *      the process dies between the claim and the response, the reconciler can
  *      see a claimed-but-unconfirmed refund and resolve it by QUERYING Razorpay
- *      — never by blindly sending a second one.
+ *      â€” never by blindly sending a second one.
  *   4. AMOUNT.  `computeSettlement` clamps the payout to the order-level
  *      headroom, so N partial returns can never exceed what was paid.
  *   5. GATEWAY.  Razorpay is called with an explicit paise amount. Only
@@ -1215,7 +1336,7 @@ export async function settleRefund(
   }
 
   // 4. The gateway call. Everything before this point is reversible; this is
-  //    the line. If it throws, we do NOT retry blindly — we leave the ledger
+  //    the line. If it throws, we do NOT retry blindly â€” we leave the ledger
   //    row PENDING and let `reconcileRefunds` ask Razorpay what happened.
   const paymentId = row.razorpay_payment_id;
   if (!paymentId) {
@@ -1258,7 +1379,7 @@ export async function settleRefund(
         ok: false,
         code: 'GATEWAY_UNKNOWN',
         message:
-          'We could not confirm the refund with our payment provider. Our team will verify it and retry — please do not duplicate it.',
+          'We could not confirm the refund with our payment provider. Our team will verify it and retry. Please do not duplicate it.',
       };
     }
 
@@ -1284,7 +1405,7 @@ export async function settleRefund(
   if (processed) {
     const done = await casStatus(returnId, 'REFUND_PENDING', 'REFUNDED');
     if (!done) {
-      // Should be impossible — we hold the claim. If it isn't, the money has
+      // Should be impossible â€” we hold the claim. If it isn't, the money has
       // still moved, so the correct action is to record the truth loudly
       // rather than silently leave the row wrong.
       console.error(
@@ -1324,7 +1445,7 @@ export async function settleRefund(
     };
   }
 
-  // `pending` — accepted by Razorpay, not yet sent to the bank. The
+  // `pending` â€” accepted by Razorpay, not yet sent to the bank. The
   // refund.processed webhook will move this to REFUNDED. Leaving it here is
   // correct and safe: the ledger row proves a refund exists, so a retry cannot
   // create a second one.
@@ -1450,7 +1571,7 @@ async function existingRefundId(returnId: string): Promise<string | null> {
 }
 
 // ---------------------------------------------------------------------------
-// Reconciliation — the crash-recovery path
+// Reconciliation â€” the crash-recovery path
 // ---------------------------------------------------------------------------
 
 /**
@@ -1459,7 +1580,7 @@ async function existingRefundId(returnId: string): Promise<string | null> {
  * Run on a schedule, and after any `GATEWAY_UNKNOWN`. It handles the one case
  * the synchronous path cannot: the process died between the Razorpay call and
  * our status write. The refund may or may not exist at the gateway, so we ASK
- * rather than resend — `fetchRazorpayRefund` first, and only consider a new
+ * rather than resend â€” `fetchRazorpayRefund` first, and only consider a new
  * refund when the gateway positively says this id is unknown.
  *
  * This is precisely why the `refunds` row is written BEFORE the call: without
@@ -1494,7 +1615,7 @@ export async function reconcileRefunds(limit = 50): Promise<{
   for (const row of rows) {
     if (!row.razorpay_refund_id) {
       // The crash happened before the gateway answered, so there is no id to
-      // query. Flag for a human rather than guess — a wrong guess here either
+      // query. Flag for a human rather than guess â€” a wrong guess here either
       // double-refunds or leaves a customer out of pocket.
       await recordEvent({
         returnRequestId: row.return_request_id,
@@ -1535,7 +1656,7 @@ export async function reconcileRefunds(limit = 50): Promise<{
         stillPending++;
       }
     } catch (error) {
-      // Razorpay unreachable — try again next run. Do NOT mark failed.
+      // Razorpay unreachable â€” try again next run. Do NOT mark failed.
       console.error(`[returns] reconcile failed for ${row.refund_id}:`, error);
       stillPending++;
     }
@@ -1558,7 +1679,7 @@ export type ExchangeOutcome =
  * Exchanges have a failure mode returns do not: we receive the original back
  * and then discover the replacement size went out of stock in the days the
  * parcel was in transit. That is why the variant is decremented HERE, at
- * fulfilment, rather than at request time — holding stock for a week on an
+ * fulfilment, rather than at request time â€” holding stock for a week on an
  * unapproved claim would let a customer reserve the last size in a popular
  * product just by opening the form.
  *
@@ -1621,7 +1742,7 @@ export async function fulfilExchange(
 
   const ok = await casStatus(returnId, row.status, 'EXCHANGE_SHIPPED');
   if (!ok) {
-    // Put the stock back — we took it but did not complete the exchange.
+    // Put the stock back â€” we took it but did not complete the exchange.
     await rawQuery(sql`
       UPDATE product_variants
       SET stock_quantity = stock_quantity + ${row.qty}, updated_at = now()
@@ -1653,7 +1774,7 @@ export async function fulfilExchange(
  * A customer withdrawing their own request.
  *
  * Scoped by `customerId` in the WHERE clause, not just checked in application
- * code — so a guessed return id from another account updates nothing and looks
+ * code â€” so a guessed return id from another account updates nothing and looks
  * identical to a non-existent id.
  *
  * Allowed only while the request is still ours to cancel (REQUESTED, or
@@ -1702,7 +1823,7 @@ export async function cancelReturnByCustomer(
  * Two sort keys rather than one. `needs_action` puts the requests that are
  * actually waiting on a human at the top, so the queue is a work list and not
  * just a reverse-chronological dump. Within that, `risk_score` descending puts
- * the ones most likely to be fraudulent in front of whoever picks it up — they
+ * the ones most likely to be fraudulent in front of whoever picks it up â€” they
  * are the ones where a careless "approve, it's fine" costs real money.
  */
 export async function listAdminReturns(opts: {
@@ -1764,7 +1885,7 @@ type AdminReturnRow = {
 /**
  * The queue SELECT, shared by the list and the detail view.
  *
- * A SQL fragment interpolated with `${ADMIN_SELECT}` — Drizzle treats it as an
+ * A SQL fragment interpolated with `${ADMIN_SELECT}` â€” Drizzle treats it as an
  * already-built chunk, so the caller only supplies WHERE/ORDER. Two queries
  * that must not drift apart are better as one definition.
  */
@@ -1904,7 +2025,7 @@ export async function getAdminReturnDetail(
  *
  * Returns true when this caller is the FIRST to see the event. Every webhook
  * handler calls this first, and the partial `webhook_events` primary key does
- * the deduplication in the database rather than in a process-local Set — which
+ * the deduplication in the database rather than in a process-local Set â€” which
  * would be useless on serverless, where retries routinely land on a different
  * instance.
  */
@@ -1946,7 +2067,7 @@ export async function failWebhookEvent(
 }
 
 /**
- * An order was delivered — this is what STARTS the return clock.
+ * An order was delivered â€” this is what STARTS the return clock.
  *
  * Without this the entire returns flow is inert: `orders.delivered_at` is the
  * anchor for the 7-day window, and nothing else in the codebase can honestly
@@ -1997,12 +2118,12 @@ export async function handleOrderDelivered(input: {
  * `tracking` MAY be supplied by the caller. This exists because the webhook
  * handler already has the authoritative status in the inbound payload, and
  * without this parameter the handler would re-fetch the SAME 100-row return list
- * from the courier once per affected return — five identical API round-trips to
+ * from the courier once per affected return â€” five identical API round-trips to
  * learn one fact we were just told. Passing it in removes that entirely.
  *
  * Only ever moves FORWARD, and only within the goods-moving states. A courier
  * status that goes backwards (a re-scan, a mis-keyed event) must not drag a
- * customer's parcel out of "received" and back into "in transit" — that would
+ * customer's parcel out of "received" and back into "in transit" â€” that would
  * make a refund that has already been paid look outstanding in the UI.
  */
 export async function syncReturnFromCourier(
@@ -2027,7 +2148,7 @@ export async function syncReturnFromCourier(
 
   // Only IN_TRANSIT is applied automatically. PICKUP_FAILED needs a human to
   // choose between a retry and the self-ship fallback, and RECEIVED still has to
-  // pass QC before it means anything — so both are surfaced, not enacted.
+  // pass QC before it means anything â€” so both are surfaced, not enacted.
   if (known.status === 'PICKUP_FAILED') {
     await recordEvent({
       returnRequestId: returnId,
@@ -2067,7 +2188,7 @@ export async function syncReturnFromCourier(
 }
 
 // ---------------------------------------------------------------------------
-// 9. Disputes — the money-back-twice signal
+// 9. Disputes â€” the money-back-twice signal
 // ---------------------------------------------------------------------------
 
 /**
@@ -2076,7 +2197,7 @@ export async function syncReturnFromCourier(
  * The highest-value fraud input in the system. A customer who refunds an item
  * AND raises a chargeback has taken the money twice; one who raises a chargeback
  * on a DELIVERED order is very likely an empty-box or mail-rail claim. Both stop
- * here — `evaluateHardBlocks` refuses approval while a dispute is open.
+ * here â€” `evaluateHardBlocks` refuses approval while a dispute is open.
  */
 export async function recordDispute(input: {
   disputeId: string;
@@ -2159,7 +2280,7 @@ export async function resolveDispute(input: {
       (customer_id, chargeback_count, is_blocked, blocked_reason, updated_at)
     VALUES (
       ${order.customer_id}, 1, true,
-      ${'Chargeback lost — the bank returned the payment after we issued a refund'},
+      ${'Chargeback lost: the bank returned the payment after we issued a refund'},
       now()
     )
     ON CONFLICT (customer_id) DO UPDATE SET
@@ -2175,6 +2296,7 @@ export async function resolveDispute(input: {
     data: { disputeId: input.disputeId, orderId: order.order_id },
   });
 }
+
 
 
 

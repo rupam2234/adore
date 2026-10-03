@@ -246,7 +246,9 @@ export default function ProductDetail({
         <div className="flex flex-col gap-3 lg:sticky lg:top-25 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-2 scrollbar-thin">
           <div>
             <div className="flex items-start justify-between gap-3">
-              <h1 className="font-serif text-3xl">{product.name}</h1>
+              <h1 className="font-serif text-3xl font-semibold tracking-tight">
+                {product.name}
+              </h1>
               {reviewSummary && reviewSummary.count > 0 && (
                 <button
                   type="button"
@@ -256,7 +258,7 @@ export default function ProductDetail({
                       ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                   }
                   aria-label={`Rated ${reviewSummary.average} out of 5 from ${reviewSummary.count} reviews. Jump to reviews.`}
-                  title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? '' : 's'} — jump to reviews`}
+                  title={`${reviewSummary.average.toFixed(1)} · ${reviewSummary.count} review${reviewSummary.count === 1 ? '' : 's'}. Jump to reviews`}
                   className="group flex shrink-0 cursor-pointer flex-col items-end gap-1 pt-1"
                 >
                   <Stars value={reviewSummary.average} />
@@ -427,7 +429,7 @@ export default function ProductDetail({
                     disabled={s.stock <= 0}
                     title={
                       s.price
-                        ? `${s.size} — ${formatPrice(s.price, product.currency)}`
+                        ? `${s.size} ${formatPrice(s.price, product.currency)}`
                         : s.size
                     }
                     className={`cursor-pointer border px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -490,7 +492,7 @@ export default function ProductDetail({
                 : adding
                   ? 'Adding…'
                   : selectedSize
-                    ? `Add to basket — ${selectedSize}`
+                    ? `Add to basket (${selectedSize})`
                     : 'Select a size'}
             </button>
           </div>

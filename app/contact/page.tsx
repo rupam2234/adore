@@ -3,7 +3,7 @@ import ContactForm from './contact-form';
 
 export const metadata = {
   title: 'Contact Us',
-  description: "Get in touch with the Adore team — we'd love to hear from you.",
+  description: "Get in touch with the Adore team. We'd love to hear from you.",
 };
 
 const CONTACT_CHANNELS = [

@@ -48,7 +48,7 @@ export async function generateMetadata({
   if (!product) return {};
 
   const description =
-    product.shortDescription ?? product.details[0] ?? `${product.name} — Adore`;
+    product.shortDescription ?? product.details[0] ?? `${product.name} | Adore`;
 
   return {
     title: product.name, // root layout template appends "| Adore"

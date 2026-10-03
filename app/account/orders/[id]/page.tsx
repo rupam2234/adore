@@ -125,7 +125,7 @@ export default async function OrderDetailPage({
           ) : (
             <p className="text-amber-800">
               Payment for this order wasn&rsquo;t completed. Unfortunately, not
-              all items are available anymore — stock ran out while your payment
+              all items are available anymore. Stock ran out while your payment
               was pending. Please browse the store for alternatives.
             </p>
           )}

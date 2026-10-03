@@ -3,7 +3,7 @@ import PageShell from '@/components/theme/page-shell';
 export const metadata = {
   title: 'Terms & Conditions',
   description:
-    'Terms of service for shopping with Adore — orders, returns, and fraud prevention.',
+    'Terms of service for shopping with Adore: orders, returns, and fraud prevention.',
 };
 
 function Section({
@@ -60,7 +60,7 @@ export default function TermsPage() {
 
       <Section title="3. Returns & exchanges">
         <p>
-          We want you to love what you ordered — but returns must be fair to
+          We want you to love what you ordered, but returns must be fair to
           both of us. The following rules apply:
         </p>
         <ul className="list-disc space-y-2 pl-6">
@@ -82,15 +82,15 @@ export default function TermsPage() {
           </li>
           <li>
             <strong>Defects.</strong> Genuine manufacturing defects are
-            corrected by repair, replacement, or full refund — including
-            shipping costs — at our choice. Minor variations in natural-fabric
+            corrected by repair, replacement, or full refund, including
+            shipping costs, at our choice. Minor variations in natural-fabric
             texture, dye, or hand-finished stitching are characteristics of
             small-batch production, not defects.
           </li>
           <li>
             <strong>Refunds.</strong> Once the return passes inspection, we
             refund to the original payment method within 5–7 business days.
-            Refunds are only issued to the original payment method — never to a
+            Refunds are only issued to the original payment method, never to a
             different card, account, or in cash.
           </li>
         </ul>
@@ -105,25 +105,25 @@ export default function TermsPage() {
         </p>
         <ul className="list-disc space-y-2 pl-6">
           <li>
-            <strong>Wear-and-return (&ldquo;wardrobing&rdquo;)</strong> —
+            <strong>Wear-and-return (&ldquo;wardrobing&rdquo;)</strong>:
             wearing an item (including to an event) and returning it as unused.
             We may refuse items showing signs of wear, washing, or dry-cleaning.
           </li>
           <li>
-            <strong>Item swapping</strong> — returning a different, used, or
+            <strong>Item swapping</strong>: returning a different, used, or
             counterfeit item in place of the one purchased.
           </li>
           <li>
-            <strong>Serial returning</strong> — repeatedly ordering with the
+            <strong>Serial returning</strong>: repeatedly ordering with the
             intention of returning most or all items.
           </li>
           <li>
-            <strong>Empty-box or short-ship claims</strong> — claiming items
+            <strong>Empty-box or short-ship claims</strong>: claiming items
             were never received or arrived damaged without supporting evidence,
             when tracking indicates delivery.
           </li>
           <li>
-            <strong>Refund manipulation</strong> — requesting refunds while
+            <strong>Refund manipulation</strong>: requesting refunds while
             initiating chargebacks, or double-claiming the same loss.
           </li>
         </ul>
@@ -185,7 +185,7 @@ export default function TermsPage() {
 
       <Section title="8. Intellectual property">
         <p>
-          All content on this site — text, photography, logos, and design — is
+          All content on this site, including text, photography, logos, and design, is
           owned by Adore or licensed to us and may not be copied or reused
           commercially without permission.
         </p>

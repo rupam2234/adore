@@ -179,7 +179,7 @@ export default async function ShopCategoryPage({
                   ))
                 ) : (
                   <p className="col-span-full text-sm text-[#2B2620]/60">
-                    No {category.name.toLowerCase()} styles yet — check back
+                    No {category.name.toLowerCase()} styles yet. Check back
                     soon.
                   </p>
                 )}

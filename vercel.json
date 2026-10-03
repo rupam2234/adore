@@ -4,6 +4,20 @@
     {
       "path": "/api/cron/reconcile-refunds",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/drain-emails",
+      "schedule": "30 4 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/queues/send-email/route.ts": {
+      "experimentalTriggers": [
+        {
+          "type": "queue/v2beta",
+          "topic": "email"
+        }
+      ]
+    }
+  }
 }

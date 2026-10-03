@@ -159,8 +159,8 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
           // In development the API attaches the unwrapped Postgres cause, which
           // turns an opaque "Failed to create product" into something actionable.
           text: data.detail
-            ? `${data.error} — ${data.detail}`
-            : (data.error ?? 'Something went wrong — fix the errors and retry.'),
+            ? `${data.error}: ${data.detail}`
+            : (data.error ?? 'Something went wrong. Fix the errors and retry.'),
         });
         return;
       }
@@ -175,7 +175,7 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
     } catch {
       setMessage({
         kind: 'error',
-        text: 'Network error — the request did not go through. Try again.',
+        text: 'Network error. The request did not go through. Try again.',
       });
     } finally {
       setSaving(false);
@@ -282,7 +282,7 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
             placeholder="400"
           />
           <p className="mt-1 text-xs text-[#2B2620]/50">
-            Packed weight per unit — used for shipping rates. Defaults to 400g.
+            Packed weight per unit. Used for shipping rates. Defaults to 400g.
           </p>
         </div>
       </div>
@@ -473,7 +473,7 @@ export function ProductForm({ product }: { product?: AdminProductFormValue }) {
           </select>
           {isEdit && status === 'ACTIVE' && product?.status !== 'ACTIVE' && (
             <p className="mt-1 text-xs text-[#2B2620]/50">
-              Needs ≥1 variant and ≥1 image — upload images below first if new.
+              Needs ≥1 variant and ≥1 image. Upload images below first if new.
             </p>
           )}
         </div>

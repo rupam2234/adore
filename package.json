@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
+    "@vercel/queue": "^0.7.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
     "date-fns": "^4.4.0",

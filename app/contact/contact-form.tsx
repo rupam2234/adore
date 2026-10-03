@@ -30,7 +30,7 @@ export default function ContactForm() {
   if (status === 'sent') {
     return (
       <div className="rounded-2xl border border-[#5C6B4B]/30 bg-[#5C6B4B]/10 p-8 text-center">
-        <h2 className="font-serif text-2xl">Thank you — note received</h2>
+        <h2 className="font-serif text-2xl">Thank you. Note received</h2>
         <p className="mt-3 text-[15px] text-[#2B2620]/70">
           Our team will reply within 1–2 business days. (Email delivery is being
           set up; messages sent before launch are still saved and answered.)

@@ -45,3 +45,14 @@ next-env.d.ts
 
 # Shiprocket JWT token cache (auto-managed by utils/shipping.ts)
 .shiprocket-token.json
+
+# Generated email previews (node scripts/preview-emails.mjs).
+# Regenerate on demand; committing them just adds churn.
+/scripts/preview/
+
+# Data dumps written by the audit/purge scripts before a destructive change.
+# These contain real customer emails and review text, so they must not be
+# committed even though the .sql files are hand-editable.
+scripts/*backup*.json
+scripts/*restore*.sql
+

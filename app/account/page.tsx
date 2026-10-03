@@ -79,7 +79,7 @@ export default async function AccountOverviewPage() {
           </div>
         ) : (
           <p className="mt-3 text-sm text-[#2B2620]/60">
-            No address saved yet — add one to speed up checkout.
+            No address saved yet. Add one to speed up checkout.
           </p>
         )}
       </div>
