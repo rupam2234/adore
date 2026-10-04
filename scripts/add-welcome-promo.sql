@@ -25,17 +25,21 @@
 
 -- --- 1. Per-customer welcome code -----------------------------------------
 CREATE TABLE IF NOT EXISTS welcome_promo_issues (
-  id             text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  -- uuid, NOT text. Every id column in this database is uuid (promo_codes.id,
+  -- customers.id, users.id — verified against the live schema), and a text FK
+  -- pointing at a uuid column cannot be implemented. That exact error is what
+  -- the first attempt at this migration returned.
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- The account this code belongs to. UNIQUE is what makes "one code per
   -- customer" a database guarantee rather than a hopeful code path.
-  user_id        text NOT NULL UNIQUE,
+  user_id        uuid NOT NULL UNIQUE,
 
   -- Issued per customer, so the same string can never identify two accounts.
   code           text NOT NULL UNIQUE,
 
   -- Points at the shared promo_codes row that defines the discount.
-  promo_code_id  text NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+  promo_code_id  uuid NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
 
   expires_at     timestamptz NOT NULL,
   redeemed_at    timestamptz,
@@ -102,5 +106,31 @@ VALUES (
   now() + interval '2 years'
 )
 ON CONFLICT (code) DO NOTHING;
+
+-- --- 5. Cap the welcome offer ----------------------------------------------
+-- SAFETY NOTE, READ THIS BEFORE EDITING
+-- -----------------------------------
+-- The INSERT above deliberately does NOT overwrite an existing WELCOME10 row
+-- (`ON CONFLICT DO NOTHING`), so re-running this migration never resets the
+-- redemption counter — that counter is the thing capping our liability, and
+-- silently zeroing it would be far worse than leaving it alone.
+--
+-- Consequence: if a WELCOME10 row already exists, it KEEPS its original terms,
+-- including `max_redemptions = NULL`, which means no global cap at all. This
+-- UPDATE is what puts the ceiling back.
+--
+-- It only fires when the cap is missing (NULL). An existing NON-NULL cap is
+-- left exactly as an admin set it, so this can never loosen or tighten a
+-- deliberate limit on a re-run. It has never been capped here, so this is safe
+-- to apply for the first time.
+--
+-- Set the number to whatever your margin can absorb: 500 redemptions of 10% is
+-- 50x the discount in total, so pick it against a total-order-value budget
+-- rather than a per-order one.
+UPDATE promo_codes
+   SET max_redemptions = 500,
+       updated_at = now()
+ WHERE code = 'WELCOME10'
+   AND max_redemptions IS NULL;
 
 ANALYZE welcome_promo_issues;

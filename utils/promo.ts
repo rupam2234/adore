@@ -25,6 +25,21 @@ export class PromoError extends Error {
   }
 }
 
+/**
+ * True for Postgres "relation does not exist" (42P01).
+ *
+ * Used to turn an unmigrated database into a clean customer-facing message
+ * instead of a 500. The driver surfaces the SQLSTATE as `code` on the error.
+ */
+function isUndefinedTable(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: unknown }).code === '42P01'
+  );
+}
+
 async function getCartSubtotal(cartId: string): Promise<string> {
   const rows = await rawQuery<{ subtotal: string }>(sql`
     SELECT COALESCE(SUM(v.price * ci.quantity), 0) AS subtotal
@@ -114,6 +129,20 @@ export async function applyPromo(
     } catch (err) {
       if (err instanceof WelcomeCodeError) {
         throw new PromoError(err.message);
+      }
+      // Postgres 42P01 = undefined_table. Reached only if
+      // scripts/add-welcome-promo.sql has not been applied, in which case the
+      // welcome ledger is missing and there is nothing to resolve.
+      //
+      // Without this branch the driver error propagates to the route's generic
+      // catch and the customer sees a 500 for what is really "we are not set up
+      // for this code yet" — which reads as a bug on the storefront rather than
+      // a missing migration, and sent me hunting the wrong problem once already.
+      if (isUndefinedTable(err)) {
+        console.error(
+          '[promo] welcome_promo_issues missing — run scripts/add-welcome-promo.sql'
+        );
+        throw new PromoError('This code is not available right now');
       }
       throw err;
     }

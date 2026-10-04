@@ -56,8 +56,17 @@ export async function enqueueEmail(input: {
   dedupeKey: string;
 }): Promise<boolean> {
   try {
+    // `"to"` MUST stay quoted. `to` is a reserved word in Postgres (GRANT ...
+    // TO), and this column was created quoted in scripts/add-email-jobs.sql for
+    // exactly that reason — with the comment saying so.
+    //
+    // It was left unquoted here, so every single enqueue in this codebase has
+    // been failing with `syntax error at or near "to"`, caught by the catch
+    // below, logged to the dev console, and reported as a harmless `false`.
+    // The outbox therefore stayed empty: order confirmations, shipping notices,
+    // returns and refunds were all silently never queued either.
     const rows = await rawQuery<{ id: string }>(sql`
-      INSERT INTO email_jobs (flow, to, payload, dedupe_key)
+      INSERT INTO email_jobs (flow, "to", payload, dedupe_key)
       VALUES (
         ${input.flow},
         ${input.to},
