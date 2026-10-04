@@ -28,13 +28,6 @@ type CategoryRow = {
   products: ProductCardData[];
 };
 
-/**
- * - "Latest arrivals" — newest products across all categories, one mixed grid.
- * - One row per main category (dress, kurti, …) so each garment class gets its
- *   own titled row with sub-category tags linking to its own listing.
- * - "Most loved" — featured products not already shown above, falling back to
- *   newest so the section is never empty on a stocked shop.
- */
 async function getHomeProducts(): Promise<{
   latest: ProductCardData[];
   favourites: ProductCardData[];
@@ -49,7 +42,6 @@ async function getHomeProducts(): Promise<{
       CATEGORY_TREE.map(node =>
         getProductsForSection({
           categorySlug: node.slug,
-          // Parent slugs include their children (dress → mini/midi/maxi).
           includeChildren: true,
           sort: 'newest',
           limit: CATEGORY_ROW_LIMIT,
@@ -167,7 +159,6 @@ export default async function Home() {
             </Link>
           </div>
 
-          {/* Sub-category tags — each opens that slice of the row's grid. */}
           {row.tags.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               <Link
@@ -233,9 +224,7 @@ export default async function Home() {
               and feels like you.
             </p>
           </div>
-          {/* Placeholder subscribe form. There is no newsletter endpoint yet, so
-              it renders inert rather than POSTing and reloading the page. Wire
-              `action` up when the API route exists. */}
+
           <div className="flex w-full max-w-sm gap-2 sm:w-auto">
             <input
               type="email"
