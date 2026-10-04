@@ -149,6 +149,7 @@ import {
   welcomeEmail,
   REPLY_TO,
   type EmailTemplate,
+  type OrderLine,
 } from './email-templates';
 
 type SendArgs = {
@@ -255,6 +256,7 @@ export async function dispatchEmailJob(input: {
           name: str(i.name),
           qty: num(i.qty, 1),
           price: str(i.price),
+          imageUrl: typeof i.imageUrl === 'string' ? i.imageUrl : undefined,
         })),
         total: str(payload.total),
         idempotencyKey: dedupeKey,
@@ -267,6 +269,11 @@ export async function dispatchEmailJob(input: {
         orderNumber,
         trackingUrl: typeof payload.trackingUrl === 'string' ? payload.trackingUrl : undefined,
         courierName: typeof payload.courierName === 'string' ? payload.courierName : undefined,
+        items: arr(payload.items).map(i => ({
+          name: str(i.name),
+          qty: num(i.qty, 1),
+          imageUrl: typeof i.imageUrl === 'string' ? i.imageUrl : undefined,
+        })),
         idempotencyKey: dedupeKey,
       });
 
@@ -323,7 +330,7 @@ export async function dispatchEmailJob(input: {
 export function sendOrderConfirmed(
   args: SendArgs & {
     orderNumber: string;
-    items: Array<{ name: string; qty: number; price: string }>;
+    items: OrderLine[];
     total: string;
   }
 ): Promise<EmailResult> {
@@ -335,6 +342,7 @@ export function sendOrderShipped(
     orderNumber: string;
     trackingUrl?: string;
     courierName?: string;
+    items?: OrderLine[];
   }
 ): Promise<EmailResult> {
   return deliver('order_shipped', args.orderNumber, args.to, orderShipped, args);

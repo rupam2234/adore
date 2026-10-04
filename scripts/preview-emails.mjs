@@ -15,6 +15,7 @@ import {
   refundFailed,
   refundProcessed,
   returnRejected,
+  welcomeEmail,
 } from '../utils/email-templates.ts';
 
 const OUT = join('scripts', 'preview');
@@ -22,16 +23,32 @@ mkdirSync(OUT, { recursive: true });
 
 const customerName = 'Asha Rao';
 
+/** Cloudinary-shaped URLs, so the preview shows real <img> tags. */
+const IMG = id =>
+  `https://res.cloudinary.com/adore/image/upload/f_auto,q_auto,w_128,h_128,c_fill/${id}.jpg`;
+
 const TEMPLATES = {
   'order-confirmed': orderConfirmed({
     to: 'asha@example.com',
     customerName,
     orderNumber: 'AD-1001',
     items: [
-      { name: 'Floral Meadow', qty: 1, price: '₹2,499.00' },
-      { name: 'Jonaki Short Kurti', qty: 2, price: '₹1,899.00' },
+      {
+        name: 'Floral Meadow',
+        qty: 1,
+        price: '₹2,499.00',
+        imageUrl: IMG('adore/floral-meadow'),
+      },
+      {
+        name: 'Jonaki Short Kurti',
+        qty: 2,
+        price: '₹1,899.00',
+        imageUrl: IMG('adore/jonaki-short-kurti'),
+      },
+      // No image: proves the row still renders with just the name.
+      { name: 'Ivory Bloom Sundress', qty: 1, price: '₹3,299.00' },
     ],
-    total: '₹6,297.00',
+    total: '₹9,596.00',
   }),
   'order-shipped': orderShipped({
     to: 'asha@example.com',
@@ -39,6 +56,18 @@ const TEMPLATES = {
     orderNumber: 'AD-1001',
     trackingUrl: 'https://track.example/abc123',
     courierName: 'Shiprocket',
+    items: [
+      {
+        name: 'Floral Meadow',
+        qty: 1,
+        imageUrl: IMG('adore/floral-meadow'),
+      },
+      {
+        name: 'Jonaki Short Kurti',
+        qty: 2,
+        imageUrl: IMG('adore/jonaki-short-kurti'),
+      },
+    ],
   }),
   'return-rejected': returnRejected({
     to: 'asha@example.com',
@@ -62,6 +91,21 @@ const TEMPLATES = {
     customerName,
     orderNumber: 'AD-1001',
     amount: '₹2,499.00',
+  }),
+  // Both variants: with a code (the normal path) and without, which is what a
+  // customer gets when issueWelcomeCode could not run. Both must render.
+  'welcome': welcomeEmail({
+    to: 'asha@example.com',
+    customerName,
+    promoCode: 'WELCOME10-QB2CKU',
+    promoValidFor: '30 days',
+    discountPercent: 10,
+    minimumOrder: '₹600',
+  }),
+  'welcome-no-code': welcomeEmail({
+    to: 'asha@example.com',
+    customerName,
+    promoCode: null,
   }),
 };
 
