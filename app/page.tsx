@@ -6,25 +6,56 @@ import {
   SearchBar,
   HeroCarousel,
 } from '@/components';
-import { getProductsForSection } from '@/utils';
+import {
+  CATEGORY_TREE,
+  getProductsForSection,
+  type ProductCardData,
+} from '@/utils';
 
 export const revalidate = 300;
 
 const LATEST_LIMIT = 8;
 const FAVOURITES_LIMIT = 4;
+/** Cards per category row (dress, kurti, …). */
+const CATEGORY_ROW_LIMIT = 8;
+
+/** A homepage row: one main category plus its sub-category "tags". */
+type CategoryRow = {
+  slug: string;
+  name: string;
+  description: string;
+  tags: { slug: string; name: string }[];
+  products: ProductCardData[];
+};
 
 /**
  * - "Latest arrivals" — newest products across all categories, one mixed grid.
+ * - One row per main category (dress, kurti, …) so each garment class gets its
+ *   own titled row with sub-category tags linking to its own listing.
  * - "Most loved" — featured products not already shown above, falling back to
  *   newest so the section is never empty on a stocked shop.
  */
 async function getHomeProducts(): Promise<{
-  latest: Awaited<ReturnType<typeof getProductsForSection>>;
-  favourites: Awaited<ReturnType<typeof getProductsForSection>>;
+  latest: ProductCardData[];
+  favourites: ProductCardData[];
+  categories: CategoryRow[];
 }> {
-  const [latest, featured] = await Promise.all([
+  // Every row is one independent query — run them together rather than in
+  // sequence so the homepage costs a single round of DB latency, not N.
+  const [latest, featured, categoryProducts] = await Promise.all([
     getProductsForSection({ sort: 'newest', limit: LATEST_LIMIT }),
     getProductsForSection({ featuredOnly: true, limit: 8 }),
+    Promise.all(
+      CATEGORY_TREE.map(node =>
+        getProductsForSection({
+          categorySlug: node.slug,
+          // Parent slugs include their children (dress → mini/midi/maxi).
+          includeChildren: true,
+          sort: 'newest',
+          limit: CATEGORY_ROW_LIMIT,
+        })
+      )
+    ),
   ]);
 
   const latestIds = new Set(latest.map(p => p.id));
@@ -46,11 +77,29 @@ async function getHomeProducts(): Promise<{
       .slice(0, FAVOURITES_LIMIT);
   }
 
-  return { latest, favourites };
+  // Empty rows are dropped entirely rather than rendering an empty heading.
+  const categories: CategoryRow[] = CATEGORY_TREE.flatMap((node, i) =>
+    categoryProducts[i].length > 0
+      ? [
+          {
+            slug: node.slug,
+            name: node.name,
+            description: node.description,
+            tags: (node.children ?? []).map(c => ({
+              slug: c.slug,
+              name: c.name,
+            })),
+            products: categoryProducts[i],
+          },
+        ]
+      : []
+  );
+
+  return { latest, favourites, categories };
 }
 
 export default async function Home() {
-  const { latest, favourites } = await getHomeProducts();
+  const { latest, favourites, categories } = await getHomeProducts();
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
@@ -96,6 +145,58 @@ export default async function Home() {
           )}
         </div>
       </section>
+
+      {/* One row per main category (dress, kurti, …). Driven by CATEGORY_TREE, so
+          a category added there gets its own titled row here automatically. */}
+      {categories.map(row => (
+        <section
+          key={row.slug}
+          id={`row-${row.slug}`}
+          className="w-full border-t border-[#2B2620]/10 px-6 py-16 sm:px-12 sm:py-20"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-[#2B2620]/10 pb-4">
+            <div>
+              <h2 className="font-serif text-3xl sm:text-4xl">{row.name}</h2>
+              <p className="mt-2 max-w-md text-sm text-[#2B2620]/60">
+                {row.description}
+              </p>
+            </div>
+            <Link
+              href={`/shop/${row.slug}`}
+              className="text-sm underline underline-offset-4"
+            >
+              Shop all {row.name.toLowerCase()}
+            </Link>
+          </div>
+
+          {/* Sub-category tags — each opens that slice of the row's grid. */}
+          {row.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link
+                href={`/shop/${row.slug}`}
+                className="rounded-full bg-[#2B2620] px-4 py-1.5 text-xs text-[#FAF8F3] transition-opacity hover:opacity-80"
+              >
+                All {row.name}
+              </Link>
+              {row.tags.map(tag => (
+                <Link
+                  key={tag.slug}
+                  href={`/shop/${tag.slug}`}
+                  className="rounded-full border border-[#2B2620]/20 px-4 py-1.5 text-xs transition-colors hover:border-[#2B2620] hover:bg-[#2B2620] hover:text-[#FAF8F3]"
+                >
+                  {tag.name}
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {row.products.map(product => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </section>
+      ))}
 
       {favourites.length > 0 && (
         <section

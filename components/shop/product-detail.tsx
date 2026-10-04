@@ -241,11 +241,18 @@ export default function ProductDetail({
       )}
 
       {/* Info — second on mobile, right column on desktop. The cell spans
-          BOTH rows (gallery + reviews), so the panel stays sticky through the
-          whole product area and releases right before "We Think You Might
-          Enjoy...". Height is capped so expanded sections scroll internally. */}
+            BOTH rows (gallery + reviews), so the panel stays sticky through the
+            whole product area and releases right before "We Think You Might
+            Enjoy...".
+
+            The panel deliberately has NO max-height and no `overflow-y-auto`:
+            capping it gave the info column its own scrollbar, so the page had two
+            vertical scrollbars (the panel's and the document's) and the wheel
+            scrolled whichever one the cursor happened to be over. Sticky alone
+            pins the panel; if it is taller than the viewport the browser simply
+            lets it scroll with the page until its bottom is reached. */}
       <div className="order-2 mt-2 min-w-0 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-        <div className="flex flex-col gap-3 lg:sticky lg:top-25 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-2 scrollbar-thin">
+        <div className="flex flex-col gap-3 lg:sticky lg:top-25 lg:pr-2">
           <div>
             <div className="flex items-center justify-between gap-3">
               <h1 className="font-serif text-3xl font-semibold tracking-tight">
