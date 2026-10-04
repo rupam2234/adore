@@ -217,25 +217,33 @@ export async function revalidateAttachedPromo(
   const attached = await getAttachedPromo(cartId, userId);
   if (!attached) return;
 
-  // A welcome code must be re-checked through its own ledger, because the
-  // generic lookup below only sees the shared WELCOME10 definition and would
-  // happily keep the discount attached to a cart whose owner has already spent
-  // it. This runs after every add/update/remove, so it is the backstop that
-  // stops a stale cart from carrying a used discount to checkout.
+  // A welcome code resolves through its own ledger FIRST, because the generic
+  // lookup below only sees the shared WELCOME10 definition and would happily
+  // keep the discount attached to a cart whose owner has already spent it, or
+  // whose code belongs to someone else.
+  let promo: PromoRow | null;
   if (looksLikeWelcomeCode(attached.code)) {
     try {
-      await resolveWelcomeCode(attached.code, userId);
+      promo = await findPromo('WELCOME10', await resolveWelcomeCode(attached.code, userId));
     } catch {
       await removePromo(cartId);
+      return;
     }
-    return;
+  } else {
+    promo = await findPromo(attached.code);
   }
 
-  const promo = await findPromo(attached.code);
   if (!promo) {
     await removePromo(cartId);
     return;
   }
+
+  // The eligibility check is NOT optional and applies to welcome codes exactly
+  // as it does to any other promo. Returning early after resolving the code
+  // skipped it entirely, which meant a customer could apply the code at ₹700
+  // (clearing the ₹600 minimum) and then delete items down to ₹50 with the
+  // discount still attached — the discount maths re-runs on every cart change,
+  // so the saving scaled with whatever was left in the bag.
   const subtotal = await getCartSubtotal(cartId);
   try {
     assertEligible(promo, subtotal);
