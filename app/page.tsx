@@ -146,8 +146,6 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* One row per main category (dress, kurti, …). Driven by CATEGORY_TREE, so
-          a category added there gets its own titled row here automatically. */}
       {categories.map(row => (
         <section
           key={row.slug}
