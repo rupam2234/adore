@@ -318,6 +318,65 @@ export function refundFailed(input: {
 }
 
 /* ==========================================================================
+   6. WELCOME EMAIL
+   The one email sent before the customer has any relationship with us, so it
+   does the most work: it has to deliver the code we promised in the signup form
+   ("Member perks like promo codes, straight away") and be worth opening.
+
+   The code is the reason this email exists, so it gets a callout rather than
+   being mentioned in a sentence. When there is no code — the migration has not
+   been run, or issuing failed — the template still renders, just without the
+   discount block, because a welcome email with no offer still beats no email.
+   ========================================================================== */
+
+export function welcomeEmail(input: {
+  to: string;
+  customerName: string;
+  /** Null when no code could be issued for this account. */
+  promoCode?: string | null;
+  /** Human-readable expiry, e.g. "30 days". Omitted when there is no code. */
+  promoValidFor?: string;
+  discountPercent?: number;
+  minimumOrder?: string;
+}): EmailTemplate {
+  const codeBlock = input.promoCode
+    ? callout(
+        'Your welcome code',
+        `<span style="font-size:20px;letter-spacing:0.08em;">${esc(input.promoCode)}</span>` +
+          (input.promoValidFor
+            ? `<br><span style="font-size:13px;color:${BRAND.muted};">Use it within ${esc(input.promoValidFor)} on your first order.</span>`
+            : '')
+      )
+    : '';
+
+  const valueLine = [
+    input.discountPercent ? `${input.discountPercent}% off your first order` : '',
+    input.minimumOrder ? `on orders over ${input.minimumOrder}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  const { html, text } = layout({
+    preheader: input.promoCode
+      ? `${valueLine || 'Your welcome offer is ready'} — code ${input.promoCode}.`
+      : 'Welcome to Adore. Here is what happens next.',
+    heading: 'Welcome to Adore',
+    bodyHtml:
+      greeting(input.customerName) +
+      p(`Thank you for creating an account. Everything you need is here: your orders, your returns, and your addresses, all in one place.`) +
+      codeBlock +
+      (input.promoCode
+        ? p(`Add the code in your bag before you check out. It is tied to your account, so nobody else can use it.`)
+        : p(`We will send offers to this address from time to time. You can unsubscribe from any of them using the link below.`)) +
+      p(`A note on delivery: we share order updates by email, so if anything looks wrong with an order you will hear from us rather than having to chase it.`),
+    cta: { label: 'Start shopping', url: `${SITE_URL}/shop` },
+    footerNote: `Signed up as ${input.to}`,
+  });
+
+  return { subject: 'Welcome to Adore — your first-order offer', html, text };
+}
+
+/* ==========================================================================
    5. ORDER SHIPPED
    Carries the tracking link, which is the only reason most recipients open it.
    The tracking URL is placed in a callout as well as the button, because that is

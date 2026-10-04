@@ -1,6 +1,13 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db, rawQuery, promoCodes, promoRedemptions } from './db';
 import { computeDiscount } from './promo-format';
+import {
+  getWelcomeIssueCodeForUser,
+  looksLikeWelcomeCode,
+  markWelcomeCodeRedeemed,
+  resolveWelcomeCode,
+  WelcomeCodeError,
+} from './welcome-promo';
 
 export type AppliedPromo = {
   code: string;
@@ -42,12 +49,13 @@ type PromoRow = {
   expires_at: string | null;
 };
 
-async function findPromo(code: string): Promise<PromoRow | null> {
+async function findPromo(code: string, onlyId?: string): Promise<PromoRow | null> {
   const rows = await rawQuery<PromoRow>(sql`
     SELECT id, code, description, discount_type, discount_value, min_subtotal,
            max_redemptions, redemption_count, starts_at, expires_at
     FROM promo_codes
     WHERE UPPER(code) = ${code.toUpperCase()} AND is_active
+      ${onlyId ? sql`AND id = ${onlyId}` : sql``}
     LIMIT 1
   `);
   return rows[0] ?? null;
@@ -88,7 +96,33 @@ export async function applyPromo(
     throw new PromoError('Add items to your bag before applying a code');
   }
 
-  const promo = await findPromo(code);
+  // A welcome code is not looked up by its own string: it is resolved through
+  // welcome_promo_issues, which answers two questions a plain promo lookup
+  // cannot — is this MY code, and has it already been spent. A shared
+  // `WELCOME10` row alone would let anyone type the same word forever.
+  //
+  // The bare `WELCOME10` string is deliberately NOT redeemable. Customers will
+  // type it (it is in the email subject), and it must fail rather than hand out
+  // a discount to every account that guesses the name.
+  let promoId: string | null = null;
+  let welcomeCode: string | null = null;
+
+  if (looksLikeWelcomeCode(code)) {
+    try {
+      promoId = await resolveWelcomeCode(code, userId);
+      welcomeCode = code.toUpperCase();
+    } catch (err) {
+      if (err instanceof WelcomeCodeError) {
+        throw new PromoError(err.message);
+      }
+      throw err;
+    }
+  }
+
+  const promo = promoId
+    ? await findPromo('WELCOME10', promoId)
+    : await findPromo(code);
+
   if (!promo) throw new PromoError('Invalid promo code');
 
   assertEligible(promo, subtotal);
@@ -119,12 +153,22 @@ export async function applyPromo(
     })
     .where(eq(promoCodes.id, promo.id));
 
+  // Keep the welcome-code record in step with the redemption ledger written
+  // above. promo_redemptions stays the source of truth for "has this customer
+  // used the offer"; redeemed_at is the denormalised copy that makes
+  // "show me my unused code" a single indexed read instead of a join.
+  if (welcomeCode) {
+    await markWelcomeCodeRedeemed(welcomeCode, userId);
+  }
+
   await db.execute(
     sql`UPDATE carts SET promo_code_id = ${promo.id}, updated_at = now() WHERE id = ${cartId}`
   );
 
+  // Echo the customer's own code, not the shared `WELCOME10` definition. Showing
+  // them a code they cannot use is worse than showing nothing.
   return {
-    code: promo.code,
+    code: welcomeCode ?? promo.code,
     description: promo.description,
     discountType: promo.discount_type,
     discountValue: promo.discount_value,
@@ -143,6 +187,21 @@ export async function revalidateAttachedPromo(
   if (!userId) return;
   const attached = await getAttachedPromo(cartId, userId);
   if (!attached) return;
+
+  // A welcome code must be re-checked through its own ledger, because the
+  // generic lookup below only sees the shared WELCOME10 definition and would
+  // happily keep the discount attached to a cart whose owner has already spent
+  // it. This runs after every add/update/remove, so it is the backstop that
+  // stops a stale cart from carrying a used discount to checkout.
+  if (looksLikeWelcomeCode(attached.code)) {
+    try {
+      await resolveWelcomeCode(attached.code, userId);
+    } catch {
+      await removePromo(cartId);
+    }
+    return;
+  }
+
   const promo = await findPromo(attached.code);
   if (!promo) {
     await removePromo(cartId);
@@ -178,8 +237,19 @@ export async function getAttachedPromo(
   `);
   const promo = rows[0];
   if (!promo) return null;
+
+  // Show the customer THEIR code, not the shared definition string. If a
+  // welcome code is attached, prefer the per-account value so the cart reads
+  // 'WELCOME10-AB12CD'; fall back to the definition only if the issue row has
+  // gone missing, in which case revalidateAttachedPromo will drop it anyway.
+  let displayCode = promo.code;
+  if (/^WELCOME10/i.test(promo.code) && userId) {
+    const issue = await getWelcomeIssueCodeForUser(promo.id, userId);
+    if (issue) displayCode = issue;
+  }
+
   return {
-    code: promo.code,
+    code: displayCode,
     description: promo.description,
     discountType: promo.discount_type,
     discountValue: promo.discount_value,

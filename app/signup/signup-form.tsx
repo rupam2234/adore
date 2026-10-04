@@ -18,10 +18,12 @@ export default function SignupForm() {
   const emailId = useId();
   const passwordId = useId();
   const confirmId = useId();
+  const phoneId = useId();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [fieldError, setFieldError] = useState<{
@@ -29,6 +31,7 @@ export default function SignupForm() {
     email?: string;
     password?: string;
     confirm?: string;
+    phone?: string;
   }>({});
   const [busy, setBusy] = useState(false);
 
@@ -41,6 +44,13 @@ export default function SignupForm() {
     if (!password) next.password = 'Choose a password.';
     else if (password.length < 8) next.password = 'Use at least 8 characters.';
     if (confirm !== password) next.confirm = 'Passwords do not match.';
+    // Counted before submit so the customer finds out here rather than after a
+    // round trip. Matches the server rule in utils/phone.ts: 10 digits, and
+    // nothing but digits once the usual separators are ignored.
+    const digits = phone.replace(/\D/g, '');
+    if (!phone.trim()) next.phone = 'Enter your mobile number.';
+    else if (!/^[\d\s+()-]+$/.test(phone.trim()) || digits.length !== 10)
+      next.phone = 'Enter a valid 10-digit mobile number.';
     setFieldError(next);
     return Object.keys(next).length === 0;
   }
@@ -59,6 +69,7 @@ export default function SignupForm() {
           name: name.trim(),
           email: email.trim().toLowerCase(),
           password,
+          phone: phone.trim(),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -152,6 +163,39 @@ export default function SignupForm() {
               className="mt-1.5 text-xs text-[#A45A4B]"
             >
               {fieldError.email}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor={phoneId} className={labelClass}>
+            Mobile number
+          </label>
+          <input
+            id={phoneId}
+            name="phone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
+            value={phone}
+            onChange={e => {
+              setPhone(e.target.value);
+              if (fieldError.phone)
+                setFieldError(f => ({ ...f, phone: undefined }));
+            }}
+            placeholder="98765 43210"
+            disabled={busy}
+            aria-invalid={!!fieldError.phone}
+            aria-describedby={fieldError.phone ? `${phoneId}-error` : undefined}
+            className={inputClass(fieldError.phone)}
+          />
+          {fieldError.phone ? (
+            <p id={`${phoneId}-error`} className="mt-1.5 text-xs text-[#A45A4B]">
+              {fieldError.phone}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-xs text-[#2B2620]/50">
+              For delivery updates. One account per number.
             </p>
           )}
         </div>

@@ -146,6 +146,7 @@ import {
   refundFailed,
   refundProcessed,
   returnRejected,
+  welcomeEmail,
   REPLY_TO,
   type EmailTemplate,
 } from './email-templates';
@@ -292,6 +293,24 @@ export async function dispatchEmailJob(input: {
     case 'refund_failed':
       return sendRefundFailed({ to, name, orderNumber, amount: str(payload.amount), idempotencyKey: dedupeKey });
 
+    case 'welcome_email':
+      return sendWelcomeEmail({
+        to,
+        name,
+        promoCode: typeof payload.promoCode === 'string' ? payload.promoCode : null,
+        promoValidFor:
+          typeof payload.promoValidFor === 'string' ? payload.promoValidFor : undefined,
+        discountPercent:
+          typeof payload.discountPercent === 'number'
+            ? payload.discountPercent
+            : undefined,
+        minimumOrder:
+          typeof payload.minimumOrder === 'string'
+            ? payload.minimumOrder
+            : undefined,
+        idempotencyKey: dedupeKey,
+      });
+
     default:
       // Permanent: retrying an unknown flow cannot ever succeed.
       console.error('[email] unknown flow:', input.flow, 'key:', dedupeKey);
@@ -347,6 +366,24 @@ export function sendRefundFailed(
   args: SendArgs & { orderNumber: string; amount: string }
 ): Promise<EmailResult> {
   return deliver('refund_failed', args.orderNumber, args.to, refundFailed, args);
+}
+
+/* --- Lifecycle ------------------------------------------------------------ */
+
+/**
+ * The signup email. `ref` is the user id, not an order number, which is what
+ * makes `welcome_email/<user-id>` a stable dedupe key: a retried signup cannot
+ * send a second copy even though the user pressed the button twice.
+ */
+export function sendWelcomeEmail(
+  args: SendArgs & {
+    promoCode?: string | null;
+    promoValidFor?: string;
+    discountPercent?: number;
+    minimumOrder?: string;
+  }
+): Promise<EmailResult> {
+  return deliver('welcome_email', undefined, args.to, welcomeEmail, args);
 }
 
 

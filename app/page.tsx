@@ -14,7 +14,7 @@ import {
 
 export const revalidate = 300;
 
-const LATEST_LIMIT = 8;
+const LATEST_LIMIT = 4;
 const FAVOURITES_LIMIT = 4;
 /** Cards per category row (dress, kurti, …). */
 const CATEGORY_ROW_LIMIT = 8;
@@ -42,6 +42,7 @@ async function getHomeProducts(): Promise<{
       CATEGORY_TREE.map(node =>
         getProductsForSection({
           categorySlug: node.slug,
+          // Parent slugs include their children (dress → mini/midi/maxi).
           includeChildren: true,
           sort: 'newest',
           limit: CATEGORY_ROW_LIMIT,
@@ -115,21 +116,11 @@ export default async function Home() {
 
         <div className="mt-5 sm:mt-10">
           {latest.length > 0 ? (
-            <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                {latest.map(product => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
-              </div>
-              <div className="mt-10 text-center">
-                <Link
-                  href="/shop"
-                  className="inline-block rounded-full border border-[#2B2620]/30 px-6 py-3 text-sm transition-colors hover:border-[#2B2620]"
-                >
-                  View all pieces
-                </Link>
-              </div>
-            </>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {latest.map(product => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
           ) : (
             <p className="text-center text-sm text-[#2B2620]/60">
               No pieces yet. Check back soon.

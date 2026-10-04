@@ -252,6 +252,41 @@ export const promoRedemptions = pgTable(
   ]
 );
 
+/**
+ * Per-customer instances of the welcome offer.
+ *
+ * `promo_codes` holds the DEFINITION of WELCOME10 (percentage, global cap,
+ * minimum order). This holds the individual codes handed out at signup, one per
+ * account. The split is what makes the offer safe: the definition cannot itself
+ * be redeemed, only a code issued to a specific customer, and only by them.
+ *
+ * `userId` and `code` are both UNIQUE, so "one code per customer" and "one
+ * customer per code" are both database guarantees rather than application
+ * logic that a future refactor could quietly drop.
+ */
+export const welcomePromoIssues = pgTable(
+  'welcome_promo_issues',
+  {
+    id: text('id').primaryKey().$defaultFn(randomId),
+    userId: text('user_id').notNull().unique(),
+    code: text('code').notNull().unique(),
+    promoCodeId: text('promo_code_id').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    redeemedAt: timestamp('redeemed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  t => [
+    // Resolving a pasted code back to its owner.
+    index('idx_welcome_promo_issues_code').on(t.code),
+    // Partial, so it only holds rows still unused.
+    index('idx_welcome_promo_issues_unredeemed')
+      .on(t.userId)
+      .where(sql`redeemed_at IS NULL`),
+  ]
+);
+
 export const customers = pgTable('customers', {
   id: text('id').primaryKey().$defaultFn(randomId),
   userId: text('user_id').unique(),
@@ -629,7 +664,8 @@ export type EmailFlow =
   | 'order_shipped'
   | 'return_rejected'
   | 'refund_processed'
-  | 'refund_failed';
+  | 'refund_failed'
+  | 'welcome_email';
 
 /**
  * Webhook replay guard.

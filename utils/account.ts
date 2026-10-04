@@ -33,10 +33,28 @@ export type CustomerRow = {
   createdAt: string;
 };
 
+/**
+ * Raised when a signup's phone number already belongs to another ACCOUNT.
+ *
+ * Distinct from a generic failure because the caller has to treat it
+ * differently: it is a rejection (409), not a transient provisioning error to
+ * log and carry on. Only real accounts are checked — a guest row sharing the
+ * number is fine, which is why the guarantee is a partial unique index on
+ * `user_id IS NOT NULL` rather than on `phone` alone.
+ */
+export class PhoneAlreadyRegisteredError extends Error {
+  constructor() {
+    super('An account already exists with this mobile number');
+    this.name = 'PhoneAlreadyRegisteredError';
+  }
+}
+
 export async function ensureCustomer(user: {
   id: string;
   email: string;
   name: string;
+  /** Already normalised by utils/phone.ts. Optional for existing callers. */
+  phone?: string | null;
 }): Promise<CustomerRow> {
   const byUser = await db
     .select()
@@ -58,6 +76,10 @@ export async function ensureCustomer(user: {
         userId: user.id,
         firstName: byEmail[0].firstName ?? first,
         lastName: byEmail[0].lastName ?? (rest.join(' ') || null),
+        // Keep an existing number rather than overwriting it with the signup
+        // one: a customer who ordered as a guest already told us theirs, and
+        // changing it would risk tripping the account-level unique index.
+        phone: byEmail[0].phone ?? user.phone ?? null,
         updatedAt: new Date(),
       })
       .where(eq(customers.id, byEmail[0].id))
@@ -73,16 +95,33 @@ export async function ensureCustomer(user: {
       email: user.email,
       firstName: first,
       lastName: rest.join(' ') || null,
+      phone: user.phone ?? null,
     })
     .onConflictDoNothing()
     .returning();
   if (inserted[0]) return mapCustomer(inserted[0]);
+
+  // onConflictDoNothing swallowed a UNIQUE violation. A collision on
+  // customers.phone means this number is already on another account, which is
+  // the case the caller must reject; anything else (a racing signup with the
+  // same email) is handled by the re-read below.
   const retry = await db
     .select()
     .from(customers)
     .where(eq(customers.email, user.email))
     .limit(1);
-  return mapCustomer(retry[0]);
+  if (retry[0]) return mapCustomer(retry[0]);
+
+  if (user.phone) {
+    const phoneOwner = await db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.phone, user.phone))
+      .limit(1);
+    if (phoneOwner[0]) throw new PhoneAlreadyRegisteredError();
+  }
+
+  throw new Error('Customer provisioning failed');
 }
 
 export async function getCustomerByUserId(
