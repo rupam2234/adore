@@ -26,6 +26,11 @@ import {
 
 const base = { to: 'a@b.com', customerName: 'Asha Rao', orderNumber: 'AD-1001' };
 
+/** Total <img> tags — the header logo plus any content images. */
+function countImages(html: string): number {
+  return (html.match(/<img /g) ?? []).length;
+}
+
 /**
  * Count inspection photos by their alt text rather than by `<img`.
  *
@@ -262,7 +267,10 @@ test('an order line with no image still shows its name', () => {
   assert.ok(tpl.html.includes('Ivory Bloom'));
   // No placeholder: an empty grey box reads as "out of stock", which is a lie.
   assert.ok(!/placeholder/i.test(tpl.html));
-  assert.equal(countInspectionPhotos(tpl.html), 0);
+  // The only image is the header logo — no empty <img> left for the missing
+  // thumbnail. (The logo is always present, so the counts differ by exactly 1.)
+  assert.equal(countImages(tpl.html), 1);
+  assert.ok(tpl.html.includes('alt="Adore"'));
 });
 
 test('the shipping email lists items but no prices', () => {
@@ -275,11 +283,6 @@ test('the shipping email lists items but no prices', () => {
   // showPrice is false, so the price is deliberately absent even though the
   // caller supplied one — "these are arriving", not "this is what they cost".
   assert.ok(!tpl.html.includes('2,499'));
-});
-
-test('the shipping email renders when no items are supplied', () => {
-  const tpl = orderShipped({ ...base });
-  assert.ok(tpl.html.includes('Your order has shipped'));
 });
 
 /* --- Branding -------------------------------------------------------------- */

@@ -11,10 +11,23 @@ import {
   getProductsForSection,
   type ProductCardData,
 } from '@/utils';
+import { sampleWithoutReplacement } from '@/utils/random';
 
 export const revalidate = 300;
 
-const LATEST_LIMIT = 4;
+/**
+ * How many of the newest products Latest arrivals picks from…
+ */
+const LATEST_POOL_SIZE = 8;
+/**
+ * …and how many it shows. Four fills one `sm:grid-cols-4` row exactly.
+ *
+ * These are separate constants because they answer different questions: the
+ * pool decides how much variety the row has, the display count decides its
+ * layout. Changing the grid means touching only the second.
+ */
+const LATEST_DISPLAY_COUNT = 4;
+
 const FAVOURITES_LIMIT = 4;
 /** Cards per category row (dress, kurti, …). */
 const CATEGORY_ROW_LIMIT = 8;
@@ -35,8 +48,13 @@ async function getHomeProducts(): Promise<{
 }> {
   // Every row is one independent query — run them together rather than in
   // sequence so the homepage costs a single round of DB latency, not N.
-  const [latest, featured, categoryProducts] = await Promise.all([
-    getProductsForSection({ sort: 'newest', limit: LATEST_LIMIT }),
+  //
+  // `latestPool` fetches MORE than it displays on purpose: the row shows a
+  // random subset of the newest pieces, so the query has to over-fetch first.
+  // The shuffle itself happens in JS (see below), not in SQL, so this stays a
+  // single indexed round trip.
+  const [latestPool, featured, categoryProducts] = await Promise.all([
+    getProductsForSection({ sort: 'newest', limit: LATEST_POOL_SIZE }),
     getProductsForSection({ featuredOnly: true, limit: 8 }),
     Promise.all(
       CATEGORY_TREE.map(node =>
@@ -51,6 +69,25 @@ async function getHomeProducts(): Promise<{
     ),
   ]);
 
+  // Four distinct pieces from the newest eight.
+  //
+  // Shuffling here rather than `ORDER BY random()` in SQL is the performance
+  // choice: random() cannot use an index, so Postgres would sort the whole
+  // active catalogue. The DB does the indexed `created_at DESC LIMIT 8` it is
+  // already good at, and the shuffle is a handful of operations on an array
+  // that is already in memory.
+  //
+  // Sampling is without replacement, so the four cards are always four
+  // DIFFERENT products — the property a naive `pick()` would not guarantee.
+  //
+  // NOTE: this page is ISR'd (`revalidate = 300`), so the four shown are stable
+  // for every visitor within a regeneration window and reshuffle at most every
+  // five minutes. That is per-regeneration randomness, not per-visitor.
+  const latest = sampleWithoutReplacement(
+    latestPool,
+    LATEST_DISPLAY_COUNT
+  );
+
   const latestIds = new Set(latest.map(p => p.id));
 
   let favourites = featured
@@ -60,9 +97,14 @@ async function getHomeProducts(): Promise<{
   // Fallback: nothing featured (or all of it already in the latest row) →
   // fill with the next-newest products instead.
   if (favourites.length === 0) {
+    // Needs enough rows to cover everything already shown PLUS the favourites
+    // it is replacing. The latest row is drawn from a pool of 8, so it is
+    // `LATEST_POOL_SIZE` distinct products that must be skipped — using the
+    // display count here would over-fetch and under-fill whenever the random
+    // draw happens to omit some of the pool.
     const filler = await getProductsForSection({
       sort: 'newest',
-      limit: LATEST_LIMIT + FAVOURITES_LIMIT,
+      limit: LATEST_POOL_SIZE + FAVOURITES_LIMIT,
     });
     const shown = new Set(latestIds);
     favourites = filler
