@@ -30,20 +30,14 @@ import {
 } from '@/utils/welcome-promo-config';
 
 /**
- * Signups per IP per hour.
- *
- * Keyed on IP rather than customer because there is no customer yet. This is a
- * burst cap, not an airtight global limit — utils/rate-limit.ts documents that
- * it is per server instance — and that is the right trade here: it stops a naive
- * script without adding infrastructure, and the durable limits (one account per
- * phone, global redemption cap) are what actually bound the damage.
+ * Signups per IP per hour. Burst cap only — it is per server instance, and the
+ * real limits are one-account-per-phone plus the global redemption cap.
  */
 const REGISTER_LIMIT = 5;
 const REGISTER_WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
-  // Rate limited BEFORE the body is parsed, so a flood costs nothing beyond the
-  // limiter itself.
+  // Limited before parsing the body, so a flood costs nothing extra.
   const ip =
     request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const limit = rateLimit(`register:${ip}`, {
@@ -95,11 +89,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Phone is required at signup, which is a deliberate change from before. It
-  // is what makes the one-account-per-phone guarantee possible, and that
-  // guarantee is the only thing here that meaningfully raises the cost of
-  // farming welcome codes. We also need a reachable number for delivery
-  // questions anyway, so asking now saves asking twice later.
+  // Phone at signup is what makes the one-account-per-phone guarantee possible,
+  // which is the only real brake on farming welcome codes.
   const rawPhone = body.phone?.trim() ?? '';
   if (!rawPhone) {
     return NextResponse.json(
@@ -153,11 +144,9 @@ export async function POST(request: NextRequest) {
     );
 
     const cookies = setAuthCookies(accessToken, refreshToken);
-    // ensureCustomer carries the phone onto the customers row, which is where
-    // the one-account-per-phone unique index lives. A collision here is a
-    // SECOND ACCOUNT on a number we have already seen — the exact abuse case
-    // this feature exists to stop — so it is reported as a 409 rather than
-    // swallowed like the other non-fatal provisioning failures below.
+    // Carries the phone onto the customers row, where the one-account-per-phone
+    // index lives. A collision is the exact abuse this feature stops, so it is a
+    // 409 rather than a swallowed provisioning failure.
     let phoneInUse = false;
     try {
       const { ensureCustomer } = await import('@/utils/account');
@@ -171,9 +160,8 @@ export async function POST(request: NextRequest) {
     }
 
     if (phoneInUse) {
-      // The account row exists but has no customer row, so nothing the customer
-      // can see is inconsistent. Clean it up so the email stays free to be
-      // reused and a retry starts from a clean slate.
+      // No customer row exists yet, so nothing visible is inconsistent. Clean up
+      // to free the email and leave a clean slate for a retry.
       await db.delete(users).where(eq(users.id, user.id));
       await revokeSession(user.id);
       return NextResponse.json(
@@ -197,18 +185,10 @@ export async function POST(request: NextRequest) {
       console.error('Cart merge failed (signup continues):', err);
     }
 
-    // Welcome email + first-order code.
-    //
-    // Enqueued through the durable outbox rather than sent inline, for two
-    // reasons. The account already exists and is already logged in, so nothing
-    // here is on the critical path and the customer should not wait on Resend.
-    // And `welcome_email/<user-id>` is a dedupe key derived from the id we just
-    // got back, so a customer who double-taps the button cannot receive two
-    // copies — the second enqueue is a no-op at the UNIQUE index.
-    //
-    // Wrapped in try/catch because issueWelcomeCode already swallows its own
-    // failures; this guard is for the enqueue itself, and a missing welcome
-    // email must never cost someone the account they just created.
+    // Welcome email + first-order code, via the durable outbox so signup never
+    // waits on Resend. The `welcome_email/<user-id>` dedupe key makes a
+    // double-tap a no-op at the UNIQUE index. try/catch so a missing welcome
+    // email never costs someone the account they just created.
     try {
       const welcome = await issueWelcomeCode(user.id);
       await enqueueAndNotify({

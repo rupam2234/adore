@@ -76,10 +76,6 @@ export const OPEN_STATUSES: readonly ReturnStatus[] = RETURN_STATUSES.filter(
   s => !TERMINAL_STATUSES.includes(s)
 );
 
-// ---------------------------------------------------------------------------
-// Transitions
-// ---------------------------------------------------------------------------
-
 /**
  * The complete legal transition table.
  *
@@ -166,10 +162,6 @@ export function isTerminal(status: string): boolean {
 export function allowedTransitions(from: string): readonly ReturnStatus[] {
   return TRANSITIONS[from as ReturnStatus] ?? [];
 }
-
-// ---------------------------------------------------------------------------
-// Guards — the reason the machine exists
-// ---------------------------------------------------------------------------
 
 export class TransitionError extends Error {
   code: string;
@@ -276,10 +268,6 @@ export function assertCanTransition(
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Settlement — the money gate
-// ---------------------------------------------------------------------------
 
 export type SettlementContext = {
   /** Gross refund snapshot taken when the request was created (rupees). */

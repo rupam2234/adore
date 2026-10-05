@@ -10,27 +10,20 @@ export const metadata = {
 };
 
 /**
- * The returns work queue.
+ * The returns work queue. Without it a request sits at REQUESTED forever —
+ * nothing in the customer path can approve, inspect, or refund.
  *
- * This page is the operational half of the flow that was missing: without it a
- * return request sits at REQUESTED forever, because nothing in the customer
- * path can approve a pickup, pass an item through inspection, or issue a
- * refund.
- *
- * The ordering is done in SQL (see listAdminReturns): first by what needs a
- * human, then by risk score descending. That combination is the whole point —
- * "needs a decision" and "most likely to be fraudulent" are different axes, and
- * a purely chronological list would let a batch of ordinary returns bury the one
- * request that would have cost the most if approved carelessly.
+ * Ordered in SQL by what needs a human, then risk descending: "needs a
+ * decision" and "riskiest" are different axes, and chronological order would
+ * let ordinary returns bury the costliest one.
  */
 export default async function AdminReturnsPage() {
   await requireAdminPage();
 
   const requests = await listAdminReturns({ limit: 200 });
 
-  // Headline numbers, so an operator can see the shape of the queue without
-  // scrolling. Refunds "due" is the money-shaped one: every one of those needs
-  // a deliberate click before it moves.
+  // Queue shape at a glance. Refunds "due" is the money-shaped one: each needs a
+  // deliberate click before it moves.
   const counts = {
     needsReview: requests.filter(r => r.status === 'REQUESTED').length,
     needsQc: requests.filter(r => r.status === 'RECEIVED').length,
