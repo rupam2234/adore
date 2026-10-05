@@ -58,10 +58,8 @@ export default async function OrderDetailPage({
     isPending && (await checkOrderAvailability(id)).every(a => a.inStock);
 
   /**
-   * Decide up front whether the return form can appear at all.
-   *
-   * This is UX ONLY. `createReturnRequest` re-runs the full check server-side,
-   * so hiding the button here is a courtesy, never the enforcement.
+   * Whether the return form can appear at all. UX only — `createReturnRequest`
+   * re-runs the full check server-side, so hiding the button is a courtesy.
    */
   let returnDisabledReason: string | null = null;
   if (order.status !== 'DELIVERED') {
@@ -74,8 +72,7 @@ export default async function OrderDetailPage({
       'We could not verify the delivery date for this order yet. Please contact us and we will arrange your return.';
   }
 
-  // Sibling variants power the exchange size picker. Only worth loading when
-  // the order can actually be returned.
+  // Sibling variants power the size picker; only load them when a return is possible.
   const exchangeVariantsByItem = new Map<
     string,
     Awaited<ReturnType<typeof listExchangeVariants>>

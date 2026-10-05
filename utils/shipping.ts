@@ -441,10 +441,6 @@ export async function checkPinServiceability(
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Order forwarding — push a paid order into Shiprocket automatically.
-// ---------------------------------------------------------------------------
-
 export class ShiprocketOrderError extends Error {}
 
 export type ShiprocketOrderInput = {
@@ -621,8 +617,7 @@ export type RmaAddress = {
  * The v1/external catalogue documents `POST /orders/create/return`. An earlier
  * version of this adapter posted to `/orders/create/rma`, which does not exist —
  * it returns `{"message":"404 Not Found"}`. Every return would therefore have
- * failed at the first step. utils/shipping-returns.test.ts pins the corrected
- * path; re-verify against the live API after changing it.
+ * failed at the first step. Re-verify against the live API after changing it.
  *
  * The body is a FULL order payload, not a thin `{awb, reason}`: the return
  * parcel needs both endpoints (pickup = customer, shipping = our warehouse),

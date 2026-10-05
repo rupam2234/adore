@@ -17,15 +17,9 @@
  * persistence lives in utils/returns-ops.ts.
  */
 
-// The `.ts` extension is required, not stylistic: `node --test` loads these
-// files directly with no bundler, and Node's ESM resolver will not guess an
-// extension. The rest of the app imports these via the `@/utils/*` alias
-// (resolved by Next), so this only affects direct node execution.
+// The explicit `.ts` extension is deliberate: the rest of the app imports these
+// via the `@/utils/*` alias, and this keeps the file directly executable by node.
 import { ABUSE_GUARDRAILS } from './returns.ts';
-
-// ---------------------------------------------------------------------------
-// 1. Scoring
-// ---------------------------------------------------------------------------
 
 export type RiskSignals = {
   /** Lifetime value refunded to this customer (₹). */
@@ -208,10 +202,6 @@ function formatHours(h: number): string {
   const rounded = Math.round(h * 10) / 10;
   return `${rounded} hour${rounded < 2 ? '' : 's'}`;
 }
-
-// ---------------------------------------------------------------------------
-// 2. Hard blocks
-// ---------------------------------------------------------------------------
 
 export type BlockContext = {
   hasOpenDispute: boolean;

@@ -135,10 +135,6 @@ export function verifyRazorpaySignature(input: {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// ---------------------------------------------------------------------------
-// Refunds
-// ---------------------------------------------------------------------------
-
 export type RazorpayRefund = {
   id: string;
   payment_id: string;

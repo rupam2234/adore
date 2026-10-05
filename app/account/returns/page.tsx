@@ -9,11 +9,8 @@ export const metadata = {
 };
 
 /**
- * The customer's returns dashboard.
- *
- * Every query here is scoped by `customerId`, which is derived from the session
- * rather than from anything in the URL. That is the whole authorisation story
- * for this page: there is no id in the path to tamper with.
+ * The customer's returns dashboard. Every query is scoped by a session-derived
+ * `customerId`, so there is no id in the path to tamper with.
  */
 export default async function AccountReturnsPage() {
   const user = await requireAccountPage();

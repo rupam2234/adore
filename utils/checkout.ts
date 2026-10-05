@@ -385,10 +385,6 @@ export async function createCheckoutSession(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Payment verification → confirmed order → fulfilment
-// ---------------------------------------------------------------------------
-
 /**
  * httpOnly cookie holding the order number this browser just paid for. It is
  * the ONLY key to the confirmation page — order numbers are never enumerable,
