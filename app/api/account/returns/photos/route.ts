@@ -10,16 +10,9 @@ const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const UPLOAD_LIMIT = { limit: 10, windowMs: 60 * 60 * 1000 };
 
 /**
- * POST /api/account/returns/photos — upload evidence for a damage or
- * wrong-item claim.
- *
- * Why this exists: the return form needs photos, but storing them as base64 in
- * a jsonb column would put megabytes of binary in Postgres — bloating storage,
- * bloating every row read, and eventually hitting the row/TOAST limits. They go
- * to Cloudinary and only the URL is stored.
- *
- * Separate from /api/upload, which is admin-only and wired to product images.
- * This one is session-scoped and writes to a `returns/` folder.
+ * POST /api/account/returns/photos — evidence for a damage or wrong-item claim.
+ * Photos go to Cloudinary, not base64 jsonb: megabytes of binary in Postgres
+ * bloats storage and every row read. Separate from the admin-only /api/upload.
  */
 export async function POST(request: Request) {
   const userId = await getSessionUserId();
@@ -50,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'file is required' }, { status: 400 });
   }
 
-  // Server-side checks — the client guard is a convenience, never the gate.
+  // The client guard is a convenience; this is the gate.
   if (!ALLOWED_TYPES.has(file.type)) {
     return NextResponse.json(
       { error: 'Photos must be JPEG, PNG or WebP.' },
