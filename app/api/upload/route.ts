@@ -80,6 +80,12 @@ export async function POST(request: Request) {
           use_filename: true,
           unique_filename: true,
           overwrite: false,
+
+           transformation: [
+             { width: 1500, crop: "scale" },
+             { quality: "auto" },
+             { fetch_format: "auto" }
+           ]
         }
       );
 
