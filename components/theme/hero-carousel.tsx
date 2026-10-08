@@ -25,6 +25,7 @@ export default function HeroCarousel({
 }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [loadedCount, setLoadedCount] = useState(0);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const keyboardFocus = useRef(false);
@@ -49,6 +50,10 @@ export default function HeroCarousel({
 
   const next = useCallback(() => step(1), [step]);
   const prev = useCallback(() => step(-1), [step]);
+
+  const handleImageLoad = () => {
+    setLoadedCount(prev => Math.min(prev + 1, count));
+  };
 
   useEffect(() => {
     if (count < 2 || paused) return;
@@ -161,8 +166,9 @@ export default function HeroCarousel({
                 // caused a visible blank frame on advance. Only the opener is
                 // `priority`, so one image holds the LCP hint rather than all
                 // six competing for it.
-                priority={position === 1}
-                loading="eager"
+                priority={position === 1 && (position - 1) <= loadedCount}
+                loading={(position - 1) <= loadedCount ? 'eager' : 'lazy'}
+                                  onLoad={handleImageLoad}
                 sizes="100vw"
                 style={{
                   objectPosition: resolveObjectPosition(slide.objectPosition),
