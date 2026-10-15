@@ -166,7 +166,10 @@ export async function createRazorpayRefund(input: {
   if (!Number.isInteger(input.amountPaise) || input.amountPaise <= 0) {
     // A zero or negative refund would be rejected by the gateway anyway;
     // failing here keeps the reason in our logs where we can act on it.
-    throw new RazorpayError('Refund amount must be a positive whole number of paise', 400);
+    throw new RazorpayError(
+      'Refund amount must be a positive whole number of paise',
+      400
+    );
   }
 
   return razorpayFetch<RazorpayRefund>(
@@ -228,4 +231,3 @@ export function signWebhookPayload(rawBody: string): string {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET ?? '';
   return crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 }
-

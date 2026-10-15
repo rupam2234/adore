@@ -51,7 +51,10 @@ export type CustomerReturn = {
  * SELF_SHIP_PENDING or QC_PASSED; they see "waiting for your parcel" and
  * "being checked", which are the parts they can act on.
  */
-const STATUS_COPY: Record<string, { label: string; detail: string; tone: string }> = {
+const STATUS_COPY: Record<
+  string,
+  { label: string; detail: string; tone: string }
+> = {
   REQUESTED: {
     label: 'Received',
     detail: 'We have your request and will confirm within 24 hours.',

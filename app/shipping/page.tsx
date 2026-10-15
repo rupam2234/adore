@@ -191,8 +191,8 @@ export default function ShippingPolicyPage() {
         </ul>
         <p>
           Shipping charges are not refundable once an order has been dispatched,
-          except where an item is defective or incorrect. In which case we
-          cover the cost of returning it. Our returns and exchange terms live in
+          except where an item is defective or incorrect. In which case we cover
+          the cost of returning it. Our returns and exchange terms live in
           section 3 of our{' '}
           <a
             href="/terms"

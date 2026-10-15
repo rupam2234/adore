@@ -152,15 +152,15 @@ export default function ReturnsPage() {
             Returns in your account
           </a>
           , and cancel a request there while it has not yet been collected. We
-          use your account history to keep prices fair for everyone; see
-          section 6.
+          use your account history to keep prices fair for everyone; see section
+          6.
         </p>
         <p>
-          Pickups occasionally fail. Your PIN code may be outside reverse
-          pickup coverage, the rider may be unable to reach you, or the first
-          attempt may simply miss you. We try up to{' '}
-          {SELF_SHIP.maxPickupAttempts} attempts. If pickup still can&rsquo;t
-          happen, we will ask you to self-ship instead, and we will reimburse ₹
+          Pickups occasionally fail. Your PIN code may be outside reverse pickup
+          coverage, the rider may be unable to reach you, or the first attempt
+          may simply miss you. We try up to {SELF_SHIP.maxPickupAttempts}{' '}
+          attempts. If pickup still can&rsquo;t happen, we will ask you to
+          self-ship instead, and we will reimburse ₹
           {SELF_SHIP.returnReimbursement} toward your return shipping (₹
           {SELF_SHIP.exchangeReimbursement} on an exchange).{' '}
           <strong>
@@ -341,10 +341,9 @@ export default function ReturnsPage() {
           </li>
         </ul>
         <p>
-          We&rsquo;re not trying to catch people out here. We simply
-          can&rsquo;t refund an item we never received. If something here
-          applies to you, tell us and we&rsquo;ll almost always find a way to
-          sort it out.
+          We&rsquo;re not trying to catch people out here. We simply can&rsquo;t
+          refund an item we never received. If something here applies to you,
+          tell us and we&rsquo;ll almost always find a way to sort it out.
         </p>
       </Section>
 

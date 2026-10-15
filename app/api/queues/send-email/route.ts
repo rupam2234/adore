@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { drainEmailJobs, emailJobStats, oldestPendingAgeSeconds } from '@/utils/email-queue';
+import {
+  drainEmailJobs,
+  emailJobStats,
+  oldestPendingAgeSeconds,
+} from '@/utils/email-queue';
 
 /**
  * POST /api/queues/send-email — Vercel Queues consumer (the fast path).
@@ -47,10 +51,7 @@ export async function POST() {
     console.error('[queues/send-email] failed:', error);
     // A non-2xx tells Vercel to redeliver the message, which is what we want:
     // the jobs are still PENDING in the database and the retry will find them.
-    return NextResponse.json(
-      { error: 'Email drain failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Email drain failed' }, { status: 500 });
   }
 }
 

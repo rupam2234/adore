@@ -147,6 +147,7 @@ import {
   refundProcessed,
   returnRejected,
   welcomeEmail,
+  contactFormEmail,
   REPLY_TO,
   type EmailTemplate,
   type OrderLine,
@@ -161,6 +162,8 @@ type SendArgs = {
    * job's dedupeKey so a retry can never send twice; direct calls omit it.
    */
   idempotencyKey?: string;
+  /** Optional custom FROM address (e.g., 'Adore <order@adore.ind.in>'). */
+  from?: string;
 };
 
 /**
@@ -197,6 +200,7 @@ async function deliver<T extends { to: string; customerName: string }>(
   // Omit<T,...> & SendArgs intersection is assignable to the unresolved T.
   const tpl = render({ ...args, to, customerName: args.name } as unknown as T);
   const idempotencyKey = args.idempotencyKey;
+  const from = args.from;
   return sendEmail({
     to,
     subject: tpl.subject,
@@ -205,6 +209,7 @@ async function deliver<T extends { to: string; customerName: string }>(
     replyTo: REPLY_TO,
     tags: tags(flow, ref),
     ...(idempotencyKey ? { idempotencyKey } : {}),
+    ...(from ? { from } : {}),
   });
 }
 
@@ -267,8 +272,14 @@ export async function dispatchEmailJob(input: {
         to,
         name,
         orderNumber,
-        trackingUrl: typeof payload.trackingUrl === 'string' ? payload.trackingUrl : undefined,
-        courierName: typeof payload.courierName === 'string' ? payload.courierName : undefined,
+        trackingUrl:
+          typeof payload.trackingUrl === 'string'
+            ? payload.trackingUrl
+            : undefined,
+        courierName:
+          typeof payload.courierName === 'string'
+            ? payload.courierName
+            : undefined,
         items: arr(payload.items).map(i => ({
           name: str(i.name),
           qty: num(i.qty, 1),
@@ -283,7 +294,9 @@ export async function dispatchEmailJob(input: {
         name,
         orderNumber,
         reason: str(payload.reason),
-        photoUrls: arr(payload.photoUrls).map(p => str(p)).filter(Boolean),
+        photoUrls: arr(payload.photoUrls)
+          .map(p => str(p))
+          .filter(Boolean),
         idempotencyKey: dedupeKey,
       });
 
@@ -298,15 +311,24 @@ export async function dispatchEmailJob(input: {
       });
 
     case 'refund_failed':
-      return sendRefundFailed({ to, name, orderNumber, amount: str(payload.amount), idempotencyKey: dedupeKey });
+      return sendRefundFailed({
+        to,
+        name,
+        orderNumber,
+        amount: str(payload.amount),
+        idempotencyKey: dedupeKey,
+      });
 
     case 'welcome_email':
       return sendWelcomeEmail({
         to,
         name,
-        promoCode: typeof payload.promoCode === 'string' ? payload.promoCode : null,
+        promoCode:
+          typeof payload.promoCode === 'string' ? payload.promoCode : null,
         promoValidFor:
-          typeof payload.promoValidFor === 'string' ? payload.promoValidFor : undefined,
+          typeof payload.promoValidFor === 'string'
+            ? payload.promoValidFor
+            : undefined,
         discountPercent:
           typeof payload.discountPercent === 'number'
             ? payload.discountPercent
@@ -327,6 +349,8 @@ export async function dispatchEmailJob(input: {
 
 /* --- Order lifecycle ------------------------------------------------------ */
 
+const ORDER_FROM = 'Adore <order@adore.ind.in>';
+
 export function sendOrderConfirmed(
   args: SendArgs & {
     orderNumber: string;
@@ -334,7 +358,13 @@ export function sendOrderConfirmed(
     total: string;
   }
 ): Promise<EmailResult> {
-  return deliver('order_confirmed', args.orderNumber, args.to, orderConfirmed, args);
+  return deliver(
+    'order_confirmed',
+    args.orderNumber,
+    args.to,
+    orderConfirmed,
+    { ...args, from: ORDER_FROM }
+  );
 }
 
 export function sendOrderShipped(
@@ -345,7 +375,13 @@ export function sendOrderShipped(
     items?: OrderLine[];
   }
 ): Promise<EmailResult> {
-  return deliver('order_shipped', args.orderNumber, args.to, orderShipped, args);
+  return deliver(
+    'order_shipped',
+    args.orderNumber,
+    args.to,
+    orderShipped,
+    { ...args, from: ORDER_FROM }
+  );
 }
 
 /* --- Returns & refunds ---------------------------------------------------- */
@@ -357,7 +393,13 @@ export function sendReturnRejected(
     photoUrls?: string[];
   }
 ): Promise<EmailResult> {
-  return deliver('return_rejected', args.orderNumber, args.to, returnRejected, args);
+  return deliver(
+    'return_rejected',
+    args.orderNumber,
+    args.to,
+    returnRejected,
+    { ...args, from: ORDER_FROM }
+  );
 }
 
 export function sendRefundProcessed(
@@ -367,13 +409,25 @@ export function sendRefundProcessed(
     method?: string;
   }
 ): Promise<EmailResult> {
-  return deliver('refund_processed', args.orderNumber, args.to, refundProcessed, args);
+  return deliver(
+    'refund_processed',
+    args.orderNumber,
+    args.to,
+    refundProcessed,
+    { ...args, from: ORDER_FROM }
+  );
 }
 
 export function sendRefundFailed(
   args: SendArgs & { orderNumber: string; amount: string }
 ): Promise<EmailResult> {
-  return deliver('refund_failed', args.orderNumber, args.to, refundFailed, args);
+  return deliver(
+    'refund_failed',
+    args.orderNumber,
+    args.to,
+    refundFailed,
+    { ...args, from: ORDER_FROM }
+  );
 }
 
 /* --- Lifecycle ------------------------------------------------------------ */
@@ -394,4 +448,41 @@ export function sendWelcomeEmail(
   return deliver('welcome_email', undefined, args.to, welcomeEmail, args);
 }
 
-
+/**
+ * Contact form submission. Sends the visitor's message to the support inbox
+ * with the customer's email as reply-to so the team can reply directly.
+ *
+ * No idempotency key is used here because contact forms are intentionally
+ * not deduplicated — if a customer submits twice, we want to see both.
+ */
+export function sendContactFormEmail(args: {
+  to: string;
+  name: string;
+  customerEmail: string;
+  orderNumber?: string;
+  subject: string;
+  message: string;
+}): Promise<EmailResult> {
+  return sendEmail({
+    to: args.to,
+    subject: `Contact: ${args.subject} — ${args.name}`,
+    html: contactFormEmail({
+      to: args.to,
+      customerName: args.name,
+      customerEmail: args.customerEmail,
+      orderNumber: args.orderNumber,
+      subject: args.subject,
+      message: args.message,
+    }).html,
+    text: contactFormEmail({
+      to: args.to,
+      customerName: args.name,
+      customerEmail: args.customerEmail,
+      orderNumber: args.orderNumber,
+      subject: args.subject,
+      message: args.message,
+    }).text,
+    replyTo: args.customerEmail,
+    tags: [{ name: 'flow', value: 'contact_form' }],
+  });
+}

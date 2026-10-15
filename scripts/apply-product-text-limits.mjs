@@ -16,7 +16,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -31,7 +34,8 @@ const cols = await sql`
   WHERE table_schema = 'public' AND table_name = 'products' AND column_name = 'fit'`;
 
 const col = cols[0];
-if (!col) throw new Error('products.fit not found — did the table name change?');
+if (!col)
+  throw new Error('products.fit not found — did the table name change?');
 if (col.max_len === null) {
   console.log(`OK   products.fit is now ${col.data_type} (unlimited)`);
 } else {
@@ -47,5 +51,7 @@ if (rows[0]?.len !== probe.length) {
   console.log(`FAIL probe length mismatch: ${rows[0]?.len} != ${probe.length}`);
   process.exitCode = 1;
 } else {
-  console.log(`OK   the previously-failing ${probe.length}-char fit value now inserts`);
+  console.log(
+    `OK   the previously-failing ${probe.length}-char fit value now inserts`
+  );
 }

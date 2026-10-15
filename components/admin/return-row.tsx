@@ -101,9 +101,9 @@ export default function ReturnRow({ request }: { request: AdminReturn }) {
     }
   }
 
-
   const canSettle = request.status === 'QC_PASSED' && request.type === 'RETURN';
-  const canFulfil = request.status === 'QC_PASSED' && request.type === 'EXCHANGE';
+  const canFulfil =
+    request.status === 'QC_PASSED' && request.type === 'EXCHANGE';
   const working = pending || busy !== null;
 
   return (
@@ -210,8 +210,13 @@ export default function ReturnRow({ request }: { request: AdminReturn }) {
           <div className="flex flex-col items-start gap-2">
             {request.status === 'REQUESTED' && (
               <>
-                <ActionButton onClick={() => act('approve')}>Approve</ActionButton>
-                <ActionButton tone="danger" onClick={() => setShowReject(v => !v)}>
+                <ActionButton onClick={() => act('approve')}>
+                  Approve
+                </ActionButton>
+                <ActionButton
+                  tone="danger"
+                  onClick={() => setShowReject(v => !v)}
+                >
                   Refuse
                 </ActionButton>
               </>
@@ -238,8 +243,13 @@ export default function ReturnRow({ request }: { request: AdminReturn }) {
 
             {request.status === 'RECEIVED' && (
               <>
-                <ActionButton onClick={() => act('qc_pass')}>Pass QC</ActionButton>
-                <ActionButton tone="danger" onClick={() => setShowReject(v => !v)}>
+                <ActionButton onClick={() => act('qc_pass')}>
+                  Pass QC
+                </ActionButton>
+                <ActionButton
+                  tone="danger"
+                  onClick={() => setShowReject(v => !v)}
+                >
                   Fail QC
                 </ActionButton>
               </>
@@ -273,12 +283,17 @@ export default function ReturnRow({ request }: { request: AdminReturn }) {
             )}
 
             {request.status === 'REFUND_FAILED' && (
-              <ActionButton onClick={() => act('settle')}>Retry refund</ActionButton>
+              <ActionButton onClick={() => act('settle')}>
+                Retry refund
+              </ActionButton>
             )}
 
             {(request.status === 'QC_FAILED' ||
               request.status === 'EXCHANGE_FAILED') && (
-              <ActionButton tone="danger" onClick={() => setShowReject(v => !v)}>
+              <ActionButton
+                tone="danger"
+                onClick={() => setShowReject(v => !v)}
+              >
                 Refuse
               </ActionButton>
             )}
@@ -319,8 +334,7 @@ function ActionButton({
   tone?: 'default' | 'danger' | 'money';
 }) {
   const tones = {
-    default:
-      'border-[#2B2620]/25 hover:border-[#5C6B4B] hover:text-[#5C6B4B]',
+    default: 'border-[#2B2620]/25 hover:border-[#5C6B4B] hover:text-[#5C6B4B]',
     danger: 'border-rose-300 text-rose-800 hover:bg-rose-50',
     money: 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700',
   } as const;

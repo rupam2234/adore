@@ -143,9 +143,7 @@ export default function ReturnRequestForm({
   return (
     <div className="space-y-4 rounded-2xl border border-[#2B2620]/12 bg-[#FAF8F3] p-5">
       <div>
-        <p className="text-sm font-medium">
-          Return or exchange: {productName}
-        </p>
+        <p className="text-sm font-medium">Return or exchange: {productName}</p>
         <p className="text-xs text-[#2B2620]/50">
           {color} · {size} · {formatPrice(unitPrice, currency)} each
         </p>

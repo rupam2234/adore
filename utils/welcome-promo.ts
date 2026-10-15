@@ -39,11 +39,9 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_SUFFIX_LENGTH = 6;
 
 /**
- * A code a human can transcribe: WELCOME10-XXXXXX.
+ * A code a human can transcribe: WELCOME10XXXXXX.
  *
- * The readable prefix is deliberate. Someone comparing the email against the
- * checkout box can see at a glance that they match, instead of wondering
- * whether 'F' really was 'E'.
+ * No dash — easier to type, paste, and read. The prefix is still recognisable.
  */
 function generateCode(): string {
   const bytes = new Uint8Array(CODE_SUFFIX_LENGTH);
@@ -55,7 +53,7 @@ function generateCode(): string {
     // character is equally likely.
     suffix += CODE_ALPHABET[bytes[i]! % CODE_ALPHABET.length];
   }
-  return `WELCOME10-${suffix}`;
+  return `WELCOME10${suffix}`;
 }
 
 export type WelcomeIssue = {
@@ -206,7 +204,7 @@ export async function resolveWelcomeCode(
  * account" rather than being silently treated as an unknown code.
  */
 export function looksLikeWelcomeCode(code: string): boolean {
-  return /^WELCOME10(?:-[A-Z2-9]{6})?$/i.test(code.trim());
+  return /^WELCOME10(?:[A-Z2-9]{6})?$/i.test(code.trim());
 }
 
 /**

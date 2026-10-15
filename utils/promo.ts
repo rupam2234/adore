@@ -64,7 +64,10 @@ type PromoRow = {
   expires_at: string | null;
 };
 
-async function findPromo(code: string, onlyId?: string): Promise<PromoRow | null> {
+async function findPromo(
+  code: string,
+  onlyId?: string
+): Promise<PromoRow | null> {
   const rows = await rawQuery<PromoRow>(sql`
     SELECT id, code, description, discount_type, discount_value, min_subtotal,
            max_redemptions, redemption_count, starts_at, expires_at
@@ -224,7 +227,10 @@ export async function revalidateAttachedPromo(
   let promo: PromoRow | null;
   if (looksLikeWelcomeCode(attached.code)) {
     try {
-      promo = await findPromo('WELCOME10', await resolveWelcomeCode(attached.code, userId));
+      promo = await findPromo(
+        'WELCOME10',
+        await resolveWelcomeCode(attached.code, userId)
+      );
     } catch {
       await removePromo(cartId);
       return;

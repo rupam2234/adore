@@ -24,7 +24,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -80,8 +83,12 @@ const classified = await sql`
 const verified = classified.filter(r => r.has_verified_purchase);
 const unverified = classified.filter(r => !r.has_verified_purchase);
 
-console.log(`\n=== would survive the verified-buyer gate: ${verified.length} ===`);
-console.log(`=== would be REMOVED by a verified-buyer purge: ${unverified.length} ===`);
+console.log(
+  `\n=== would survive the verified-buyer gate: ${verified.length} ===`
+);
+console.log(
+  `=== would be REMOVED by a verified-buyer purge: ${unverified.length} ===`
+);
 
 if (unverified.length > 0) {
   console.log('\nRows that fail the gate:');
@@ -94,7 +101,9 @@ if (unverified.length > 0) {
 }
 
 if (verified.length > 0) {
-  console.log('\nRows that pass the gate (real customers — do NOT bulk-delete):');
+  console.log(
+    '\nRows that pass the gate (real customers — do NOT bulk-delete):'
+  );
   for (const r of verified) {
     console.log(
       `  ${r.id}  "${r.author_name}"  ${r.rating}*  ` +
@@ -119,7 +128,9 @@ const byProduct = await sql`
 
 console.log('\n=== reviews by product ===');
 for (const p of byProduct) {
-  console.log(`  ${String(p.review_count).padStart(3)} review(s)  ${p.name}  (/products/${p.slug})`);
+  console.log(
+    `  ${String(p.review_count).padStart(3)} review(s)  ${p.name}  (/products/${p.slug})`
+  );
 }
 
 console.log('\n=== every review, with its product ===');
@@ -167,7 +178,9 @@ console.log(`  orders:                      ${oc.orders}`);
 console.log(`  order_items:                 ${oc.order_items}`);
 console.log(`  customers:                   ${oc.customers}`);
 console.log(`  customers with a user_id:    ${oc.customers_with_user}`);
-console.log(`  products with a verified buy: ${linkedOrders[0].products_bought}`);
+console.log(
+  `  products with a verified buy: ${linkedOrders[0].products_bought}`
+);
 
 if (linkedOrders[0].products_bought === 0) {
   console.log(

@@ -16,7 +16,8 @@ const EXT = new Set(['.ts', '.tsx', '.mjs']);
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
-    if (name === 'node_modules' || name === '.next' || name === '.git') continue;
+    if (name === 'node_modules' || name === '.next' || name === '.git')
+      continue;
     const full = join(dir, name);
     if (statSync(full).isDirectory()) walk(full, out);
     else if (EXT.has(extname(name))) out.push(full);
@@ -30,7 +31,8 @@ const sources = new Map(files.map(f => [f, readFileSync(f, 'utf8')]));
 /** Collect every `export ... name` / `export { a, b }` binding. */
 const exported = new Map(); // name -> [files]
 
-const NAMED = /^export\s+(?:async\s+)?(?:function|const|let|class|type|interface|enum)\s+([A-Za-z_$][\w$]*)/gm;
+const NAMED =
+  /^export\s+(?:async\s+)?(?:function|const|let|class|type|interface|enum)\s+([A-Za-z_$][\w$]*)/gm;
 const LIST = /^export\s*\{([^}]+)\}/gm;
 
 for (const [file, src] of sources) {
@@ -41,7 +43,11 @@ for (const [file, src] of sources) {
   }
   for (const m of src.matchAll(LIST)) {
     for (const part of m[1].split(',')) {
-      const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+      const name = part
+        .trim()
+        .split(/\s+as\s+/)
+        .pop()
+        ?.trim();
       if (!name || name === 'type') continue;
       if (!exported.has(name)) exported.set(name, []);
       exported.get(name).push(file);
@@ -63,7 +69,10 @@ for (const name of exported.keys()) {
         ),
         ''
       )
-      .replace(new RegExp(`^export\\s*\\{[^}]*\\b${name}\\b[^}]*\\};?`, 'gm'), '');
+      .replace(
+        new RegExp(`^export\\s*\\{[^}]*\\b${name}\\b[^}]*\\};?`, 'gm'),
+        ''
+      );
     used += stripped.match(new RegExp(`\\b${name}\\b`, 'g'))?.length ?? 0;
   }
   if (used === 0) dead.push({ name, files: exported.get(name) });

@@ -259,7 +259,10 @@ async function loginForToken(): Promise<string | null> {
 
 /** Shiprocket quotes per 0.5 kg slab — round up (min one slab). */
 function rateSlabKg(weightKg: number | null | undefined): number {
-  const w = weightKg != null && Number.isFinite(weightKg) && weightKg > 0 ? weightKg : DEFAULT_WEIGHT_KG;
+  const w =
+    weightKg != null && Number.isFinite(weightKg) && weightKg > 0
+      ? weightKg
+      : DEFAULT_WEIGHT_KG;
   return Math.min(50, Math.max(0.5, Math.ceil(w * 2) / 2));
 }
 
@@ -472,11 +475,13 @@ export type ShiprocketOrderResult = {
 };
 
 // Seller warehouse pickup location name configured in the Shiprocket dashboard.
-const PICKUP_LOCATION = process.env.SHIPROCKET_PICKUP_LOCATION ?? 'Primary';
-// Rough parcel dimensions (cm / g) — good enough for rate estimates.
+const PICKUP_LOCATION = process.env.SHIPROCKET_PICKUP_LOCATION ?? 'home';
+// Rough parcel dimensions (cm / kg) — good enough for rate estimates.
 const PARCEL_LENGTH_CM = 30;
 const PARCEL_BREADTH_CM = 24;
 const PARCEL_HEIGHT_CM = 6;
+// Per-unit fallback weight in GRAMS (converted to kg before sending to
+// Shiprocket, whose API takes kg).
 const PARCEL_WEIGHT_G_PER_UNIT = 400;
 
 function splitName(fullName: string): { first: string; last: string } {
@@ -521,14 +526,19 @@ export async function createShiprocketOrder(
     breadth: PARCEL_BREADTH_CM,
     height: PARCEL_HEIGHT_CM,
     // Real per-product weights when the admin set them; 400g estimate otherwise.
-    weight: input.items.reduce(
-      (sum, i) =>
-        sum +
-        (i.weightGrams != null && i.weightGrams > 0
-          ? i.weightGrams
-          : PARCEL_WEIGHT_G_PER_UNIT) * i.units,
-      0
-    ),
+    // Shiprocket's weight field is in KILOGRAMS, not grams — the stored
+    // weight_grams values must be divided by 1000 or a 400g parcel books as
+    // 400kg and every courier rate is wrong.
+    weight:
+      input.items.reduce(
+        (sum, i) =>
+          sum +
+          (i.weightGrams != null && i.weightGrams > 0
+            ? i.weightGrams
+            : PARCEL_WEIGHT_G_PER_UNIT) *
+          i.units,
+        0
+      ) / 1000,
   };
 
   const res = await shiprocketPost('/orders/create/adhoc', payload);
@@ -543,11 +553,115 @@ export async function createShiprocketOrder(
   const body = (await res.json()) as {
     order_id?: number | string;
     shipment_id?: number | string;
+    message?: string;
   };
+
+  // Shiprocket returns HTTP 200 even for business errors (e.g. wrong pickup
+  // location) with the error in `message` and no order_id. Treat missing
+  // order_id as a failure so callers retry rather than silently losing the
+  // booking.
+  if (!body.order_id) {
+    throw new ShiprocketOrderError(
+      `Shiprocket did not return an order id${body.message ? `: ${body.message}` : ''}`
+    );
+  }
+
   return {
-    shiprocketOrderId: String(body.order_id ?? ''),
+    shiprocketOrderId: String(body.order_id),
     shipmentId: body.shipment_id != null ? String(body.shipment_id) : null,
   };
+}
+
+/**
+ * Cancel an order in Shiprocket.
+ *
+ * Uses the order ids endpoint (`/orders/cancel` with `ids`). Works while the
+ * shipment has not been dispatched — once a shipment has an AWB and is moving,
+ * Shiprocket rejects cancellation and the caller surfaces a clear error.
+ *
+ * Shiprocket answers 200 with `status: "cancelled"` on success and can answer
+ * 200 with an error in `message` (same shape as order creation), so both paths
+ * are checked.
+ */
+export async function cancelShiprocketOrder(
+  shiprocketOrderId: string
+): Promise<void> {
+  const res = await shiprocketPost('/orders/cancel', {
+    ids: [Number(shiprocketOrderId)],
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new ShiprocketOrderError(
+      `Shiprocket cancellation failed (${res.status}) ${detail.slice(0, 200)}`
+    );
+  }
+
+  const body = (await res.json().catch(() => null)) as {
+    status?: string;
+    message?: string;
+  } | null;
+
+  // 200-with-error (e.g. shipment already dispatched) — surface, never swallow.
+  if (body?.message && body?.status !== 'cancelled') {
+    throw new ShiprocketOrderError(
+      `Shiprocket cancellation rejected: ${body.message}`
+    );
+  }
+}
+
+export type ShiprocketOrderStatus = {
+  /** Shiprocket's own order-level status (NEW, IN_TRANSIT, DELIVERED…). */
+  orderStatus: string | null;
+  /** Latest shipment status string. */
+  shipmentStatus: string | null;
+  courierName: string | null;
+  awb: string | null;
+};
+
+/**
+ * Read the live shipping status for a booked order.
+ *
+ * Used by the admin order-details page. Best-effort by design: a Shiprocket
+ * outage must never break the details page — the caller renders the stored
+ * booking id plus "status unavailable" instead.
+ */
+export async function fetchShiprocketOrderStatus(
+  shiprocketOrderId: string
+): Promise<ShiprocketOrderStatus | null> {
+  try {
+    const res = await shiprocketGet(
+      `/orders/show/${encodeURIComponent(shiprocketOrderId)}`
+    );
+    if (!res.ok) return null;
+
+    const body = (await res.json().catch(() => null)) as {
+      data?: Array<{
+        status?: string | number;
+        shipments?: Array<{
+          status?: string;
+          courier_name?: string;
+          awb_code?: string;
+        }>;
+      }>;
+    } | null;
+
+    const record = body?.data?.[0];
+    if (!record) return null;
+
+    const shipment = record.shipments?.[0] ?? null;
+    return {
+      orderStatus:
+        record.status != null
+          ? String(record.status)
+          : (shipment?.status ?? null),
+      shipmentStatus: shipment?.status ?? null,
+      courierName: shipment?.courier_name ?? null,
+      awb: shipment?.awb_code ?? null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -590,7 +704,12 @@ export type CreateRmaInput = {
   returnReason: string;
   /** Our internal return-request id, echoed for reconciliation. */
   requestId: string;
-  items: Array<{ name: string; sku: string; units: number; sellingPrice: number }>;
+  items: Array<{
+    name: string;
+    sku: string;
+    units: number;
+    sellingPrice: number;
+  }>;
   /** Packed dimensions/weight for the return parcel. */
   lengthCm: number;
   breadthCm: number;
@@ -693,7 +812,9 @@ export async function createReturnOrder(
   };
 
   if (!res.ok) {
-    const detail = JSON.stringify(body.errors ?? body.message ?? '').toLowerCase();
+    const detail = JSON.stringify(
+      body.errors ?? body.message ?? ''
+    ).toLowerCase();
     if (detail.includes('already') || detail.includes('rma')) {
       return { shipmentId: '', returnOrderId: null }; // alreadyExisted
     }
@@ -724,7 +845,10 @@ export async function createReturnOrder(
   }
   return {
     shipmentId: String(shipmentId),
-    returnOrderId: body.data?.return_order_id != null ? String(body.data.return_order_id) : null,
+    returnOrderId:
+      body.data?.return_order_id != null
+        ? String(body.data.return_order_id)
+        : null,
   };
 }
 
@@ -812,10 +936,7 @@ export async function scheduleReversePickup(
 }
 
 export type ReturnTrackingStatus =
-  | 'PICKUP_SCHEDULED'
-  | 'PICKUP_FAILED'
-  | 'IN_TRANSIT'
-  | 'RECEIVED';
+  'PICKUP_SCHEDULED' | 'PICKUP_FAILED' | 'IN_TRANSIT' | 'RECEIVED';
 
 /**
  * Map Shiprocket's return-leg vocabulary onto our state machine.
@@ -912,4 +1033,3 @@ export async function fetchReturnTracking(
 
   return { status: mapped, awb: row.awb ?? null };
 }
-

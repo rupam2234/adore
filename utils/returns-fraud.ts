@@ -134,7 +134,9 @@ export function scoreReturnRisk(s: RiskSignals): RiskAssessment {
   }
 
   if (s.lifetimeRefunded > 0 && s.lifetimeReturns >= 3) {
-    reasons.push(`₹${Math.round(s.lifetimeRefunded)} refunded across the account`);
+    reasons.push(
+      `₹${Math.round(s.lifetimeRefunded)} refunded across the account`
+    );
   }
 
   // --- Timing -------------------------------------------------------------

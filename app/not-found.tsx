@@ -15,7 +15,8 @@ export default function NotFound() {
             Page not found
           </p>
           <p className="max-w-md mx-auto text-sm text-[#2B2620]/60">
-            The page you&apos;re looking for doesn&apos;t exist or has been moved.
+            The page you&apos;re looking for doesn&apos;t exist or has been
+            moved.
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:gap-4">
             <Link

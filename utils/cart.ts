@@ -129,13 +129,16 @@ function mapCart(
     items.reduce((sum, item) => sum + Number(item.lineTotal), 0)
   );
   const weightGrams = items.reduce(
-    (sum, item) => sum + (item.weightGrams ?? DEFAULT_WEIGHT_GRAMS) * item.quantity,
+    (sum, item) =>
+      sum + (item.weightGrams ?? DEFAULT_WEIGHT_GRAMS) * item.quantity,
     0
   );
   const discount = promo
     ? computeDiscount(promo.discountType, promo.discountValue, subtotal)
     : '0';
-  const shipping = String(computeShippingAmount(Number(subtotal) - Number(discount)));
+  const shipping = String(
+    computeShippingAmount(Number(subtotal) - Number(discount))
+  );
   const total = String(Number(subtotal) - Number(discount) + Number(shipping));
 
   return {
@@ -353,9 +356,7 @@ const CART_ROWS_ORDER = sql`
  * error and break every cart operation; fall back to the legacy read with
  * null weights (→ the 400g estimate applies).
  */
-async function cartRowsWithWeight(
-  cartId: string
-): Promise<CartRow[]> {
+async function cartRowsWithWeight(cartId: string): Promise<CartRow[]> {
   try {
     return await rawQuery<CartRow>(
       sql`${CART_ROWS_SQL}${cartId}${CART_ROWS_ORDER}`

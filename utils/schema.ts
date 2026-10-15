@@ -563,7 +563,9 @@ export const paymentDisputes = pgTable(
     orderId: uuid('order_id').references(() => orders.id, {
       onDelete: 'cascade',
     }),
-    amount: numeric('amount', { precision: 10, scale: 2 }).notNull().default('0'),
+    amount: numeric('amount', { precision: 10, scale: 2 })
+      .notNull()
+      .default('0'),
     reason: text('reason'),
     status: text('status')
       .$type<'OPEN' | 'LOST' | 'WON' | 'WITHDRAWN'>()
@@ -652,7 +654,9 @@ export const emailJobs = pgTable(
   t => [
     // The claim query's exact predicate: pending, and due. Partial so the index
     // stays small even after the table fills with SENT history.
-    index('idx_email_jobs_due').on(t.nextAttemptAt).where(sql`status = 'PENDING'`),
+    index('idx_email_jobs_due')
+      .on(t.nextAttemptAt)
+      .where(sql`status = 'PENDING'`),
     // Lets the Resend bounce webhook find the job by provider id.
     index('idx_email_jobs_provider').on(t.providerId),
   ]
@@ -693,4 +697,3 @@ export const webhookEvents = pgTable(
   },
   t => [index('idx_webhook_events_pending').on(t.provider, t.receivedAt)]
 );
-
