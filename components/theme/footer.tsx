@@ -50,7 +50,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 gap-10 sm:grid-cols-3 lg:grid-cols-5">
           <div className="col-span-2 sm:col-span-3 lg:col-span-2">
             <h4 className="font-serif text-xl tracking-tight transition-colors hover:text-[#E7DFCB]">
-              Find us at.
+              Find us at
             </h4>
             {/* <p className="mt-3 max-w-xs text-sm leading-relaxed text-[#FAF8F3]/60"></p> */}
             <div className="mt-3 flex gap-5">

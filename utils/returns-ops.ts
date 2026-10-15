@@ -7,7 +7,11 @@
  */
 
 import { rawQuery, sql } from '@/utils/db';
-import { createRazorpayRefund, fetchRazorpayRefund, RazorpayError } from '@/utils/razorpay';
+import {
+  createRazorpayRefund,
+  fetchRazorpayRefund,
+  RazorpayError,
+} from '@/utils/razorpay';
 import {
   createReturnOrder,
   scheduleReversePickup,
@@ -39,7 +43,6 @@ import { recordEvent } from './returns-audit';
 import { enqueueAndNotify } from './email-queue';
 import { buildDedupeKey } from './email-lifecycle';
 
-
 export class ReturnsOpsError extends Error {
   code: string;
   status: number;
@@ -49,7 +52,6 @@ export class ReturnsOpsError extends Error {
     this.status = status;
   }
 }
-
 
 /**
  * Everything a transition needs, in ONE query (the Neon HTTP driver costs ~120ms
@@ -204,7 +206,6 @@ export async function loadOpsRow(returnId: string): Promise<OpsRow | null> {
 // customer submit path pulling in the payment/courier adapters.
 export { recordEvent, type ReturnEventInput } from './returns-audit';
 
-
 /**
  * Compare-and-set the status: `UPDATE ... WHERE id = ? AND status = ?`. A lost race
  * updates zero rows and returns false, so callers bail rather than act on a stale
@@ -231,8 +232,8 @@ function isOurFault(reason: string): boolean {
   return (CUSTOMER_FAULT_EXEMPT_REASONS as readonly string[]).includes(reason);
 }
 
-  // Null hours means genuinely unknown (legacy orders): the scorer reads that as
-  // "no signal" rather than treating a guessed delivery date as suspicion.
+// Null hours means genuinely unknown (legacy orders): the scorer reads that as
+// "no signal" rather than treating a guessed delivery date as suspicion.
 
 /** Assemble the scoring signals from a loaded row. */
 function buildRiskSignals(row: OpsRow, now: Date): RiskSignals {
@@ -296,18 +297,19 @@ type BlockContextLite = Parameters<typeof evaluateHardBlocks>[0];
 /** Is the claim's return window still open? */
 function windowHasClosed(row: OpsRow, now: Date): boolean {
   if (!row.delivered_at) {
-  // No address means no email, and the rejection is already committed - not worth
-  // failing the admin's action over.
+    // No address means no email, and the rejection is already committed - not worth
+    // failing the admin's action over.
     return true;
   }
   const delivered = new Date(row.delivered_at);
   if (Number.isNaN(delivered.getTime())) return true;
-  const windowMs = (isOurFault(row.reason) ? 48 : RETURN_WINDOW_DAYS * 24) * 3_600_000;
+  const windowMs =
+    (isOurFault(row.reason) ? 48 : RETURN_WINDOW_DAYS * 24) * 3_600_000;
   return now.getTime() - delivered.getTime() > windowMs;
 }
 
-    // Keyed on the RETURN id: one order can have several return requests (the
-    // unit of return is the order LINE), and each is a distinct email.
+// Keyed on the RETURN id: one order can have several return requests (the
+// unit of return is the order LINE), and each is a distinct email.
 export type ReviewOutcome =
   | { ok: true; status: string; riskScore: number; riskReasons: string[] }
   | { ok: false; code: string; message: string; blockReason: string | null };
@@ -427,7 +429,12 @@ export async function reviewReturn(
       reason,
     });
 
-    return { ok: true, status: 'REJECTED', riskScore: risk.score, riskReasons: risk.reasons };
+    return {
+      ok: true,
+      status: 'REJECTED',
+      riskScore: risk.score,
+      riskReasons: risk.reasons,
+    };
   }
 
   // 3. Hard blocks.
@@ -466,7 +473,12 @@ export async function reviewReturn(
     });
   } catch (error) {
     if (error instanceof TransitionError) {
-      return { ok: false, code: error.code, message: error.message, blockReason: null };
+      return {
+        ok: false,
+        code: error.code,
+        message: error.message,
+        blockReason: null,
+      };
     }
     throw error;
   }
@@ -492,9 +504,13 @@ export async function reviewReturn(
     data: { riskScore: risk.score, riskReasons: risk.reasons },
   });
 
-  return { ok: true, status: 'APPROVED', riskScore: risk.score, riskReasons: risk.reasons };
+  return {
+    ok: true,
+    status: 'APPROVED',
+    riskScore: risk.score,
+    riskReasons: risk.reasons,
+  };
 }
-
 
 /**
  * Recompute a customer's rolling risk counters - a full recompute, not an
@@ -580,9 +596,13 @@ async function anyReturnForCustomer(customerId: string): Promise<string> {
   return rows[0]?.id ?? `account:${customerId}`;
 }
 
-
 export type PickupOutcome =
-  | { ok: true; status: 'PICKUP_SCHEDULED' | 'SELF_SHIP_PENDING'; rmaId: string | null; alreadyScheduled: boolean }
+  | {
+      ok: true;
+      status: 'PICKUP_SCHEDULED' | 'SELF_SHIP_PENDING';
+      rmaId: string | null;
+      alreadyScheduled: boolean;
+    }
   | { ok: false; code: string; message: string };
 
 /**
@@ -600,10 +620,20 @@ export async function bookReversePickup(
   // Idempotent: a re-book on an already-scheduled return is a no-op, not an
   // error. Couriers charge per pickup, so a double-book is real money.
   if (row.status === 'PICKUP_SCHEDULED') {
-    return { ok: true, status: 'PICKUP_SCHEDULED', rmaId: row.shiprocket_return_awb, alreadyScheduled: true };
+    return {
+      ok: true,
+      status: 'PICKUP_SCHEDULED',
+      rmaId: row.shiprocket_return_awb,
+      alreadyScheduled: true,
+    };
   }
   if (row.status === 'SELF_SHIP_PENDING') {
-    return { ok: true, status: 'SELF_SHIP_PENDING', rmaId: row.shiprocket_return_awb, alreadyScheduled: false };
+    return {
+      ok: true,
+      status: 'SELF_SHIP_PENDING',
+      rmaId: row.shiprocket_return_awb,
+      alreadyScheduled: false,
+    };
   }
 
   try {
@@ -707,7 +737,8 @@ export async function bookReversePickup(
       return {
         ok: false,
         code: 'STALE',
-        message: 'This request changed while we were booking. Refresh and try again.',
+        message:
+          'This request changed while we were booking. Refresh and try again.',
       };
     }
 
@@ -742,7 +773,11 @@ export async function bookReversePickup(
       // PIN outside reverse coverage is a published outcome: offer self-ship and waive
       // the fee, since refusing here is not the customer's fault.
       if (error.code === 'PICKUP_UNAVAILABLE') {
-        const moved = await casStatus(returnId, row.status, 'SELF_SHIP_PENDING');
+        const moved = await casStatus(
+          returnId,
+          row.status,
+          'SELF_SHIP_PENDING'
+        );
         if (moved) {
           await rawQuery(sql`
             UPDATE return_requests
@@ -859,7 +894,6 @@ export async function confirmSelfShipment(
   return { ok: true, status: 'IN_TRANSIT' };
 }
 
-
 type PickupAddress = {
   fullName: string;
   email: string;
@@ -885,7 +919,9 @@ async function loadPickupAddress(
     name: string | null;
     phone: string | null;
   }>(sql`
-    SELECT o.shipping_address_snapshot AS snap, c.email, c.name, c.phone
+    SELECT o.shipping_address_snapshot AS snap, c.email,
+           NULLIF(CONCAT_WS(' ', c.first_name, c.last_name), '') AS name,
+           c.phone
     FROM orders o
     LEFT JOIN customers c ON c.id = o.customer_id
     WHERE o.id = ${orderId}
@@ -908,8 +944,8 @@ async function loadPickupAddress(
   };
 }
 
-  // Idempotent: couriers retry and a double "received" is harmless. Checked BEFORE
-  // the transition guard so a replayed webhook doesn't error at the courier.
+// Idempotent: couriers retry and a double "received" is harmless. Checked BEFORE
+// the transition guard so a replayed webhook doesn't error at the courier.
 
 export type QcOutcome =
   | { ok: true; status: 'IN_TRANSIT' | 'RECEIVED' | 'QC_PASSED' | 'QC_FAILED' }
@@ -950,7 +986,11 @@ export async function markReceived(
 
   const ok = await casStatus(returnId, row.status, 'RECEIVED');
   if (!ok) {
-    return { ok: false, code: 'STALE', message: 'This request changed. Refresh and try again.' };
+    return {
+      ok: false,
+      code: 'STALE',
+      message: 'This request changed. Refresh and try again.',
+    };
   }
   if (awb) {
     await rawQuery(sql`
@@ -1022,7 +1062,11 @@ export async function recordQcVerdict(
 
   const ok = await casStatus(returnId, row.status, to);
   if (!ok) {
-    return { ok: false, code: 'STALE', message: 'This request changed. Refresh and try again.' };
+    return {
+      ok: false,
+      code: 'STALE',
+      message: 'This request changed. Refresh and try again.',
+    };
   }
 
   if (passed) {
@@ -1078,7 +1122,6 @@ export async function recordQcVerdict(
 
   return { ok: true, status: to };
 }
-
 
 export type SettleOutcome =
   | {
@@ -1257,8 +1300,8 @@ export async function settleRefund(
   if (processed) {
     const done = await casStatus(returnId, 'REFUND_PENDING', 'REFUNDED');
     if (!done) {
-    // Idempotent: settle a second time and we report the original figures rather
-    // than erroring, so a double click is harmless.
+      // Idempotent: settle a second time and we report the original figures rather
+      // than erroring, so a double click is harmless.
       console.error(
         `[returns] refund processed but status did not advance for ${returnId}`
       );
@@ -1314,7 +1357,6 @@ export async function settleRefund(
       'The refund has been accepted by our payment provider and will reach you within a few working days.',
   };
 }
-
 
 /** Postgres SQLSTATE from a Drizzle-wrapped driver error. */
 function sqlState(error: unknown): string | null {
@@ -1401,7 +1443,10 @@ async function releaseClaim(returnId: string): Promise<void> {
   `);
 }
 
-async function markRefundFailed(refundId: string, reason: string): Promise<void> {
+async function markRefundFailed(
+  refundId: string,
+  reason: string
+): Promise<void> {
   await rawQuery(sql`
     UPDATE refunds SET status = 'FAILED' WHERE id = ${refundId}
   `);
@@ -1417,9 +1462,9 @@ async function existingRefundId(returnId: string): Promise<string | null> {
   return rows[0]?.razorpay_refund_id ?? null;
 }
 
-      // The crash happened before the gateway answered, so there is no id to query.
-      // Flag for a human rather than guess: a wrong guess either double-refunds
-      // or leaves a customer out of pocket.
+// The crash happened before the gateway answered, so there is no id to query.
+// Flag for a human rather than guess: a wrong guess either double-refunds
+// or leaves a customer out of pocket.
 
 /**
  * Resolve refunds we are not sure about, on a schedule and after any
@@ -1506,10 +1551,14 @@ export async function reconcileRefunds(limit = 50): Promise<{
   return { checked: rows.length, resolved, stillPending };
 }
 
-    // Idempotent: a second call finds the customer_risk row already bumped.
+// Idempotent: a second call finds the customer_risk row already bumped.
 
 export type ExchangeOutcome =
-  | { ok: true; status: 'EXCHANGE_SHIPPED' | 'EXCHANGE_FAILED'; message?: string }
+  | {
+      ok: true;
+      status: 'EXCHANGE_SHIPPED' | 'EXCHANGE_FAILED';
+      message?: string;
+    }
   | { ok: false; code: string; message: string };
 
 /**
@@ -1603,7 +1652,6 @@ export async function fulfilExchange(
   return { ok: true, status: 'EXCHANGE_SHIPPED' };
 }
 
-
 /**
  * A customer withdrawing their own request.
  *
@@ -1647,7 +1695,6 @@ export async function cancelReturnByCustomer(
   return { ok: true };
 }
 
-
 /**
  * The admin work queue, hardest first.
  *
@@ -1656,9 +1703,11 @@ export async function cancelReturnByCustomer(
  * reverse-chronological dump. Within that, `risk_score` descending puts the
  * likeliest frauds in front - those are where a careless approve costs real money.
  */
-export async function listAdminReturns(opts: {
-  limit?: number;
-} = {}): Promise<AdminReturn[]> {
+export async function listAdminReturns(
+  opts: {
+    limit?: number;
+  } = {}
+): Promise<AdminReturn[]> {
   const rows = await rawQuery<AdminReturnRow>(sql`
     ${ADMIN_SELECT}
     WHERE r.status NOT IN ('REFUNDED','REJECTED','CANCELLED')
@@ -1723,7 +1772,9 @@ const ADMIN_SELECT = sql`
   SELECT r.id, r.type, r.reason, r.status, r.qty, r.fee, r.refund_amount,
          r.net_refund, r.order_id, r.order_item_id,
          o.order_number, oi.product_name, oi.sku,
-         r.customer_id, c.name AS customer_name, c.email AS customer_email,
+         r.customer_id,
+         NULLIF(CONCAT_WS(' ', c.first_name, c.last_name), '') AS customer_name,
+         c.email AS customer_email,
          c.phone AS customer_phone,
          r.created_at, o.delivered_at,
          r.risk_score, r.risk_reasons, r.is_blocked, r.blocked_reason,
@@ -1776,9 +1827,7 @@ function mapAdminReturn(r: AdminReturnRow): AdminReturn {
 }
 
 /** One request, with its full event history. For the admin detail drawer. */
-export async function getAdminReturnDetail(
-  returnId: string
-): Promise<{
+export async function getAdminReturnDetail(returnId: string): Promise<{
   request: AdminReturn | null;
   events: Array<{
     event: string;
@@ -1843,7 +1892,6 @@ export async function getAdminReturnDetail(
     })),
   };
 }
-
 
 /**
  * Claim a webhook event id, or report that we have already seen it. True when this
@@ -1954,15 +2002,20 @@ export async function syncReturnFromCourier(
   if (!row.shiprocket_return_awb) return { changed: false };
   // Once the goods are in and inspected, the courier has nothing left to tell us.
   if (
-    ['RECEIVED','QC_PASSED','QC_FAILED','REFUND_PENDING','REFUNDED'].includes(
-      row.status
-    )
+    [
+      'RECEIVED',
+      'QC_PASSED',
+      'QC_FAILED',
+      'REFUND_PENDING',
+      'REFUNDED',
+    ].includes(row.status)
   ) {
     return { changed: false };
   }
 
   // Fall back to asking the courier only when the caller could not tell us.
-  const known = tracking ?? (await fetchReturnTracking(row.shiprocket_return_awb));
+  const known =
+    tracking ?? (await fetchReturnTracking(row.shiprocket_return_awb));
   if (!known) return { changed: false };
 
   // Only IN_TRANSIT is applied automatically. PICKUP_FAILED needs a human to choose
@@ -2005,7 +2058,6 @@ export async function syncReturnFromCourier(
 
   return { changed: false };
 }
-
 
 /**
  * Record a chargeback / dispute raised against a payment.
@@ -2112,19 +2164,3 @@ export async function resolveDispute(input: {
     data: { disputeId: input.disputeId, orderId: order.order_id },
   });
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

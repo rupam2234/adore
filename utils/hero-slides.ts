@@ -155,7 +155,7 @@ export const HERO_SLIDES: HeroSlide[] = [
     objectPosition: 'center 30%',
     eyebrow: 'Made by hand',
     title: 'Slow cloth, made to last',
-    quote: 'Handloom quiet, handloom warm, handloom ours.',
+    quote: 'Timelessly yours, forever muse, a lot of charm.',
     cta: 'Explore the collection',
     href: '#shop',
   },

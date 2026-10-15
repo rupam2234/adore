@@ -15,7 +15,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -26,14 +29,35 @@ const sql = neon(url);
 // not exist") even when the value is null.
 const EXPECTED = {
   products: [
-    'id', 'name', 'slug', 'short_description', 'details', 'story', 'material',
-    'fit', 'care_instructions', 'status', 'is_featured', 'weight_grams',
-    'created_at', 'updated_at',
+    'id',
+    'name',
+    'slug',
+    'short_description',
+    'details',
+    'story',
+    'material',
+    'fit',
+    'care_instructions',
+    'status',
+    'is_featured',
+    'weight_grams',
+    'created_at',
+    'updated_at',
   ],
   product_variants: [
-    'id', 'product_id', 'sku', 'color', 'color_hex', 'size', 'price',
-    'compare_at_price', 'currency', 'stock_quantity', 'is_active',
-    'created_at', 'updated_at',
+    'id',
+    'product_id',
+    'sku',
+    'color',
+    'color_hex',
+    'size',
+    'price',
+    'compare_at_price',
+    'currency',
+    'stock_quantity',
+    'is_active',
+    'created_at',
+    'updated_at',
   ],
   product_categories: ['product_id', 'category_id'],
   categories: ['id', 'slug', 'name'],
@@ -65,18 +89,26 @@ const conflictIdx = await sql`
   SELECT indexdef FROM pg_indexes
   WHERE schemaname = 'public' AND tablename = 'product_variants'
     AND indexdef ILIKE '%UNIQUE%'`;
-const hasConflictTarget = conflictIdx.some(r =>
-  /product_id/i.test(r.indexdef) &&
-  /color/i.test(r.indexdef) &&
-  /\bsize\b/i.test(r.indexdef)
+const hasConflictTarget = conflictIdx.some(
+  r =>
+    /product_id/i.test(r.indexdef) &&
+    /color/i.test(r.indexdef) &&
+    /\bsize\b/i.test(r.indexdef)
 );
 if (hasConflictTarget) {
-  console.log('OK   product_variants: unique index covers (product_id, color, size)');
+  console.log(
+    'OK   product_variants: unique index covers (product_id, color, size)'
+  );
 } else {
   problems++;
-  console.log('FAIL product_variants: NO unique index on (product_id, color, size)');
+  console.log(
+    'FAIL product_variants: NO unique index on (product_id, color, size)'
+  );
   console.log('     -> ON CONFLICT in syncVariants() cannot resolve.');
-  console.log('     existing unique indexes:', conflictIdx.map(r => r.indexdef));
+  console.log(
+    '     existing unique indexes:',
+    conflictIdx.map(r => r.indexdef)
+  );
 }
 
 // products.slug must stay unique (uniqueSlug() relies on it to append -2, -3).
@@ -87,7 +119,9 @@ if (slugIdx.some(r => /slug/i.test(r.indexdef))) {
   console.log('OK   products: unique constraint on slug');
 } else {
   problems++;
-  console.log('WARN products: no unique index on slug — uniqueSlug() cannot dedupe.');
+  console.log(
+    'WARN products: no unique index on slug — uniqueSlug() cannot dedupe.'
+  );
 }
 
 console.log(

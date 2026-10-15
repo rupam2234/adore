@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 export type AdminImage = {
   id: string;
@@ -31,10 +31,6 @@ export function ImageManager({
   const [images, setImages] = useState(initialImages);
   const [uploads, setUploads] = useState<UploadProgress[]>([]);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    setImages(initialImages);
-  }, [initialImages]);
 
   function uploadFileWithProgress(file: File): Promise<boolean> {
     return new Promise(resolve => {

@@ -62,14 +62,28 @@ export class CheckoutError extends Error {
   }
 }
 
-export type CheckoutSession = {
-  orderNumber: string;
-  amount: number; // paise, exactly what Razorpay was created with
-  currency: string;
-  razorpayKeyId: string;
-  razorpayOrderId: string;
-  prefill: { name: string; email: string; contact: string };
-};
+/**
+ * Discriminated union: either a normal session requiring Razorpay payment,
+ * or a zero-total session that is already confirmed and only needs redirect.
+ */
+export type CheckoutSession =
+  | {
+      /** Normal case: payment required via Razorpay */
+      paymentRequired: true;
+      orderNumber: string;
+      amount: number; // paise
+      currency: string;
+      razorpayKeyId: string;
+      razorpayOrderId: string;
+      prefill: { name: string; email: string; contact: string };
+    }
+  | {
+      /** Zero-total case: order is already CONFIRMED, just redirect to success */
+      paymentRequired: false;
+      orderNumber: string;
+      amount: 0;
+      currency: string;
+    };
 
 export type CheckoutSessionInput = {
   /** Guests send the full address; logged-in users send a saved addressId. */
@@ -287,6 +301,29 @@ export async function createCheckoutSession(
   );
   const total = Math.round((subtotal - discount + shipping) * 100);
 
+  // --- Zero-total shortcut: if promo covers everything, confirm directly ---
+  // No Razorpay needed, order is CONFIRMED immediately, stock reserved, pushed
+  // to Shiprocket. This is safe for production because:
+  //  - Only triggered when server-computed total is exactly 0
+  //  - Still validates PIN serviceability and stock
+  //  - Creates a real CONFIRMED order with all normal flow steps
+  //  - Pushes to Shiprocket same as paid orders
+  if (total === 0) {
+    return await handleZeroTotalCheckout({
+      cart,
+      cartId,
+      userId,
+      address,
+      contactEmail,
+      subtotal,
+      discount,
+      shipping,
+      currency,
+      shippingAddressId,
+      promoCodeId: await getCartPromoCodeId(cartId),
+    });
+  }
+
   // --- Persist the order (PENDING until payment is verified) ----------------
   const orderNumber = generateOrderNumber();
   const customer = userId
@@ -359,6 +396,7 @@ export async function createCheckoutSession(
       .where(eq(orders.id, orderId));
 
     return {
+      paymentRequired: true,
       orderNumber,
       amount: rpOrder.amount,
       currency: rpOrder.currency,
@@ -381,6 +419,134 @@ export async function createCheckoutSession(
     if (err instanceof RazorpayError) {
       throw new CheckoutError(err.message, err.status);
     }
+    throw err;
+  }
+}
+
+/**
+ * Handle zero-total checkout (100% discount code).
+ * Creates CONFIRMED order directly, reserves stock, pushes to Shiprocket.
+ * Returns a session that tells frontend to redirect to success page.
+ */
+async function handleZeroTotalCheckout(input: {
+  cart: Awaited<ReturnType<typeof getCartDetail>>;
+  cartId: string | null;
+  userId: string | null;
+  address: CheckoutAddress;
+  contactEmail: string;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  currency: string;
+  shippingAddressId: string | null;
+  promoCodeId: string | null;
+}): Promise<CheckoutSession> {
+  const { cart, cartId, userId, address, contactEmail, subtotal, discount, shipping, currency, shippingAddressId, promoCodeId } = input;
+
+  const orderNumber = generateOrderNumber();
+  const customer = userId
+    ? await ensureCustomerForUserId(userId)
+    : await ensureGuestCustomer(contactEmail, address);
+
+  // Create order as CONFIRMED directly (no PENDING state)
+  const inserted = await db
+    .insert(orders)
+    .values({
+      customerId: customer.id,
+      orderNumber,
+      status: 'CONFIRMED',
+      subtotal: subtotal.toFixed(2),
+      discountAmount: discount.toFixed(2),
+      shippingAmount: shipping.toFixed(2),
+      taxAmount: '0',
+      totalAmount: '0',
+      currency,
+      shippingAddressId,
+      shippingAddressSnapshot: addressSnapshot(address),
+      promoCodeId,
+      razorpayPaymentId: null,
+      updatedAt: new Date(),
+    })
+    .returning({ id: orders.id });
+  const orderId = inserted[0]!.id;
+
+  try {
+    await db.insert(orderItems).values(
+      cart.items.map((item: CartLine) => ({
+        orderId,
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.name,
+        sku: `${item.slug}-${item.color}-${item.size}`,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.lineTotal,
+      }))
+    );
+
+    // Reserve stock (same as paid orders)
+    try {
+      await reserveCartItems(
+        orderId,
+        cartId ?? '',
+        cart.items.map((item: CartLine) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+        }))
+      );
+    } catch (err) {
+      if (err instanceof StockUnavailableError) {
+        throw new CheckoutError(err.message, 409);
+      }
+      throw err;
+    }
+
+    // Stock is now reserved; finalize it (decrement)
+    await finalizeReservations(orderId);
+
+    // Clear the cart
+    if (cartId) {
+      try {
+        await clearCart(cartId);
+        await removePromo(cartId);
+      } catch {
+        // Ignore — cart cleanup is cosmetic
+      }
+    }
+
+    // Push to Shiprocket (same as paid orders, best-effort)
+    let shiprocketOrderId: string | null = null;
+    try {
+      shiprocketOrderId = await pushToShiprocket(orderId);
+      if (shiprocketOrderId) {
+        await db
+          .update(orders)
+          .set({
+            shiprocketOrderId,
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, orderId));
+      }
+    } catch (err) {
+      // Best-effort: log but don't fail the order
+      console.error(
+        `[checkout] Shiprocket push for zero-total order ${orderNumber} failed:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+
+    // Return session indicating no payment required — frontend will redirect
+    return {
+      paymentRequired: false,
+      orderNumber,
+      amount: 0,
+      currency,
+    };
+  } catch (err) {
+    // Rollback on any failure: release reservations, delete order
+    await releaseOrderReservations(orderId);
+    await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
+    await db.delete(orders).where(eq(orders.id, orderId));
     throw err;
   }
 }

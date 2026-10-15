@@ -16,7 +16,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -59,25 +62,33 @@ const countSql = `SELECT t, n FROM (${countParts.join(' UNION ALL ')}) c ORDER B
 // The first run of this script reported 0 rows in every table because of the
 // first quirk, which is exactly the kind of silently-wrong answer worth a note.
 const executed = await sql.query(countSql);
-const rows = Array.isArray(executed) ? executed : executed?.rows ?? [];
+const rows = Array.isArray(executed) ? executed : (executed?.rows ?? []);
 
 const rowCounts = Object.fromEntries(rows.map(r => [r.t, r.n]));
 
 // --- 2. What does the application think exists? ---------------------------
 const schemaSrc = readFileSync('utils/schema.ts', 'utf8');
-const codeTables = [...schemaSrc.matchAll(/pgTable\(\s*'([^']+)'/g)].map(m => m[1]);
+const codeTables = [...schemaSrc.matchAll(/pgTable\(\s*'([^']+)'/g)].map(
+  m => m[1]
+);
 
 function walk(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (entry === 'node_modules' || entry === '.next' || entry === '.git') continue;
+    if (entry === 'node_modules' || entry === '.next' || entry === '.git')
+      continue;
     if (statSync(full).isDirectory()) out.push(...walk(full));
     else if (/\.(ts|tsx|mjs|sql)$/.test(full)) out.push(full);
   }
   return out;
 }
-const sources = [...walk('app'), ...walk('components'), ...walk('utils'), ...walk('scripts')];
+const sources = [
+  ...walk('app'),
+  ...walk('components'),
+  ...walk('utils'),
+  ...walk('scripts'),
+];
 
 /** snake_case table name -> the camelCase identifier Drizzle exports for it. */
 function camel(name) {
@@ -102,21 +113,30 @@ function usageCount(name) {
   for (const f of sources) {
     const src = readFileSync(f, 'utf8');
     if (f.endsWith(join('utils', 'schema.ts'))) {
-      const decls = [...src.matchAll(new RegExp(`pgTable\\(\\s*'${name}'`, 'g'))].length;
+      const decls = [
+        ...src.matchAll(new RegExp(`pgTable\\(\\s*'${name}'`, 'g')),
+      ].length;
       const mentions = alternates.reduce(
-        (n, alt) => n + [...src.matchAll(new RegExp(`\\b${alt}\\b`, 'g'))].length,
+        (n, alt) =>
+          n + [...src.matchAll(new RegExp(`\\b${alt}\\b`, 'g'))].length,
         0
       );
       if (mentions > decls) files += 1;
       continue;
     }
-    if (alternates.some(alt => new RegExp(`\\b${alt}\\b`).test(src))) files += 1;
+    if (alternates.some(alt => new RegExp(`\\b${alt}\\b`).test(src)))
+      files += 1;
   }
   return files;
 }
 
 console.log('=== tables in postgres (public schema) ===');
-console.log('table'.padEnd(24), 'cols'.padStart(5), 'rows'.padStart(7), 'files'.padStart(7));
+console.log(
+  'table'.padEnd(24),
+  'cols'.padStart(5),
+  'rows'.padStart(7),
+  'files'.padStart(7)
+);
 
 const unusedInCode = [];
 for (const t of dbTables) {
@@ -164,7 +184,9 @@ const [uc] = await sql`
 console.log(`  users                              : ${uc.users}`);
 console.log(`  customers                          : ${uc.customers}`);
 console.log(`  customers linked to a user        : ${uc.linked}`);
-console.log(`  users with NO customer row         : ${uc.users_without_customer}`);
+console.log(
+  `  users with NO customer row         : ${uc.users_without_customer}`
+);
 console.log(`  customers pointing at missing user : ${uc.orphan_fk}`);
 
 // Do the two email columns agree? A mismatch means the link is unreliable.
@@ -204,7 +226,9 @@ for (const fk of await sql`
     ON ccu.constraint_name = tc.constraint_name
   WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema='public'
   ORDER BY tc.table_name`) {
-  console.log(`    ${fk.table_name}.${fk.column_name} -> ${fk.ref_table}.${fk.ref_column}`);
+  console.log(
+    `    ${fk.table_name}.${fk.column_name} -> ${fk.ref_table}.${fk.ref_column}`
+  );
 }
 
 // Duplicate emails would block a merge.

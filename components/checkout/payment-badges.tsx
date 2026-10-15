@@ -32,7 +32,10 @@ function Badge({
 
 export function PaymentBadges({ className = '' }: { className?: string }) {
   return (
-    <span className={`inline-flex items-center ${className}`} aria-hidden="true">
+    <span
+      className={`inline-flex items-center ${className}`}
+      aria-hidden="true"
+    >
       {/* Google Pay — white circle, official glyph in Google Blue */}
       <Badge
         bg="#FFFFFF"

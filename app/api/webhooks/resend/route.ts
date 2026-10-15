@@ -97,12 +97,7 @@ export async function POST(request: Request) {
   }
 
   const eventId = `${event.type}:${event.data?.email_id ?? event.created_at ?? rawBody.length}`;
-  const first = await claimWebhookEvent(
-    'resend',
-    eventId,
-    event.type,
-    event
-  );
+  const first = await claimWebhookEvent('resend', eventId, event.type, event);
   if (!first) {
     return NextResponse.json({ ok: true, duplicate: true });
   }
@@ -113,9 +108,7 @@ export async function POST(request: Request) {
     if (HARD_BOUNCES.has(event.type)) {
       const providerId = event.data?.email_id;
       const reason =
-        event.data?.bounce?.message ??
-        event.data?.bounce?.type ??
-        event.type;
+        event.data?.bounce?.message ?? event.data?.bounce?.type ?? event.type;
 
       if (providerId) {
         const rows = await rawQuery<{ id: string }>(sql`

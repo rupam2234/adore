@@ -41,7 +41,8 @@ export default async function EditProductPage({ params }: PageProps) {
             fit: product.fit ?? '',
             careInstructions: product.careInstructions ?? '',
             details: product.details.join('\n'),
-            weightGrams: product.weightGrams != null ? String(product.weightGrams) : '',
+            weightGrams:
+              product.weightGrams != null ? String(product.weightGrams) : '',
             isFeatured: product.isFeatured,
             categorySlugs: product.categorySlugs,
             variants: product.variants

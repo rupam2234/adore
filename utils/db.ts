@@ -77,7 +77,9 @@ export function describeDbError(error: unknown): string {
 
   // The top-level Drizzle message is just the SQL string — drop it if a more
   // specific cause follows, so the log leads with the real reason.
-  const meaningful = parts.filter(p => !/^\s*(insert|select|update|delete) /i.test(p));
+  const meaningful = parts.filter(
+    p => !/^\s*(insert|select|update|delete) /i.test(p)
+  );
   return (meaningful.length > 0 ? meaningful : parts).join(' → ');
 }
 

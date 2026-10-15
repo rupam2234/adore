@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { drainEmailJobs, emailJobStats, oldestPendingAgeSeconds } from '@/utils/email-queue';
+import {
+  drainEmailJobs,
+  emailJobStats,
+  oldestPendingAgeSeconds,
+} from '@/utils/email-queue';
 
 /**
  * GET/POST /api/cron/drain-emails — the backstop, not the main path.
@@ -78,9 +82,6 @@ async function run(request: Request) {
     });
   } catch (error) {
     console.error('[cron/drain-emails] failed:', error);
-    return NextResponse.json(
-      { error: 'Email drain failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Email drain failed' }, { status: 500 });
   }
 }

@@ -257,7 +257,10 @@ export default function CheckoutForm({
     if (typeof window === 'undefined' || window.Razorpay) return;
     const w = window as Window &
       typeof globalThis & {
-        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+        requestIdleCallback?: (
+          cb: () => void,
+          opts?: { timeout: number }
+        ) => number;
         cancelIdleCallback?: (id: number) => void;
       };
     let idleId: number | undefined;
@@ -268,7 +271,8 @@ export default function CheckoutForm({
       });
     }
     return () => {
-      if (idleId !== undefined && w.cancelIdleCallback) w.cancelIdleCallback(idleId);
+      if (idleId !== undefined && w.cancelIdleCallback)
+        w.cancelIdleCallback(idleId);
       clearTimeout(timeoutId);
     };
   }, []);
@@ -366,7 +370,21 @@ export default function CheckoutForm({
         .json()
         .catch(() => ({}))) as Partial<CheckoutSessionResponse> & {
         error?: string;
+        paymentRequired?: boolean;
+        orderNumber?: string;
+        razorpayOrderId?: string;
+        razorpayKeyId?: string;
+        amount?: number;
+        currency?: string;
+        prefill?: { name: string; email: string; contact: string };
       };
+
+      // Handle zero-total orders (100% discount) - redirect to success page directly
+      if (session.paymentRequired === false) {
+        window.location.href = '/checkout/success';
+        return;
+      }
+
       if (!res.ok || !session.razorpayOrderId || !session.razorpayKeyId) {
         setError(
           session.error ?? 'Could not start checkout. Please try again.'

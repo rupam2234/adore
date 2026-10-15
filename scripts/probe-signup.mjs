@@ -31,7 +31,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -41,14 +44,16 @@ const show = v => console.log(JSON.stringify(v, null, 2));
 /* --- 0. Column types (for diagnosing FK mismatches) ------------------------ */
 if (wantTypes) {
   console.log('\n=== COLUMN TYPES ===');
-  show(await sql`
+  show(
+    await sql`
     SELECT table_name, column_name, data_type, udt_name
     FROM information_schema.columns
     WHERE table_schema = 'public'
       AND table_name IN ('promo_codes','promo_redemptions','carts','users',
                          'customers','welcome_promo_issues')
       AND column_name IN ('id','promo_code_id','user_id')
-    ORDER BY table_name, column_name`);
+    ORDER BY table_name, column_name`
+  );
   process.exit(0);
 }
 
@@ -62,7 +67,9 @@ const users = await sql`
 
 console.log('\n=== 1. USER ===');
 if (users.length === 0) {
-  console.log('  NO USER ROW. Signup never committed — check the API response.');
+  console.log(
+    '  NO USER ROW. Signup never committed — check the API response.'
+  );
 } else {
   show(users[0]);
 }
@@ -80,34 +87,44 @@ show(jobs);
 
 /* --- 3. Any job stuck at all ----------------------------------------------- */
 console.log('\n=== 3. ALL JOB STATUSES (is the pipeline moving?) ===');
-show(await sql`
+show(
+  await sql`
   SELECT flow, status, count(*)::int AS n
-  FROM email_jobs GROUP BY flow, status ORDER BY flow, status`);
+  FROM email_jobs GROUP BY flow, status ORDER BY flow, status`
+);
 
 /* --- 4. Does the schema accept the new flow? ------------------------------ */
 console.log('\n=== 4. email_jobs.flow CHECK ===');
-show(await sql`
+show(
+  await sql`
   SELECT pg_get_constraintdef(oid) AS definition
   FROM pg_constraint
   WHERE conrelid = 'email_jobs'::regclass AND contype = 'c'
-    AND pg_get_constraintdef(oid) LIKE '%flow%'`);
+    AND pg_get_constraintdef(oid) LIKE '%flow%'`
+);
 
 /* --- 5. Welcome-promo prerequisites ---------------------------------------- */
 console.log('\n=== 5. MIGRATION STATE ===');
 const tbl = await sql`
   SELECT count(*)::int AS n FROM information_schema.tables
   WHERE table_schema = 'public' AND table_name = 'welcome_promo_issues'`;
-console.log(`welcome_promo_issues table: ${tbl[0].n > 0 ? 'present' : 'MISSING'}`);
-show(await sql`
+console.log(
+  `welcome_promo_issues table: ${tbl[0].n > 0 ? 'present' : 'MISSING'}`
+);
+show(
+  await sql`
   SELECT code, discount_type, discount_value, min_subtotal, max_redemptions, is_active
-  FROM promo_codes WHERE code = 'WELCOME10'`);
+  FROM promo_codes WHERE code = 'WELCOME10'`
+);
 
 if (users.length) {
   console.log('\n=== 6. CODE ISSUED TO THIS USER ===');
   if (tbl[0].n > 0) {
-    show(await sql`
+    show(
+      await sql`
       SELECT code, expires_at, redeemed_at, created_at
-      FROM welcome_promo_issues WHERE user_id = ${users[0].id}`);
+      FROM welcome_promo_issues WHERE user_id = ${users[0].id}`
+    );
   } else {
     console.log('  (table missing — no code can exist)');
   }
@@ -165,7 +182,10 @@ console.log('\n=== 7. RESEND CONFIG (.env.local) ===');
 const envText = readFileSync('.env.local', 'utf8');
 for (const key of ['RESEND_API_KEY', 'RESEND_FROM', 'RESEND_WEBHOOK_SECRET']) {
   const line = envText.split('\n').find(l => l.trim().startsWith(`${key}=`));
-  const val = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  const val = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
   console.log(
     `  ${key}: ${val ? `set (${val.length} chars, starts ${val.slice(0, 8)})` : 'NOT SET'}`
   );

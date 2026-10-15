@@ -20,7 +20,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -37,7 +40,9 @@ if (customers.length === 0) {
 } else {
   for (const c of customers) {
     const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
-    console.log(`  ${c.email}   name="${name}"  greeting="${name.split(/\s+/)[0] || 'there'}"`);
+    console.log(
+      `  ${c.email}   name="${name}"  greeting="${name.split(/\s+/)[0] || 'there'}"`
+    );
   }
 }
 
@@ -79,7 +84,9 @@ console.log('  status PENDING = durable, nothing lost. It is simply waiting.');
 
 console.log('\n=== 3. delivery timing ===');
 console.log('  cron /api/cron/drain-emails runs daily at 04:30 UTC.');
-console.log('  WITHOUT @vercel/queue: worst case ~24h before this row is sent.');
+console.log(
+  '  WITHOUT @vercel/queue: worst case ~24h before this row is sent.'
+);
 
 const queueInstalled = (() => {
   try {
@@ -117,5 +124,3 @@ console.log(
 await sql`UPDATE email_jobs SET status=${'PENDING'} WHERE dedupe_key=${probeKey}`;
 await sql`DELETE FROM email_jobs WHERE dedupe_key=${probeKey}`;
 console.log('\nprobe row deleted. Nothing was sent.');
-
-

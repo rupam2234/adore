@@ -27,7 +27,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -127,7 +130,11 @@ if (!apply) {
 console.log('\n=== applying ===');
 let failed = 0;
 for (const [i, s] of statements.entries()) {
-  const label = s.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('--'))[0] ?? '';
+  const label =
+    s
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('--'))[0] ?? '';
   try {
     await sql.query(s);
     console.log(`  ok   ${String(i + 1).padStart(2)}. ${label.slice(0, 70)}`);

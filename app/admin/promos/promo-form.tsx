@@ -20,6 +20,18 @@ export default function PromoForm() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
+    
+    // Validate no dashes in code
+    if (code.includes('-')) {
+      setError('Promo code cannot contain dashes. Use alphanumeric only.');
+      return;
+    }
+    
+    if (!code.trim()) {
+      setError('Code is required');
+      return;
+    }
+    
     setBusy(true);
     try {
       const res = await fetch('/api/admin/promos', {
@@ -76,11 +88,15 @@ export default function PromoForm() {
           <input
             id="promo-code"
             value={code}
-            onChange={e => setCode(e.target.value.toUpperCase())}
+            onChange={e => setCode(e.target.value.toUpperCase().replace(/-/g, ''))}
             placeholder="WELCOME10"
             disabled={busy}
             className={inputClass}
+            aria-describedby="promo-code-hint"
           />
+          <p id="promo-code-hint" className="mt-1 text-xs text-[#2B2620]/50">
+            Alphanumeric only — dashes will be removed automatically
+          </p>
         </div>
         <div>
           <label htmlFor="promo-description" className={labelClass}>

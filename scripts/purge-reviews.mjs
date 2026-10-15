@@ -36,7 +36,11 @@ const args = process.argv.slice(2);
 const scope = args.find(a => a.startsWith('--scope='))?.split('=')[1];
 const onlyId = args.find(a => a.startsWith('--id='))?.split('=')[1];
 const confirmed = args.includes('--confirm');
-const restoreFrom = args.find(a => a.startsWith('--restore='))?.split('=').slice(1).join('=');
+const restoreFrom = args
+  .find(a => a.startsWith('--restore='))
+  ?.split('=')
+  .slice(1)
+  .join('=');
 
 let url = process.env.adore_DATABASE_URL;
 if (!url) {
@@ -44,7 +48,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -109,7 +116,9 @@ if (!onlyId && !confirmed) {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 if (onlyId && !UUID_RE.test(onlyId)) {
-  console.error(`Refusing to run: "${onlyId}" is not a valid review id (uuid).`);
+  console.error(
+    `Refusing to run: "${onlyId}" is not a valid review id (uuid).`
+  );
   process.exit(1);
 }
 
@@ -127,7 +136,11 @@ const UNVERIFIED_PREDICATE = sql`
 
 // Tagged templates bind parameters, so the id is never interpolated into SQL
 // text. The uuid check above stays as a fail-fast guard against a pasted typo.
-const match = onlyId ? sql`r.id = ${onlyId}` : scope === 'all' ? sql`TRUE` : UNVERIFIED_PREDICATE;
+const match = onlyId
+  ? sql`r.id = ${onlyId}`
+  : scope === 'all'
+    ? sql`TRUE`
+    : UNVERIFIED_PREDICATE;
 
 // --- Backup first. A delete with no way back is not a safe operation. -------
 const doomed = await sql`
@@ -149,7 +162,11 @@ const backupPath = `scripts/reviews-backup-${stamp}.json`;
 writeFileSync(
   backupPath,
   JSON.stringify(
-    { scope: onlyId ? `id:${onlyId}` : scope, exportedAt: new Date().toISOString(), rows: doomed },
+    {
+      scope: onlyId ? `id:${onlyId}` : scope,
+      exportedAt: new Date().toISOString(),
+      rows: doomed,
+    },
     null,
     2
   )
@@ -157,7 +174,9 @@ writeFileSync(
 
 console.log(`Backed up ${doomed.length} row(s) -> ${backupPath}`);
 for (const r of doomed) {
-  console.log(`  ${r.id}  "${r.author_name}"  ${r.rating}*  on ${r.product_name}`);
+  console.log(
+    `  ${r.id}  "${r.author_name}"  ${r.rating}*  on ${r.product_name}`
+  );
 }
 
 if (!onlyId && scope === 'unverified') {
@@ -174,5 +193,9 @@ const deleted = await sql`
 const [{ remaining }] = await sql`
   SELECT COUNT(*)::int AS remaining FROM product_reviews`;
 
-console.log(`\nDeleted ${deleted.length} row(s). ${remaining} review(s) remain.`);
-console.log(`To restore: node scripts/purge-reviews.mjs --restore=${backupPath}`);
+console.log(
+  `\nDeleted ${deleted.length} row(s). ${remaining} review(s) remain.`
+);
+console.log(
+  `To restore: node scripts/purge-reviews.mjs --restore=${backupPath}`
+);

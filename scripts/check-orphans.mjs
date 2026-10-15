@@ -14,7 +14,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -36,6 +39,7 @@ if (orphans.length === 0) {
   console.log('\nThese are safe to delete if they were abandoned mid-create.');
 }
 
-const all = await sql`SELECT slug, status, created_at FROM products ORDER BY created_at DESC`;
+const all =
+  await sql`SELECT slug, status, created_at FROM products ORDER BY created_at DESC`;
 console.log('\nAll products:');
 for (const p of all) console.log(`  ${p.slug}  [${p.status}]  ${p.created_at}`);

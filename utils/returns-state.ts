@@ -310,9 +310,7 @@ const money = (n: number) =>
  * price) and is reported as `refundable: false` so the caller still settles the
  * request instead of leaving it stuck in REFUND_PENDING forever.
  */
-export function computeSettlement(
-  ctx: SettlementContext
-): SettlementPlan {
+export function computeSettlement(ctx: SettlementContext): SettlementPlan {
   const gross = money(ctx.refundAmount);
   const fee = money(ctx.fee);
   const shipping = money(ctx.shippingAmount ?? 0);
@@ -389,4 +387,3 @@ export function assertCanSettle(
     );
   }
 }
-

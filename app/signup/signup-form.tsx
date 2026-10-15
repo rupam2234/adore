@@ -190,7 +190,10 @@ export default function SignupForm() {
             className={inputClass(fieldError.phone)}
           />
           {fieldError.phone ? (
-            <p id={`${phoneId}-error`} className="mt-1.5 text-xs text-[#A45A4B]">
+            <p
+              id={`${phoneId}-error`}
+              className="mt-1.5 text-xs text-[#A45A4B]"
+            >
               {fieldError.phone}
             </p>
           ) : (

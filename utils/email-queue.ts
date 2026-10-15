@@ -27,8 +27,19 @@ import { rawQuery, sql } from './db';
 import { dispatchEmailJob } from './email';
 import type { EmailFlow } from './schema';
 
-import { MAX_ATTEMPTS, backoffMs, settleFailure, STALE_SENDING_SECONDS } from './email-lifecycle';
-export { MAX_ATTEMPTS, backoffMs, settleFailure, buildDedupeKey, STALE_SENDING_SECONDS } from './email-lifecycle';
+import {
+  MAX_ATTEMPTS,
+  backoffMs,
+  settleFailure,
+  STALE_SENDING_SECONDS,
+} from './email-lifecycle';
+export {
+  MAX_ATTEMPTS,
+  backoffMs,
+  settleFailure,
+  buildDedupeKey,
+  STALE_SENDING_SECONDS,
+} from './email-lifecycle';
 
 export type EmailJob = {
   id: string;
@@ -248,12 +259,14 @@ async function notifyQueue(): Promise<void> {
     // Signature is `send(topicName, payload)` — topic FIRST. This is the
     // top-level export, not `new QueueClient().send`; both exist, and the
     // top-level one reads its connection config from the deployment.
-    const send = (mod as {
-      send?: (
-        topic: string,
-        body: unknown
-      ) => Promise<{ messageId: string | null }>;
-    }).send;
+    const send = (
+      mod as {
+        send?: (
+          topic: string,
+          body: unknown
+        ) => Promise<{ messageId: string | null }>;
+      }
+    ).send;
     if (typeof send !== 'function') return;
 
     const result = await send('email', { at: Date.now() });
@@ -271,7 +284,10 @@ async function notifyQueue(): Promise<void> {
     }
   } catch (err) {
     // Logged, not thrown. The row is the ledger; this is only the courier.
-    console.warn('[email-queue] queue notify failed (backstop will catch it):', err);
+    console.warn(
+      '[email-queue] queue notify failed (backstop will catch it):',
+      err
+    );
   }
 }
 
@@ -316,9 +332,7 @@ export async function enqueueAndNotify(input: {
  * would just add latency and risk a 429. Correctness and simplicity beat
  * throughput at this volume.
  */
-export async function drainEmailJobs(
-  limit = 10
-): Promise<{
+export async function drainEmailJobs(limit = 10): Promise<{
   claimed: number;
   sent: number;
   retried: number;
@@ -330,7 +344,13 @@ export async function drainEmailJobs(
   const requeued = await requeueStuckJobs();
 
   const jobs = await claimEmailJobs(limit);
-  const summary = { claimed: jobs.length, sent: 0, retried: 0, dead: 0, requeued };
+  const summary = {
+    claimed: jobs.length,
+    sent: 0,
+    retried: 0,
+    dead: 0,
+    requeued,
+  };
 
   for (const job of jobs) {
     try {

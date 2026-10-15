@@ -56,7 +56,10 @@ export async function POST(request: Request) {
   if (!limit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests' },
-      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+      }
     );
   }
 
@@ -83,8 +86,7 @@ export async function POST(request: Request) {
   // nothing, so a refund sits in REFUND_PENDING forever with no error anywhere.
   const entity = (key: 'refund' | 'payment' | 'dispute') =>
     (payload[key] as Record<string, unknown> | undefined)?.entity as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
 
   /**
    * Dedupe key.
@@ -139,7 +141,9 @@ export async function POST(request: Request) {
           amount: Number.isFinite(amountPaise) ? amountPaise / 100 : 0,
           // Razorpay sends `reason_code` (a machine slug), not `reason`.
           reason:
-            typeof dispute?.reason_code === 'string' ? dispute.reason_code : null,
+            typeof dispute?.reason_code === 'string'
+              ? dispute.reason_code
+              : null,
         });
         break;
       }
@@ -284,4 +288,3 @@ async function markRefundFailedRemote(razorpayRefundId: string): Promise<void> {
     `);
   }
 }
-

@@ -50,11 +50,19 @@ export async function POST(request: NextRequest) {
         error: `Too many accounts created from this connection. Please try again in ${limit.retryAfterSeconds}s.`,
         code: 'RATE_LIMITED',
       },
-      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+      {
+        status: 429,
+        headers: { 'Retry-After': String(limit.retryAfterSeconds) },
+      }
     );
   }
 
-  let body: { name?: string; email?: string; password?: string; phone?: string };
+  let body: {
+    name?: string;
+    email?: string;
+    password?: string;
+    phone?: string;
+  };
   try {
     body = (await request.json()) as {
       name?: string;

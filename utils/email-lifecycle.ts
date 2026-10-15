@@ -1,4 +1,3 @@
-
 /**
  * Email job lifecycle RULES, with no database or network dependency.
  *
@@ -27,12 +26,7 @@ export function backoffMs(attempts: number): number {
 }
 
 /** Every status an email job can be in. */
-export type EmailJobStatus =
-  | 'PENDING'
-  | 'SENDING'
-  | 'SENT'
-  | 'FAILED'
-  | 'DEAD';
+export type EmailJobStatus = 'PENDING' | 'SENDING' | 'SENT' | 'FAILED' | 'DEAD';
 
 /**
  * Decide whether a claimed job should be retried or written off.

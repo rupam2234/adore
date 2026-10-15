@@ -35,7 +35,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -86,9 +89,12 @@ console.log(`  triggers on them       : ${triggers.length}`);
 if (dependents.length > 0 || views.length > 0 || triggers.length > 0) {
   console.error(
     '\nREFUSING TO DROP: something now depends on these tables.\n' +
-      '  tables:  ' + JSON.stringify(dependents) +
-      '\n  views:   ' + JSON.stringify(views) +
-      '\n  triggers:' + JSON.stringify(triggers)
+      '  tables:  ' +
+      JSON.stringify(dependents) +
+      '\n  views:   ' +
+      JSON.stringify(views) +
+      '\n  triggers:' +
+      JSON.stringify(triggers)
   );
   process.exit(1);
 }
@@ -118,7 +124,9 @@ if (!apply) {
     const tag = tagRows.find(t => t.id === pt.tag_id);
     console.log(`    ${pt.product_id} -> ${tag?.slug ?? pt.tag_id}`);
   }
-  console.log(`\n  products affected: ${affected.map(a => a.slug).join(', ') || 'none'}`);
+  console.log(
+    `\n  products affected: ${affected.map(a => a.slug).join(', ') || 'none'}`
+  );
   console.log('\nDRY RUN. Re-run with --confirm to back up and drop.');
   process.exit(0);
 }
