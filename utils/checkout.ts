@@ -40,6 +40,7 @@ export {
 export type { CheckoutAddress, CheckoutTotals } from './checkout-format';
 import { checkPinServiceability, createShiprocketOrder } from './shipping';
 import { enqueueAndNotify } from './email-queue';
+import { adminNotificationRecipient } from './email';
 import { buildDedupeKey } from './email-lifecycle';
 import { formatPrice } from './product-format';
 import {
@@ -517,6 +518,16 @@ async function handleZeroTotalCheckout(input: {
       }
     }
 
+    // Queue the order emails (customer receipt + admin notification) before
+    // the courier push, same ordering as the paid path.
+    await queueOrderConfirmedEmail({
+      id: orderId,
+      orderNumber,
+      customerId: customer.id,
+      totalAmount: '0',
+      currency,
+    });
+
     // Push to Shiprocket (same as paid orders, best-effort)
     let shiprocketOrderId: string | null = null;
     try {
@@ -730,13 +741,14 @@ export async function pushToShiprocket(
 }
 
 /**
- * Queue the order-confirmation email through the durable outbox (see
- * utils/schema.ts for why email is never sent inline from a request).
+ * Queue the order emails — the customer confirmation and the admin
+ * notification — through the durable outbox (see utils/schema.ts for why
+ * email is never sent inline from a request).
  *
- * Enqueueing is one INSERT whose dedupe key (`order_confirmed/<order-number>`)
- * makes a retried verification a no-op at the UNIQUE index — a double callback
- * can never produce a second email. A lost queue message is recovered by the
- * daily backstop cron, because the row is the ledger.
+ * Each enqueue is one INSERT whose dedupe key (`<flow>/<order-number>`) makes
+ * a retried verification a no-op at the UNIQUE index — a double callback can
+ * never produce a second email. A lost queue message is recovered by the daily
+ * backstop cron, because the row is the ledger.
  *
  * Never throws: `enqueueAndNotify` swallows its own errors, and the try/catch
  * guards the lookup queries. A missing email is the acceptable trade against
@@ -770,28 +782,55 @@ async function queueOrderConfirmedEmail(order: {
         .where(eq(orderItems.orderId, order.id)),
     ]);
     const customer = customerRows[0];
-    if (!customer?.email) {
+    if (!customer) {
       console.warn(
-        `[checkout] no customer email for ${order.orderNumber}; confirmation email skipped`
+        `[checkout] no customer for ${order.orderNumber}; confirmation emails skipped`
       );
       return;
     }
 
+    // One fetch serves both emails — no second round-trip for the notification.
+    const itemsPayload = items.map(i => ({
+      name: i.productName,
+      qty: i.quantity,
+      price: formatPrice(i.totalPrice, order.currency),
+    }));
+    const total = formatPrice(order.totalAmount, order.currency);
+    const customerName =
+      [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+      'there';
+
+    if (customer.email) {
+      await enqueueAndNotify({
+        flow: 'order_confirmed',
+        to: customer.email,
+        dedupeKey: buildDedupeKey('order_confirmed', order.orderNumber),
+        payload: {
+          customerName,
+          orderNumber: order.orderNumber,
+          items: itemsPayload,
+          total,
+        },
+      });
+    } else {
+      console.warn(
+        `[checkout] no customer email for ${order.orderNumber}; confirmation email skipped`
+      );
+    }
+
+    // Admin notification so a paid order never waits for someone to check the
+    // ledger. Own dedupe key; failures are caught by the outer try/catch.
     await enqueueAndNotify({
-      flow: 'order_confirmed',
-      to: customer.email,
-      dedupeKey: buildDedupeKey('order_confirmed', order.orderNumber),
+      flow: 'admin_new_order',
+      to: adminNotificationRecipient(),
+      dedupeKey: buildDedupeKey('admin_new_order', order.orderNumber),
       payload: {
-        customerName:
-          [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
-          'there',
+        customerName,
+        customerEmail: customer.email,
         orderNumber: order.orderNumber,
-        items: items.map(i => ({
-          name: i.productName,
-          qty: i.quantity,
-          price: formatPrice(i.totalPrice, order.currency),
-        })),
-        total: formatPrice(order.totalAmount, order.currency),
+        orderId: order.id,
+        items: itemsPayload,
+        total,
       },
     });
   } catch (err) {

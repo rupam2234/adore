@@ -154,6 +154,7 @@ function stripTags(html: string): string {
     .replace(/<\/(p|tr|h1|h2|li|table)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
+    .replace(/&times;/g, '×')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
@@ -736,4 +737,74 @@ export function orderShipped(input: {
   });
 
   return { subject: `Order ${input.orderNumber} has shipped`, html, text };
+}
+
+/* ==========================================================================
+   ADMIN NOTIFICATIONS
+   Internal emails: they go to the team inbox, not to a customer, so the copy
+   is factual and there is no greeting to write. Everything a recipient would
+   otherwise have to look up in the admin panel is in the email itself.
+   ========================================================================== */
+
+export function adminNewOrder(input: {
+  to: string;
+  customerName: string;
+  customerEmail: string;
+  orderNumber: string;
+  /** Order uuid, for the deep link into the admin order page. */
+  orderId?: string;
+  items: OrderLine[];
+  total: string;
+}): EmailTemplate {
+  const { html, text } = layout({
+    preheader: `${input.customerName} just placed order ${input.orderNumber}.`,
+    heading: 'New order',
+    bodyHtml:
+      p('A new order has been placed and paid for.') +
+      callout(
+        'Order',
+        `${esc(input.orderNumber)} — <span style="font-size:18px;">${esc(input.total)}</span>`
+      ) +
+      callout(
+        'Customer',
+        `${esc(input.customerName)} — <a href="mailto:${esc(input.customerEmail)}" style="color:${BRAND.olive};">${esc(input.customerEmail)}</a>`
+      ) +
+      orderItemsTable(input.items, { showPrice: true, total: input.total }),
+    cta: {
+      label: 'Open in admin',
+      url: input.orderId
+        ? `${SITE_URL}/admin/orders/${input.orderId}`
+        : `${SITE_URL}/admin/orders`,
+    },
+  });
+
+  return {
+    subject: `New order ${input.orderNumber} — ${input.total}`,
+    html,
+    text,
+  };
+}
+
+export function adminNewSignup(input: {
+  to: string;
+  customerName: string;
+  customerEmail: string;
+  phone?: string;
+}): EmailTemplate {
+  const phoneBlock = input.phone ? callout('Phone', esc(input.phone)) : '';
+
+  const { html, text } = layout({
+    preheader: `${input.customerEmail} just created an account.`,
+    heading: 'New signup',
+    bodyHtml:
+      p('A new account was just created on the store.') +
+      callout('Name', esc(input.customerName)) +
+      callout(
+        'Email',
+        `<a href="mailto:${esc(input.customerEmail)}" style="color:${BRAND.olive};">${esc(input.customerEmail)}</a>`
+      ) +
+      phoneBlock,
+  });
+
+  return { subject: `New signup: ${input.customerName}`, html, text };
 }

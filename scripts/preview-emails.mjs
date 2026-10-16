@@ -10,6 +10,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  adminNewOrder,
+  adminNewSignup,
   orderConfirmed,
   orderShipped,
   refundFailed,
@@ -106,6 +108,34 @@ const TEMPLATES = {
     to: 'asha@example.com',
     customerName,
     promoCode: null,
+  }),
+  'admin-new-order': adminNewOrder({
+    to: 'hello@adore.ind.in',
+    customerName,
+    customerEmail: 'asha@example.com',
+    orderNumber: 'AD-1001',
+    orderId: 'b7c9d3e2-4f1a-4c8e-9a2d-6f5b8c7d1e0a',
+    items: [
+      {
+        name: 'Floral Meadow',
+        qty: 1,
+        price: '₹2,499.00',
+        imageUrl: IMG('adore/floral-meadow'),
+      },
+      {
+        name: 'Jonaki Short Kurti',
+        qty: 2,
+        price: '₹1,899.00',
+        imageUrl: IMG('adore/jonaki-short-kurti'),
+      },
+    ],
+    total: '₹9,596.00',
+  }),
+  'admin-new-signup': adminNewSignup({
+    to: 'hello@adore.ind.in',
+    customerName,
+    customerEmail: 'asha@example.com',
+    phone: '98765 43210',
   }),
 };
 

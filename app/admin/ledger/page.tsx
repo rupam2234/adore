@@ -1,4 +1,13 @@
-import { formatPrice } from '@/utils';
+import {
+  clampPage,
+  formatPrice,
+  offsetFor,
+  pageHref,
+  parsePage,
+  PAGE_SIZE,
+  totalPagesFor,
+} from '@/utils';
+import { Pagination } from '@/components';
 import {
   currentPrepDayKey,
   groupByPrepDay,
@@ -37,7 +46,11 @@ function formatIstDateTime(date: Date): string {
   }).format(date);
 }
 
-export default async function AdminLedgerPage() {
+export default async function AdminLedgerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
   if (!process.env.JWT_SECRET) {
     throw new Error(
       'Admin authentication must be configured to access the ledger.'
@@ -59,13 +72,22 @@ export default async function AdminLedgerPage() {
     openOrders: 0,
   };
   let error: string | null = null;
+  let ordersTotal = 0;
+  let page = 1;
+  let totalPages = 1;
 
   try {
     const orders = await listLedgerOrders();
-    const grouped = groupByPrepDay(orders);
-    days = grouped.days;
-    stats = grouped.stats;
+    // Stats and the summary always cover the whole ledger; only the rendered
+    // batch is paginated, so the cards above stay exact on every page.
+    ordersTotal = orders.length;
+    totalPages = totalPagesFor(ordersTotal);
+    page = clampPage(parsePage((await searchParams).page), totalPages);
+    stats = groupByPrepDay(orders).stats;
     summary = ledgerSummary(orders);
+    days = groupByPrepDay(
+      orders.slice(offsetFor(page), offsetFor(page) + PAGE_SIZE)
+    ).days;
   } catch {
     error = 'Could not load the ledger. Check the database connection.';
   }
@@ -270,6 +292,19 @@ export default async function AdminLedgerPage() {
           </div>
         </div>
       ))}
+
+      {ordersTotal > 0 && (
+        <p className="mt-6 text-center text-xs text-[#2B2620]/50">
+          Showing {offsetFor(page) + 1}–
+          {Math.min(offsetFor(page) + PAGE_SIZE, ordersTotal)} of {ordersTotal}{' '}
+          paid orders
+        </p>
+      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        makeHref={p => pageHref('/admin/ledger', {}, p)}
+      />
     </section>
   );
 }

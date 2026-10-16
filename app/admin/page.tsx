@@ -1,5 +1,14 @@
 import Link from 'next/link';
-import { formatPrice } from '@/utils';
+import {
+  clampPage,
+  formatPrice,
+  offsetFor,
+  pageHref,
+  parsePage,
+  PAGE_SIZE,
+  totalPagesFor,
+} from '@/utils';
+import { Pagination } from '@/components';
 import { listAdminProducts } from '@/utils/admin-products';
 import { requireAdminPage } from '@/utils/admin-session';
 import { DeleteProductButton } from '@/components/admin/delete-product-button';
@@ -18,7 +27,7 @@ const STATUS_STYLES: Record<string, string> = {
 export default async function AdminProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[] }>;
 }) {
   await requireAdminPage();
   const params = await searchParams;
@@ -31,6 +40,12 @@ export default async function AdminProductsPage({
   } catch {
     error = 'Could not load products. Check the database connection.';
   }
+
+  // Rendered in pages of PAGE_SIZE; the fetch itself stays full so the count
+  // line above the table is always exact.
+  const totalPages = totalPagesFor(products.length);
+  const page = clampPage(parsePage(params.page), totalPages);
+  const visible = products.slice(offsetFor(page), offsetFor(page) + PAGE_SIZE);
 
   return (
     <section>
@@ -120,7 +135,7 @@ export default async function AdminProductsPage({
                 </td>
               </tr>
             )}
-            {products.map(p => (
+            {visible.map(p => (
               <tr key={p.id} className="border-t border-[#2B2620]/10">
                 <td className="px-4 py-3">
                   <p className="font-admin font-medium">{p.name}</p>
@@ -154,6 +169,11 @@ export default async function AdminProductsPage({
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        makeHref={p => pageHref('/admin', { q: query || undefined }, p)}
+      />
     </section>
   );
 }
