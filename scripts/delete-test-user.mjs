@@ -38,7 +38,10 @@ if (!url) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('adore_DATABASE_URL='));
-  url = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  url = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!url) throw new Error('adore_DATABASE_URL not found');
 
@@ -56,7 +59,9 @@ if (users.length === 0) {
   process.exit(0);
 }
 if (users.length > 1) {
-  console.error(`ABORT ${users.length} rows share this email. Unusual; not deleting.`);
+  console.error(
+    `ABORT ${users.length} rows share this email. Unusual; not deleting.`
+  );
   process.exit(1);
 }
 
@@ -65,7 +70,9 @@ const user = users[0];
 // Admin accounts are not test fixtures. Deleting one can lock the only operator
 // out of the panel.
 if (user.role === 'admin') {
-  console.error(`ABORT ${target} is an ADMIN. Delete it by hand if you really mean to.`);
+  console.error(
+    `ABORT ${target} is an ADMIN. Delete it by hand if you really mean to.`
+  );
   process.exit(1);
 }
 
@@ -98,8 +105,10 @@ const counts = await sql`
 
 const c = counts[0];
 const welcomeCount = hasWelcome
-  ? (await sql`
-      SELECT count(*)::int AS n FROM welcome_promo_issues WHERE user_id = ${user.id}`)[0].n
+  ? (
+      await sql`
+      SELECT count(*)::int AS n FROM welcome_promo_issues WHERE user_id = ${user.id}`
+    )[0].n
   : 0;
 const total =
   Object.values(c).reduce((a, b) => a + Number(b), 0) + Number(welcomeCount);
@@ -142,7 +151,9 @@ if (customer[0]) {
   console.log(`      id:    ${customerId}`);
   console.log(`      email: ${customer[0].email}`);
   console.log(`      phone: ${customer[0].phone ?? '(none)'}`);
-  console.log('      NOTE:  this row holds the phone that would block a re-signup');
+  console.log(
+    '      NOTE:  this row holds the phone that would block a re-signup'
+  );
 } else {
   console.log('      (none)');
 }
@@ -190,34 +201,58 @@ const drop = async (label, query) => {
   deleted.push(`${label}: ${rows.length}`);
 };
 
-await drop('sessions', sql`
-  DELETE FROM sessions WHERE user_id = ${user.id} RETURNING user_id`);
-await drop('carts', sql`
-  DELETE FROM carts WHERE user_id = ${user.id} RETURNING id`);
-await drop('promo_redemptions', sql`
-  DELETE FROM promo_redemptions WHERE user_id = ${user.id} RETURNING id`);
+await drop(
+  'sessions',
+  sql`
+  DELETE FROM sessions WHERE user_id = ${user.id} RETURNING user_id`
+);
+await drop(
+  'carts',
+  sql`
+  DELETE FROM carts WHERE user_id = ${user.id} RETURNING id`
+);
+await drop(
+  'promo_redemptions',
+  sql`
+  DELETE FROM promo_redemptions WHERE user_id = ${user.id} RETURNING id`
+);
 if (pendingCount > 0) {
   // Delete only UNSENT jobs. A SENT row is the audit record that the customer
   // was emailed, and the Resend bounce webhook resolves provider_id -> job, so
   // destroying it would orphan a late bounce. Keeping it costs nothing.
-  await drop('email_jobs (unsent)', sql`
+  await drop(
+    'email_jobs (unsent)',
+    sql`
     DELETE FROM email_jobs
     WHERE lower("to") = ${target} AND status IN ('PENDING','SENDING')
-    RETURNING id`);
+    RETURNING id`
+  );
 }
 
 if (hasWelcome) {
-  await drop('welcome_promo_issues', sql`
-    DELETE FROM welcome_promo_issues WHERE user_id = ${user.id} RETURNING id`);
+  await drop(
+    'welcome_promo_issues',
+    sql`
+    DELETE FROM welcome_promo_issues WHERE user_id = ${user.id} RETURNING id`
+  );
 } else {
   deleted.push('welcome_promo_issues: 0 (table absent)');
 }
-await drop('customer_addresses', sql`
-  DELETE FROM customer_addresses WHERE customer_id = ${customerId ?? ''} RETURNING id`);
-await drop('customers', sql`
-  DELETE FROM customers WHERE user_id = ${user.id} RETURNING id`);
-await drop('users', sql`
-  DELETE FROM users WHERE id = ${user.id} RETURNING id`);
+await drop(
+  'customer_addresses',
+  sql`
+  DELETE FROM customer_addresses WHERE customer_id = ${customerId ?? ''} RETURNING id`
+);
+await drop(
+  'customers',
+  sql`
+  DELETE FROM customers WHERE user_id = ${user.id} RETURNING id`
+);
+await drop(
+  'users',
+  sql`
+  DELETE FROM users WHERE id = ${user.id} RETURNING id`
+);
 
 console.log('\nDELETED');
 for (const line of deleted) console.log(`      ${line}`);

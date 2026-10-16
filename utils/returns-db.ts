@@ -134,7 +134,10 @@ function buildIntakeRiskSignals(
   if (row.delivered_at) {
     const d = new Date(row.delivered_at);
     if (!Number.isNaN(d.getTime())) {
-      hoursSinceDelivery = Math.max(0, (now.getTime() - d.getTime()) / 3_600_000);
+      hoursSinceDelivery = Math.max(
+        0,
+        (now.getTime() - d.getTime()) / 3_600_000
+      );
     }
   }
 
@@ -352,7 +355,9 @@ export async function createReturnRequest(
   // a request created 20 minutes ago must already be sortable — waiting for a
   // human to open it would leave the riskiest items sitting at the bottom of a
   // chronological list in the meantime.
-  const risk = scoreReturnRisk(buildIntakeRiskSignals(row, input.qty, new Date()));
+  const risk = scoreReturnRisk(
+    buildIntakeRiskSignals(row, input.qty, new Date())
+  );
 
   let insertedRows: Array<{
     id: string;

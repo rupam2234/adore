@@ -29,12 +29,19 @@ export default function ProductDetail({
   product,
   reviewSummary,
   reviews,
+  sizeChartUrl,
 }: {
   product: ProductCardData;
   /** SSR review summary so stars render instantly; omit to hide. */
   reviewSummary?: ReviewSummary;
   /** Reviews section rendered under the image grid (left column). */
   reviews?: ReactNode;
+  /**
+   * Delivery URL of this product's category size chart, when one exists.
+   * Rendered as a collapsible panel under the size picker; omit or null to
+   * show nothing.
+   */
+  sizeChartUrl?: string | null;
 }) {
   const images = product.images;
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
@@ -56,6 +63,8 @@ export default function ProductDetail({
     'details'
   );
   const [qty, setQty] = useState(1);
+  /** The size chart is reference material — closed until a shopper asks. */
+  const [showSizeChart, setShowSizeChart] = useState(false);
   const { addItem, adding, error, setDrawerOpen } = useCart();
 
   const activeVariants = product.variants ?? [];
@@ -478,6 +487,29 @@ export default function ProductDetail({
                 true to size and a slightly relaxed fit always looks better than
                 a tight one.
               </p>
+            )}
+            {sizeChartUrl && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowSizeChart(open => !open)}
+                  aria-expanded={showSizeChart}
+                  className="cursor-pointer text-xs uppercase tracking-[0.15em] text-[#2B2620]/70 underline underline-offset-4 transition-colors hover:text-[#2B2620]"
+                >
+                  {showSizeChart ? 'Hide size chart' : 'View size chart'}
+                </button>
+                {showSizeChart && (
+                  <div className="mt-3 border border-[#2B2620]/10 bg-white p-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={sizeChartUrl}
+                      alt="Size chart"
+                      loading="lazy"
+                      className="mx-auto w-full max-w-md"
+                    />
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

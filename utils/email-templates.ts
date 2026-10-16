@@ -389,7 +389,9 @@ export function orderConfirmed(input: {
     preheader: `Order ${input.orderNumber} confirmed. Total ${input.total}.`,
     heading: `Thank you, ${esc((input.customerName ?? '').trim().split(/\s+/)[0] ?? '')}`,
     bodyHtml:
-      p(`We have your order and payment is confirmed. We are getting your pieces ready now, and you will get another email with tracking once the parcel is on its way.`) +
+      p(
+        `We have your order and payment is confirmed. We are getting your pieces ready now, and you will get another email with tracking once the parcel is on its way.`
+      ) +
       callout('Order number', esc(input.orderNumber)) +
       itemsTable,
     cta: { label: 'View your order', url: `${SITE_URL}/account/orders` },
@@ -435,12 +437,20 @@ ${photos
     heading: 'About your return',
     bodyHtml:
       greeting(input.customerName) +
-      p(`We have finished inspecting the item from order ${esc(input.orderNumber)}.`) +
-      p(`We were not able to accept this return. The reason is below, and it is the same one shown on your returns page.`) +
+      p(
+        `We have finished inspecting the item from order ${esc(input.orderNumber)}.`
+      ) +
+      p(
+        `We were not able to accept this return. The reason is below, and it is the same one shown on your returns page.`
+      ) +
       callout('Reason', esc(input.reason)) +
       photosBlock +
-      p(`If you think we have judged this unfairly, reply to this email. A person, not an automated rule, will review it and get back to you.`) +
-      p(`If you would rather have the item sent back to you, the cost is yours to pay. Please collect it within 30 days, after which it may be disposed of.`),
+      p(
+        `If you think we have judged this unfairly, reply to this email. A person, not an automated rule, will review it and get back to you.`
+      ) +
+      p(
+        `If you would rather have the item sent back to you, the cost is yours to pay. Please collect it within 30 days, after which it may be disposed of.`
+      ),
     footerNote: `Order ${input.orderNumber}`,
     cta: { label: 'View your returns', url: `${SITE_URL}/account/returns` },
   });
@@ -464,8 +474,14 @@ export function refundProcessed(input: {
   method?: string;
 }): EmailTemplate {
   const methodRow = input.method
-    ? callout('Refund amount', `<span style="font-size:18px;">${esc(input.amount)}</span> <span style="font-size:13px;color:${BRAND.muted};">to your ${esc(input.method)}</span>`)
-    : callout('Refund amount', `<span style="font-size:18px;">${esc(input.amount)}</span>`);
+    ? callout(
+        'Refund amount',
+        `<span style="font-size:18px;">${esc(input.amount)}</span> <span style="font-size:13px;color:${BRAND.muted};">to your ${esc(input.method)}</span>`
+      )
+    : callout(
+        'Refund amount',
+        `<span style="font-size:18px;">${esc(input.amount)}</span>`
+      );
 
   const { html, text } = layout({
     preheader: `${input.amount} refunded for order ${input.orderNumber}.`,
@@ -475,12 +491,20 @@ export function refundProcessed(input: {
       p(`We have refunded your return and the money is leaving our account.`) +
       callout('Order number', esc(input.orderNumber)) +
       methodRow +
-      p(`Bank transfers usually appear within 3 to 5 working days, depending on your bank. Nothing further is needed from you.`) +
-      p(`If it has not reached you after a week, reply to this email with your bank reference and we will chase it for you.`),
+      p(
+        `Bank transfers usually appear within 3 to 5 working days, depending on your bank. Nothing further is needed from you.`
+      ) +
+      p(
+        `If it has not reached you after a week, reply to this email with your bank reference and we will chase it for you.`
+      ),
     cta: { label: 'View your order', url: `${SITE_URL}/account/orders` },
   });
 
-  return { subject: `Refund issued for order ${input.orderNumber}`, html, text };
+  return {
+    subject: `Refund issued for order ${input.orderNumber}`,
+    html,
+    text,
+  };
 }
 
 /* ==========================================================================
@@ -504,18 +528,91 @@ export function refundFailed(input: {
     bodyHtml:
       greeting(input.customerName) +
       p(`We were not able to complete your refund automatically.`) +
-      callout('Refund amount', `<span style="font-size:18px;">${esc(input.amount)}</span>`) +
-      p(`Your refund is safe and our team is already on it. You do not need to do anything, and you do not need to request it again.`) +
-      p(`If money leaves your account before we confirm, that is your bank reversing a pending authorisation, and we will chase it with them directly.`),
+      callout(
+        'Refund amount',
+        `<span style="font-size:18px;">${esc(input.amount)}</span>`
+      ) +
+      p(
+        `Your refund is safe and our team is already on it. You do not need to do anything, and you do not need to request it again.`
+      ) +
+      p(
+        `If money leaves your account before we confirm, that is your bank reversing a pending authorisation, and we will chase it with them directly.`
+      ),
     footerNote: `Order ${input.orderNumber}`,
     cta: { label: 'View your returns', url: `${SITE_URL}/account/returns` },
   });
 
-  return { subject: `We are sorting out your refund (order ${input.orderNumber})`, html, text };
+  return {
+    subject: `We are sorting out your refund (order ${input.orderNumber})`,
+    html,
+    text,
+  };
 }
 
 /* ==========================================================================
    6. WELCOME EMAIL
+   The one email sent before the customer has any relationship with us, so it
+   does the most work: it has to deliver the code we promised in the signup form
+   ("Member perks like promo codes, straight away") and be worth opening.
+
+   The code is the reason this email exists, so it gets a callout rather than
+   being mentioned in a sentence. When there is no code — the migration has not
+   been run, or issuing failed — the template still renders, just without the
+   discount block, because a welcome email with no offer still beats no email.
+   ========================================================================== */
+
+/* ==========================================================================
+   CONTACT FORM
+   Sent to the support inbox when a visitor submits the Contact page form.
+   Includes the customer's details and message so the team can reply directly.
+   ========================================================================== */
+
+export function contactFormEmail(input: {
+  to: string;
+  /** Customer's full name (used only for the greeting). */
+  customerName: string;
+  /** Customer's email — set as reply-to so replies go to them. */
+  customerEmail: string;
+  /** Optional order number. */
+  orderNumber?: string;
+  /** Subject line the customer selected. */
+  subject: string;
+  /** The message body. */
+  message: string;
+}): EmailTemplate {
+  const orderLine = input.orderNumber
+    ? callout('Order number', esc(input.orderNumber))
+    : '';
+  const subjectLine = callout('Subject', esc(input.subject));
+
+  const { html, text } = layout({
+    preheader: `New contact form message from ${input.customerName} — ${input.subject}`,
+    heading: 'New contact message',
+    bodyHtml:
+      greeting(input.customerName) +
+      p(`A visitor submitted the contact form on the website.`) +
+      callout(
+        'From',
+        `${esc(input.customerName)} <${esc(input.customerEmail)}>`
+      ) +
+      subjectLine +
+      orderLine +
+      p(`<strong>Message:</strong>`) +
+      `<div style="margin-top:8px;padding:16px;background:${BRAND.cream};border:1px solid ${BRAND.border};border-radius:10px;white-space:pre-wrap;font-family:${FONT.sans};font-size:15px;line-height:1.7;color:${BRAND.ink};">${esc(input.message)}</div>`,
+    footerNote:
+      'This message was sent from the Contact page on the Adore website.',
+    cta: { label: 'Reply to customer', url: `mailto:${input.customerEmail}` },
+  });
+
+  return {
+    subject: `Contact: ${input.subject} — ${input.customerName}`,
+    html,
+    text,
+  };
+}
+
+/* ==========================================================================
+   WELCOME EMAIL
    The one email sent before the customer has any relationship with us, so it
    does the most work: it has to deliver the code we promised in the signup form
    ("Member perks like promo codes, straight away") and be worth opening.
@@ -546,7 +643,9 @@ export function welcomeEmail(input: {
     : '';
 
   const valueLine = [
-    input.discountPercent ? `${input.discountPercent}% off your first order` : '',
+    input.discountPercent
+      ? `${input.discountPercent}% off your first order`
+      : '',
     input.minimumOrder ? `on orders over ${input.minimumOrder}` : '',
   ]
     .filter(Boolean)
@@ -564,12 +663,20 @@ export function welcomeEmail(input: {
     showHeading: false,
     bodyHtml:
       greeting(input.customerName) +
-      p(`Thank you for creating an account. Everything you need is here: your orders, your returns, and your addresses, all in one place.`) +
+      p(
+        `Thank you for creating an account. Everything you need is here: your orders, your returns, and your addresses, all in one place.`
+      ) +
       codeBlock +
       (input.promoCode
-        ? p(`Add the code in your bag before you check out. It is tied to your account, so nobody else can use it.`)
-        : p(`We will send offers to this address from time to time. You can unsubscribe from any of them using the link below.`)) +
-      p(`A note on delivery: we share order updates by email, so if anything looks wrong with an order you will hear from us rather than having to chase it.`),
+        ? p(
+            `Add the code in your bag before you check out. It is tied to your account, so nobody else can use it.`
+          )
+        : p(
+            `We will send offers to this address from time to time. You can unsubscribe from any of them using the link below.`
+          )) +
+      p(
+        `A note on delivery: we share order updates by email, so if anything looks wrong with an order you will hear from us rather than having to chase it.`
+      ),
     cta: { label: 'Start shopping', url: `${SITE_URL}/shop` },
     footerNote: `Signed up as ${input.to}`,
   });
@@ -598,7 +705,10 @@ export function orderShipped(input: {
 }): EmailTemplate {
   const courier = input.courierName ? ` via ${input.courierName}` : '';
   const tracking = input.trackingUrl
-    ? callout('Track your parcel', `<a href="${esc(input.trackingUrl)}" style="color:${BRAND.olive};">${esc(input.trackingUrl)}</a>`)
+    ? callout(
+        'Track your parcel',
+        `<a href="${esc(input.trackingUrl)}" style="color:${BRAND.olive};">${esc(input.trackingUrl)}</a>`
+      )
     : '';
 
   // Showing what is actually in the box is the single most useful thing this
@@ -613,11 +723,13 @@ export function orderShipped(input: {
     heading: 'Your order has shipped',
     bodyHtml:
       greeting(input.customerName) +
-      p(`Your parcel has left our warehouse${esc(courier)}.` ) +
+      p(`Your parcel has left our warehouse${esc(courier)}.`) +
       callout('Order number', esc(input.orderNumber)) +
       tracking +
       items +
-      p(`Tracking can take up to 24 hours to show movement after the courier scans it. Please allow for that before checking again.`),
+      p(
+        `Tracking can take up to 24 hours to show movement after the courier scans it. Please allow for that before checking again.`
+      ),
     cta: input.trackingUrl
       ? { label: 'Track your parcel', url: input.trackingUrl }
       : { label: 'View your order', url: `${SITE_URL}/account/orders` },

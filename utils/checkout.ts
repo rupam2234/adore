@@ -39,6 +39,9 @@ export {
 } from './checkout-format';
 export type { CheckoutAddress, CheckoutTotals } from './checkout-format';
 import { checkPinServiceability, createShiprocketOrder } from './shipping';
+import { enqueueAndNotify } from './email-queue';
+import { buildDedupeKey } from './email-lifecycle';
+import { formatPrice } from './product-format';
 import {
   reserveCartItems,
   releaseOrderReservations,
@@ -62,14 +65,28 @@ export class CheckoutError extends Error {
   }
 }
 
-export type CheckoutSession = {
-  orderNumber: string;
-  amount: number; // paise, exactly what Razorpay was created with
-  currency: string;
-  razorpayKeyId: string;
-  razorpayOrderId: string;
-  prefill: { name: string; email: string; contact: string };
-};
+/**
+ * Discriminated union: either a normal session requiring Razorpay payment,
+ * or a zero-total session that is already confirmed and only needs redirect.
+ */
+export type CheckoutSession =
+  | {
+      /** Normal case: payment required via Razorpay */
+      paymentRequired: true;
+      orderNumber: string;
+      amount: number; // paise
+      currency: string;
+      razorpayKeyId: string;
+      razorpayOrderId: string;
+      prefill: { name: string; email: string; contact: string };
+    }
+  | {
+      /** Zero-total case: order is already CONFIRMED, just redirect to success */
+      paymentRequired: false;
+      orderNumber: string;
+      amount: 0;
+      currency: string;
+    };
 
 export type CheckoutSessionInput = {
   /** Guests send the full address; logged-in users send a saved addressId. */
@@ -287,6 +304,29 @@ export async function createCheckoutSession(
   );
   const total = Math.round((subtotal - discount + shipping) * 100);
 
+  // --- Zero-total shortcut: if promo covers everything, confirm directly ---
+  // No Razorpay needed, order is CONFIRMED immediately, stock reserved, pushed
+  // to Shiprocket. This is safe for production because:
+  //  - Only triggered when server-computed total is exactly 0
+  //  - Still validates PIN serviceability and stock
+  //  - Creates a real CONFIRMED order with all normal flow steps
+  //  - Pushes to Shiprocket same as paid orders
+  if (total === 0) {
+    return await handleZeroTotalCheckout({
+      cart,
+      cartId,
+      userId,
+      address,
+      contactEmail,
+      subtotal,
+      discount,
+      shipping,
+      currency,
+      shippingAddressId,
+      promoCodeId: await getCartPromoCodeId(cartId),
+    });
+  }
+
   // --- Persist the order (PENDING until payment is verified) ----------------
   const orderNumber = generateOrderNumber();
   const customer = userId
@@ -359,6 +399,7 @@ export async function createCheckoutSession(
       .where(eq(orders.id, orderId));
 
     return {
+      paymentRequired: true,
       orderNumber,
       amount: rpOrder.amount,
       currency: rpOrder.currency,
@@ -381,6 +422,134 @@ export async function createCheckoutSession(
     if (err instanceof RazorpayError) {
       throw new CheckoutError(err.message, err.status);
     }
+    throw err;
+  }
+}
+
+/**
+ * Handle zero-total checkout (100% discount code).
+ * Creates CONFIRMED order directly, reserves stock, pushes to Shiprocket.
+ * Returns a session that tells frontend to redirect to success page.
+ */
+async function handleZeroTotalCheckout(input: {
+  cart: Awaited<ReturnType<typeof getCartDetail>>;
+  cartId: string | null;
+  userId: string | null;
+  address: CheckoutAddress;
+  contactEmail: string;
+  subtotal: number;
+  discount: number;
+  shipping: number;
+  currency: string;
+  shippingAddressId: string | null;
+  promoCodeId: string | null;
+}): Promise<CheckoutSession> {
+  const { cart, cartId, userId, address, contactEmail, subtotal, discount, shipping, currency, shippingAddressId, promoCodeId } = input;
+
+  const orderNumber = generateOrderNumber();
+  const customer = userId
+    ? await ensureCustomerForUserId(userId)
+    : await ensureGuestCustomer(contactEmail, address);
+
+  // Create order as CONFIRMED directly (no PENDING state)
+  const inserted = await db
+    .insert(orders)
+    .values({
+      customerId: customer.id,
+      orderNumber,
+      status: 'CONFIRMED',
+      subtotal: subtotal.toFixed(2),
+      discountAmount: discount.toFixed(2),
+      shippingAmount: shipping.toFixed(2),
+      taxAmount: '0',
+      totalAmount: '0',
+      currency,
+      shippingAddressId,
+      shippingAddressSnapshot: addressSnapshot(address),
+      promoCodeId,
+      razorpayPaymentId: null,
+      updatedAt: new Date(),
+    })
+    .returning({ id: orders.id });
+  const orderId = inserted[0]!.id;
+
+  try {
+    await db.insert(orderItems).values(
+      cart.items.map((item: CartLine) => ({
+        orderId,
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.name,
+        sku: `${item.slug}-${item.color}-${item.size}`,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.lineTotal,
+      }))
+    );
+
+    // Reserve stock (same as paid orders)
+    try {
+      await reserveCartItems(
+        orderId,
+        cartId ?? '',
+        cart.items.map((item: CartLine) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+        }))
+      );
+    } catch (err) {
+      if (err instanceof StockUnavailableError) {
+        throw new CheckoutError(err.message, 409);
+      }
+      throw err;
+    }
+
+    // Stock is now reserved; finalize it (decrement)
+    await finalizeReservations(orderId);
+
+    // Clear the cart
+    if (cartId) {
+      try {
+        await clearCart(cartId);
+        await removePromo(cartId);
+      } catch {
+        // Ignore — cart cleanup is cosmetic
+      }
+    }
+
+    // Push to Shiprocket (same as paid orders, best-effort)
+    let shiprocketOrderId: string | null = null;
+    try {
+      shiprocketOrderId = await pushToShiprocket(orderId);
+      if (shiprocketOrderId) {
+        await db
+          .update(orders)
+          .set({
+            shiprocketOrderId,
+            updatedAt: new Date(),
+          })
+          .where(eq(orders.id, orderId));
+      }
+    } catch (err) {
+      // Best-effort: log but don't fail the order
+      console.error(
+        `[checkout] Shiprocket push for zero-total order ${orderNumber} failed:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+
+    // Return session indicating no payment required — frontend will redirect
+    return {
+      paymentRequired: false,
+      orderNumber,
+      amount: 0,
+      currency,
+    };
+  } catch (err) {
+    // Rollback on any failure: release reservations, delete order
+    await releaseOrderReservations(orderId);
+    await db.delete(orderItems).where(eq(orderItems.orderId, orderId));
+    await db.delete(orders).where(eq(orders.id, orderId));
     throw err;
   }
 }
@@ -561,6 +730,79 @@ export async function pushToShiprocket(
 }
 
 /**
+ * Queue the order-confirmation email through the durable outbox (see
+ * utils/schema.ts for why email is never sent inline from a request).
+ *
+ * Enqueueing is one INSERT whose dedupe key (`order_confirmed/<order-number>`)
+ * makes a retried verification a no-op at the UNIQUE index — a double callback
+ * can never produce a second email. A lost queue message is recovered by the
+ * daily backstop cron, because the row is the ledger.
+ *
+ * Never throws: `enqueueAndNotify` swallows its own errors, and the try/catch
+ * guards the lookup queries. A missing email is the acceptable trade against
+ * failing (or blocking) the response to a payment that already succeeded.
+ */
+async function queueOrderConfirmedEmail(order: {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  totalAmount: string;
+  currency: string;
+}): Promise<void> {
+  try {
+    const [customerRows, items] = await Promise.all([
+      db
+        .select({
+          email: customers.email,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+        })
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .limit(1),
+      db
+        .select({
+          productName: orderItems.productName,
+          quantity: orderItems.quantity,
+          totalPrice: orderItems.totalPrice,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id)),
+    ]);
+    const customer = customerRows[0];
+    if (!customer?.email) {
+      console.warn(
+        `[checkout] no customer email for ${order.orderNumber}; confirmation email skipped`
+      );
+      return;
+    }
+
+    await enqueueAndNotify({
+      flow: 'order_confirmed',
+      to: customer.email,
+      dedupeKey: buildDedupeKey('order_confirmed', order.orderNumber),
+      payload: {
+        customerName:
+          [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+          'there',
+        orderNumber: order.orderNumber,
+        items: items.map(i => ({
+          name: i.productName,
+          qty: i.quantity,
+          price: formatPrice(i.totalPrice, order.currency),
+        })),
+        total: formatPrice(order.totalAmount, order.currency),
+      },
+    });
+  } catch (err) {
+    console.error(
+      `[checkout] confirmation email enqueue failed for ${order.orderNumber}:`,
+      err
+    );
+  }
+}
+
+/**
  * Verify a Razorpay Checkout success payload and turn the PENDING order into a
  * confirmed, fulfilled one. Safe to call twice with the same payment (retries,
  * double callbacks) — the PENDING→CONFIRMED transition is a single conditional
@@ -639,6 +881,11 @@ export async function verifyAndConfirmPayment(
 
   await decrementStock(order.id);
   await releaseCart();
+
+  // Queue the order-confirmation email now that the order is committed. It is
+  // enqueued BEFORE the Shiprocket push so a slow courier API can never delay
+  // it, and the outbox guarantees it goes out even if this process dies here.
+  await queueOrderConfirmedEmail(order);
 
   let shiprocketOrderId: string | null = null;
   let shiprocketError: string | null = null;

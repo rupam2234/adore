@@ -102,8 +102,8 @@ export default function OrderReceipt({
 
         {confirmation.shiprocketError && (
           <p className="mt-4 rounded-lg bg-[#E7DFCB]/60 px-3 py-2 text-xs text-[#2B2620]/70">
-            Your order is safe and paid. Courier booking is retrying on our side.
-            No action needed.
+            Your order is safe and paid. Courier booking is retrying on our
+            side. No action needed.
           </p>
         )}
       </section>

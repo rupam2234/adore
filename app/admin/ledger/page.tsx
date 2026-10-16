@@ -6,6 +6,7 @@ import {
   listLedgerOrders,
 } from '@/utils/order-ledger';
 import { requireAdminPage } from '@/utils/admin-session';
+import OrderActionsMenu from './order-actions-menu';
 
 export const metadata = {
   title: 'Order ledger | Admin',
@@ -20,6 +21,7 @@ const STATUS_STYLES: Record<string, string> = {
   PROCESSING: 'bg-blue-100 text-blue-800',
   SHIPPED: 'bg-indigo-100 text-indigo-800',
   DELIVERED: 'bg-neutral-200 text-neutral-700',
+  CANCELLED: 'bg-neutral-200 text-neutral-600',
   REFUNDED: 'bg-rose-100 text-rose-700',
 };
 
@@ -162,6 +164,7 @@ export default async function AdminLedgerPage() {
                   <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Payment / courier</th>
+                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -252,6 +255,13 @@ export default async function AdminLedgerPage() {
                           ? `Shiprocket #${order.shiprocketOrderId}`
                           : 'not booked yet'}
                       </p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <OrderActionsMenu
+                        orderId={order.id}
+                        orderNumber={order.orderNumber}
+                        shiprocketOrderId={order.shiprocketOrderId}
+                      />
                     </td>
                   </tr>
                 ))}

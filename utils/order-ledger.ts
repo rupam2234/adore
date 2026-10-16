@@ -23,7 +23,11 @@ export const PAID_STATUSES = [
   'REFUNDED',
 ] as const;
 
-export type LedgerOrderStatus = (typeof PAID_STATUSES)[number] | 'CANCELLED';
+export type LedgerOrderStatus =
+  | (typeof PAID_STATUSES)[number]
+  | 'CANCELLED'
+  /** Details page renders pending orders too; the ledger list filters them out. */
+  | 'PENDING';
 
 export type LedgerOrder = {
   id: string;
@@ -164,6 +168,75 @@ function labelForDay(dayKey: string): string {
 /* ------------------------------------------------------------------ */
 /* Reads                                                              */
 /* ------------------------------------------------------------------ */
+
+/**
+ * One order for the admin details page, whatever its status (the ledger list
+ * filters to paid orders, but the details page must render PENDING and
+ * CANCELLED rows too). Returns null when the id is unknown.
+ */
+export async function getLedgerOrder(
+  orderId: string
+): Promise<LedgerOrder | null> {
+  const rows = await db
+    .select({
+      order: orders,
+      customerEmail: customers.email,
+      firstName: customers.firstName,
+      lastName: customers.lastName,
+      customerPhone: customers.phone,
+    })
+    .from(orders)
+    .leftJoin(customers, eq(customers.id, orders.customerId))
+    .where(eq(orders.id, orderId))
+    .limit(1);
+
+  if (rows.length === 0) return null;
+
+  const { order, customerEmail, firstName, lastName, customerPhone } = rows[0];
+  const items = await db
+    .select()
+    .from(orderItems)
+    .where(eq(orderItems.orderId, order.id));
+
+  const { prepDay, inBusinessHours } = prepDayFor(order.createdAt);
+  const todayKey = istParts(new Date()).dayKey;
+  const snap = order.shippingAddressSnapshot ?? null;
+
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    status: order.status as LedgerOrderStatus,
+    paymentId: order.razorpayPaymentId,
+    razorpayOrderId: order.razorpayOrderId,
+    shiprocketOrderId: order.shiprocketOrderId,
+    placedAt: order.createdAt,
+    prepDay,
+    preparedToday: prepDay === todayKey,
+    inBusinessHours,
+    subtotal: order.subtotal,
+    discountAmount: order.discountAmount,
+    shippingAmount: order.shippingAmount,
+    totalAmount: order.totalAmount,
+    currency: order.currency,
+    customer: {
+      email: customerEmail ?? '',
+      name:
+        snap?.fullName ||
+        [firstName, lastName].filter(Boolean).join(' ') ||
+        customerEmail ||
+        'Customer',
+      phone: snap?.phone || customerPhone || null,
+    },
+    shippingAddress: snap,
+    items: items.map(i => ({
+      productName: i.productName,
+      sku: i.sku,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      totalPrice: i.totalPrice,
+    })),
+  };
+}
 
 /** All paid orders with their prep-day stamp, newest first. */
 export async function listLedgerOrders(): Promise<LedgerOrder[]> {

@@ -44,7 +44,9 @@ for (let i = 0; i < RUNS; i++) {
 
 console.log(`\nLatest arrivals â€” ${RUNS} request(s) to ${BASE}\n`);
 results.forEach((slugs, i) => {
-  console.log(`  ${i + 1}. ${slugs.length} distinct: ${slugs.join(', ') || '(none)'}`);
+  console.log(
+    `  ${i + 1}. ${slugs.length} distinct: ${slugs.join(', ') || '(none)'}`
+  );
 });
 
 const counts = [...new Set(results.map(r => r.length))].sort();

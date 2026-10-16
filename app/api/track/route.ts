@@ -5,10 +5,12 @@ import {
   completeWebhookEvent,
   failWebhookEvent,
   handleOrderDelivered,
+  handleOrderShipped,
   syncReturnFromCourier,
 } from '@/utils/returns-ops';
 import { rawQuery, sql } from '@/utils/db';
 import { mapReturnStatus, type ReturnTrackingStatus } from '@/utils/shipping';
+import { cancelOrderFromCourier } from '@/utils/order-ops';
 
 /**
  * POST /api/track — inbound tracking updates from the courier.
@@ -73,9 +75,7 @@ function tokenMatches(candidate: string | null): boolean {
 function extractToken(request: Request, url: URL): string | null {
   const header =
     request.headers.get('x-api-key') ??
-    request.headers
-      .get('authorization')
-      ?.replace(/^Bearer\s+/i, '') ??
+    request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ??
     url.searchParams.get('token');
   return header?.trim() || null;
 }
@@ -133,12 +133,7 @@ export async function POST(request: Request) {
   }
 
   // 3. Deduplicate.
-  const first = await claimWebhookEvent(
-    'courier',
-    eventId,
-    eventType,
-    payload
-  );
+  const first = await claimWebhookEvent('courier', eventId, eventType, payload);
   if (!first) {
     return NextResponse.json({ ok: true, duplicate: true });
   }
@@ -166,9 +161,42 @@ export async function POST(request: Request) {
         break;
       }
 
-      // --- Return leg: the customer's parcel is moving back to us.
-      case 'IN_TRANSIT':
+      // --- Forward leg: the parcel is on its way to the customer. The SAME
+      //     statuses fire for return shipments, so route by the order
+      //     reference, exactly like CANCELLED below: a forward shipment echoes
+      //     our order number as `order_id`, while a return shipment carries the
+      //     RMA id. An order that resolves is marked SHIPPED once and gets its
+      //     tracking email enqueued once; anything else falls through to the
+      //     return-leg sync, which no-ops when the shipment matches no return.
+      case 'OUT_FOR_PICKUP':
       case 'PICKED_UP':
+      case 'IN_TRANSIT':
+      case 'OUT_FOR_DELIVERY':
+      case 'SHIPPED': {
+        const dispatchOrderNumber = String(
+          payload.order_id ?? payload.order_number ?? ''
+        );
+        if (dispatchOrderNumber && !/^RMA/i.test(dispatchOrderNumber)) {
+          const dispatch = await handleOrderShipped({
+            orderNumber: dispatchOrderNumber,
+            awb: typeof payload.awb === 'string' ? payload.awb : undefined,
+            courierName:
+              typeof payload.courier_name === 'string'
+                ? payload.courier_name
+                : undefined,
+          });
+          if (dispatch.known) break;
+        }
+
+        // --- Return leg: the customer's parcel is moving back to us.
+        await syncReturnsForReturnShipment(
+          String(payload.shipment_id ?? ''),
+          trackingFrom(payload.shipment_status, payload.awb)
+        );
+        break;
+      }
+
+      // Return-only transit status (the RMA id in `order_id` is unambiguous).
       case 'RMA_IN_TRANSIT': {
         await syncReturnsForReturnShipment(
           String(payload.shipment_id ?? ''),
@@ -191,20 +219,39 @@ export async function POST(request: Request) {
       }
 
       case 'CANCELLED':
-      case 'CANCELLED_BY_SELLER':
+      case 'CANCELLED_BY_SELLER': {
+        // Ambiguous event: the SAME status is fired for forward-order
+        // cancellations and return-pickup cancellations. Route by the order
+        // reference — our order number is echoed back as `order_id` on the
+        // forward leg. If it resolves to an order, mirror the cancellation
+        // (Shiprocket is authoritative: someone cancelled there, possibly the
+        // admin) and restock. Otherwise treat it as a return-pickup issue.
+        const cancelOrderNumber = String(
+          payload.order_id ?? payload.order_number ?? ''
+        );
+        if (cancelOrderNumber && !/^RMA/i.test(cancelOrderNumber)) {
+          await cancelOrderFromCourier(cancelOrderNumber);
+        }
+        const cancelShipmentId = String(payload.shipment_id ?? '');
+        if (cancelShipmentId) {
+          await flagPickupIssue(cancelShipmentId, 'Courier cancelled the pickup');
+        }
+        break;
+      }
+
       case 'RMA_CANCELLED': {
-        // The courier cancelled the pickup. Recorded for the queue; a human
-        // decides between a retry and the self-ship fallback.
-        const shipmentId = String(payload.shipment_id ?? '');
-        if (shipmentId) {
-          await flagPickupIssue(shipmentId, 'Courier cancelled the pickup');
+        // Return-only event: the courier cancelled the return pickup. Recorded
+        // for the queue; a human decides between a retry and self-ship.
+        const rmaShipmentId = String(payload.shipment_id ?? '');
+        if (rmaShipmentId) {
+          await flagPickupIssue(rmaShipmentId, 'Courier cancelled the pickup');
         }
         break;
       }
 
       default:
-        // Every other courier event (OUT_FOR_DELIVERY, forward-leg IN_TRANSIT,
-        // courier-assigned, …) is not our concern here.
+        // Every other courier event (courier-assigned, undelivered scans, …)
+        // is not our concern here.
         break;
     }
 
@@ -285,7 +332,10 @@ async function syncReturnsForReturnShipment(
  * SELF_SHIP_PENDING from. It deliberately does NOT jump to IN_TRANSIT or beyond —
  * only the courier's own tracking poll can confirm the parcel is moving.
  */
-async function flagPickupIssue(shipmentId: string, note: string): Promise<void> {
+async function flagPickupIssue(
+  shipmentId: string,
+  note: string
+): Promise<void> {
   const rows = await rawQuery<{ id: string }>(sql`
     UPDATE return_requests
     SET status = 'PICKUP_FAILED',

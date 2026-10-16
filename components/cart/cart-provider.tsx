@@ -54,7 +54,9 @@ function summarize(
   const discount = promo
     ? computeDiscount(promo.discountType, promo.discountValue, subtotal)
     : '0';
-  const shipping = String(computeShippingAmount(Number(subtotal) - Number(discount)));
+  const shipping = String(
+    computeShippingAmount(Number(subtotal) - Number(discount))
+  );
   const total = String(Number(subtotal) - Number(discount) + Number(shipping));
   const weightGrams = items.reduce(
     (sum, item) =>

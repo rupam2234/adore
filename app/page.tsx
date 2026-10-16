@@ -83,10 +83,7 @@ async function getHomeProducts(): Promise<{
   // NOTE: this page is ISR'd (`revalidate = 300`), so the four shown are stable
   // for every visitor within a regeneration window and reshuffle at most every
   // five minutes. That is per-regeneration randomness, not per-visitor.
-  const latest = sampleWithoutReplacement(
-    latestPool,
-    LATEST_DISPLAY_COUNT
-  );
+  const latest = sampleWithoutReplacement(latestPool, LATEST_DISPLAY_COUNT);
 
   const latestIds = new Set(latest.map(p => p.id));
 

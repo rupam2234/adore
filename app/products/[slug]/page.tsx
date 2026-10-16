@@ -6,9 +6,10 @@ import {
   ProductReviews,
 } from '@/components';
 import {
+  getActiveProductSlugs,
   getProductBySlug,
   getRelatedProducts,
-  getActiveProductSlugs,
+  getSizeChartForProduct,
 } from '@/utils';
 import { getApprovedReviews, getReviewSummary } from '@/utils/reviews';
 import { EMPTY_SUMMARY } from '@/utils/review-format';
@@ -88,6 +89,11 @@ export default async function ProductPage({ params }: PageProps) {
   ]);
   if (!product) notFound();
 
+  // The size chart is a per-category asset, not a product field: resolve it
+  // here (with the parent fallback) rather than widening ProductCardData,
+  // which the card grids and related-products query share.
+  const sizeChartUrl = await getSizeChartForProduct(product.id);
+
   let reviewSummary = EMPTY_SUMMARY;
   let initialReviews: Awaited<
     ReturnType<typeof getApprovedReviews>
@@ -125,6 +131,7 @@ export default async function ProductPage({ params }: PageProps) {
       <main className="w-full px-6 py-8 sm:px-12 sm:py-12">
         <ProductDetail
           product={product}
+          sizeChartUrl={sizeChartUrl}
           reviewSummary={reviewSummary}
           reviews={
             <ProductReviews

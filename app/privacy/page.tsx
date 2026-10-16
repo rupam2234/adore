@@ -89,9 +89,9 @@ export default function PrivacyPolicyPage() {
       <Section title="4. Sharing your information">
         <p>
           We only share data with service providers who need it to run the store
-          with payment processors, delivery carriers, and email delivery services
-          under agreements that require them to protect your data. We never sell
-          your personal information.
+          with payment processors, delivery carriers, and email delivery
+          services under agreements that require them to protect your data. We
+          never sell your personal information.
         </p>
       </Section>
 

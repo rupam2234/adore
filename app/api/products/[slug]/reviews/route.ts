@@ -94,11 +94,7 @@ async function resolveEligibility(
 
   const [hasPurchased, alreadyReviewed] = await Promise.all([
     hasPurchasedProduct(userId, productId),
-    hasAlreadyReviewedProduct(
-      userId,
-      productId,
-      getReviewAuthorName(user)
-    ),
+    hasAlreadyReviewedProduct(userId, productId, getReviewAuthorName(user)),
   ]);
 
   return evaluateReviewEligibility({

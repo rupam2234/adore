@@ -9,7 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { enIN } from 'date-fns/locale';
 
 import CopyableOrderNumber from '@/components/account/copyable-order-number';
-import ReturnRequestForm from '@/components/account/return-request-form';
+import OrderItemActions from '@/components/account/order-item-actions';
 import { listExchangeVariants } from '@/utils/returns-db';
 import Link from 'next/link';
 import { retryCheckout } from './actions';
@@ -58,8 +58,8 @@ export default async function OrderDetailPage({
     isPending && (await checkOrderAvailability(id)).every(a => a.inStock);
 
   /**
-   * Whether the return form can appear at all. UX only — `createReturnRequest`
-   * re-runs the full check server-side, so hiding the button is a courtesy.
+   * Whether the menu's return option is enabled. UX only —
+   * `createReturnRequest` re-runs the full check server-side.
    */
   let returnDisabledReason: string | null = null;
   if (order.status !== 'DELIVERED') {
@@ -172,7 +172,7 @@ export default async function OrderDetailPage({
                     This item has already been returned in full.
                   </p>
                 ) : (
-                  <ReturnRequestForm
+                  <OrderItemActions
                     orderId={order.id}
                     orderItemId={item.orderItemId}
                     productName={item.productName}
@@ -184,7 +184,7 @@ export default async function OrderDetailPage({
                     exchangeVariants={
                       exchangeVariantsByItem.get(item.orderItemId) ?? []
                     }
-                    disabledReason={returnDisabledReason}
+                    returnDisabledReason={returnDisabledReason}
                   />
                 )}
               </div>

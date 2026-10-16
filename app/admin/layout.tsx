@@ -32,6 +32,10 @@ export default function AdminLayout({
               Promo codes
               <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
             </Link>
+            <Link href="/admin/categories" className="group relative inline-block">
+              Size charts
+              <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />
+            </Link>
             <Link href="/admin/ledger" className="group relative inline-block">
               Order ledger
               <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-[#5C6B4B] transition-transform duration-300 ease-out group-hover:scale-x-100" />

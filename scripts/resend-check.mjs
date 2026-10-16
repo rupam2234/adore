@@ -16,7 +16,10 @@ if (!apiKey) {
   const line = env
     .split('\n')
     .find(l => l.trim().startsWith('RESEND_API_KEY='));
-  apiKey = line?.split('=')[1]?.trim().replace(/^["']|["']$/g, '');
+  apiKey = line
+    ?.split('=')[1]
+    ?.trim()
+    .replace(/^["']|["']$/g, '');
 }
 if (!apiKey) {
   console.error('RESEND_API_KEY not found in .env.local');
@@ -34,7 +37,10 @@ const headers = {
 // catches network errors instead of letting them crash the script.)
 const ENDPOINTS = [
   { label: 'default (us-east-1)', base: 'https://api.resend.com' },
-  { label: 'ap-northeast-1      ', base: 'https://api.ap-northeast-1.resend.com' },
+  {
+    label: 'ap-northeast-1      ',
+    base: 'https://api.ap-northeast-1.resend.com',
+  },
 ];
 
 async function api(path, base = ENDPOINTS[0].base) {
@@ -43,7 +49,10 @@ async function api(path, base = ENDPOINTS[0].base) {
     res = await fetch(`${base}${path}`, { headers });
   } catch (err) {
     // Unresolvable/unreachable host, not an API error.
-    return { status: 0, body: { message: String(err.cause?.code ?? err.message) } };
+    return {
+      status: 0,
+      body: { message: String(err.cause?.code ?? err.message) },
+    };
   }
   const body = await res.json().catch(() => ({}));
   return { status: res.status, body };
@@ -69,7 +78,9 @@ console.log(`  active endpoint: ${activeBase}`);
 const domains = await api('/domains', activeBase);
 console.log('=== domains ===');
 if (!domains.body?.data?.length) {
-  console.log('  NONE. No domain is verified, so nothing can be sent from a custom address.');
+  console.log(
+    '  NONE. No domain is verified, so nothing can be sent from a custom address.'
+  );
   console.log('  message:', domains.body?.message ?? domains.status);
 } else {
   for (const d of domains.body.data) {
@@ -82,7 +93,9 @@ if (!domains.body?.data?.length) {
     if (Array.isArray(d.records) && d.records.length) {
       for (const r of d.records) {
         const ok = r.status === 'verified' || r.verified === true;
-        console.log(`      ${ok ? 'verified  ' : 'PENDING   '} ${r.type}  ${r.name}`);
+        console.log(
+          `      ${ok ? 'verified  ' : 'PENDING   '} ${r.type}  ${r.name}`
+        );
       }
     }
   }

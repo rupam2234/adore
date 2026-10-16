@@ -42,6 +42,7 @@ export type CheckoutTotals = {
 /**
  * Shipping for an order:
  * - Free above the threshold (discounted subtotal decides).
+ * - Free when 100% discount is applied (discounted subtotal <= 0).
  * - Otherwise the real Shiprocket courier rate when known, falling back to
  *   the flat rate (e.g. Shiprocket unavailable / PIN not yet verified).
  */
@@ -49,8 +50,14 @@ export function computeShippingAmount(
   subtotal: number,
   shiprocketRate?: number | null
 ): number {
-  if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
-  if (shiprocketRate != null && Number.isFinite(shiprocketRate) && shiprocketRate > 0) {
+  // Free shipping if 100% discount covers all products (discounted subtotal <= 0)
+  // OR if discounted subtotal meets the free shipping threshold
+  if (subtotal <= 0 || subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
+  if (
+    shiprocketRate != null &&
+    Number.isFinite(shiprocketRate) &&
+    shiprocketRate > 0
+  ) {
     return shiprocketRate;
   }
   return SHIPPING_FLAT;
@@ -62,10 +69,7 @@ export function computeCheckoutTotals(
   discount: number,
   shiprocketRate?: number | null
 ): CheckoutTotals {
-  const shipping = computeShippingAmount(
-    subtotal - discount,
-    shiprocketRate
-  );
+  const shipping = computeShippingAmount(subtotal - discount, shiprocketRate);
   return {
     subtotal,
     discount,

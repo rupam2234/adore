@@ -94,10 +94,10 @@ const TEMPLATES = {
   }),
   // Both variants: with a code (the normal path) and without, which is what a
   // customer gets when issueWelcomeCode could not run. Both must render.
-  'welcome': welcomeEmail({
+  welcome: welcomeEmail({
     to: 'asha@example.com',
     customerName,
-    promoCode: 'WELCOME10-QB2CKU',
+    promoCode: 'WELCOME10QB2CKU',
     promoValidFor: '30 days',
     discountPercent: 10,
     minimumOrder: '₹600',
@@ -116,5 +116,9 @@ for (const [name, tpl] of Object.entries(TEMPLATES)) {
   console.log(`    subject: ${tpl.subject}`);
 }
 
-console.log(`\nWrote ${Object.keys(TEMPLATES).length} template(s) to scripts/preview/`);
-console.log('Open the .html files in a browser, or send them to a real inbox to check rendering.');
+console.log(
+  `\nWrote ${Object.keys(TEMPLATES).length} template(s) to scripts/preview/`
+);
+console.log(
+  'Open the .html files in a browser, or send them to a real inbox to check rendering.'
+);

@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import { rawQuery, sql } from '@/utils/db';
-import { createCheckoutSession, CheckoutError } from '@/utils/checkout';
+import { createCheckoutSession, CheckoutError, RECENT_ORDER_COOKIE, RECENT_ORDER_MAX_AGE } from '@/utils/checkout';
 import { ShippingUnavailableError } from '@/utils/shipping';
-import { releaseOrderReservations, clearPendingOrder } from '@/utils/reservations';
+import {
+  releaseOrderReservations,
+  clearPendingOrder,
+} from '@/utils/reservations';
 
 /**
  * Step 1 of checkout: validate the address, verify the PIN is serviceable via
@@ -70,7 +73,23 @@ export async function POST(request: Request) {
       email: typeof body.email === 'string' ? body.email : undefined,
       saveAddress: body.saveAddress === true,
     });
-    return NextResponse.json(session, { status: 201 });
+
+    const response = NextResponse.json(session, { status: 201 });
+
+    // For zero-total orders, set the order cookie so the success page can access it
+    if (session.paymentRequired === false) {
+      response.cookies.set({
+        name: RECENT_ORDER_COOKIE,
+        value: session.orderNumber,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: RECENT_ORDER_MAX_AGE,
+      });
+    }
+
+    return response;
   } catch (error) {
     if (error instanceof CheckoutError) {
       return NextResponse.json(

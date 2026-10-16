@@ -5,26 +5,32 @@ import { useState, type FormEvent } from 'react';
 type Status = 'idle' | 'submitting' | 'sent' | 'error';
 
 /**
- * Contact form placeholder.
- *
- * Email delivery is not configured yet — the submit handler currently
- * simulates a send so the UI is testable. Wire it up by POSTing to an API
- * route (e.g. app/api/contact/route.ts) that calls your email provider
- * (Resend, SendGrid, SES...) once the account is ready.
+ * Contact form — submits to /api/contact which sends an email via Resend.
  */
 export default function ContactForm() {
   const [status, setStatus] = useState<Status>('idle');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (status === 'submitting') return;
     setStatus('submitting');
+    setErrors({});
 
-    // TODO: replace with a real POST once email is configured:
-    // const res = await fetch("/api/contact", { method: "POST", body: new FormData(e.currentTarget) });
-    // setStatus(res.ok ? "sent" : "error");
-    await new Promise(r => setTimeout(r, 600));
-    setStatus('sent');
+    const formData = new FormData(e.currentTarget);
+    const res = await fetch('/api/contact', { method: 'POST', body: formData });
+
+    if (res.ok) {
+      setStatus('sent');
+    } else {
+      const data = await res.json().catch(() => ({}));
+      if (data.errors) {
+        setErrors(data.errors);
+        setStatus('error');
+      } else {
+        setStatus('error');
+      }
+    }
   }
 
   if (status === 'sent') {
@@ -59,7 +65,18 @@ export default function ContactForm() {
             name="name"
             placeholder="Your name"
             className={inputClass}
+            aria-invalid={!!errors.name}
+            aria-describedby={errors.name ? 'name-error' : undefined}
           />
+          {errors.name && (
+            <p
+              id="name-error"
+              className="mt-1.5 text-sm text-[#C98F82]"
+              role="alert"
+            >
+              {errors.name}
+            </p>
+          )}
         </label>
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium">Email</span>
@@ -69,7 +86,18 @@ export default function ContactForm() {
             name="email"
             placeholder="you@example.com"
             className={inputClass}
+            aria-invalid={!!errors.email}
+            aria-describedby={errors.email ? 'email-error' : undefined}
           />
+          {errors.email && (
+            <p
+              id="email-error"
+              className="mt-1.5 text-sm text-[#C98F82]"
+              role="alert"
+            >
+              {errors.email}
+            </p>
+          )}
         </label>
       </div>
 
@@ -107,7 +135,18 @@ export default function ContactForm() {
           rows={6}
           placeholder="How can we help?"
           className={inputClass}
+          aria-invalid={!!errors.message}
+          aria-describedby={errors.message ? 'message-error' : undefined}
         />
+        {errors.message && (
+          <p
+            id="message-error"
+            className="mt-1.5 text-sm text-[#C98F82]"
+            role="alert"
+          >
+            {errors.message}
+          </p>
+        )}
       </label>
 
       {status === 'error' && (

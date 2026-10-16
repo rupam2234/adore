@@ -166,9 +166,9 @@ export default function HeroCarousel({
                 // caused a visible blank frame on advance. Only the opener is
                 // `priority`, so one image holds the LCP hint rather than all
                 // six competing for it.
-                priority={position === 1 && (position - 1) <= loadedCount}
-                loading={(position - 1) <= loadedCount ? 'eager' : 'lazy'}
-                                  onLoad={handleImageLoad}
+                priority={position === 1 && position - 1 <= loadedCount}
+                loading={position - 1 <= loadedCount ? 'eager' : 'lazy'}
+                onLoad={handleImageLoad}
                 sizes="100vw"
                 style={{
                   objectPosition: resolveObjectPosition(slide.objectPosition),

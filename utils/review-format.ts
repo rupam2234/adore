@@ -17,10 +17,7 @@ export const FIT_LABELS: Record<FitFeedback, string> = {
  * they cannot review instead of hitting a wall after filling in the form.
  */
 export type ReviewEligibility =
-  | 'eligible'
-  | 'logged_out'
-  | 'not_purchased'
-  | 'already_reviewed';
+  'eligible' | 'logged_out' | 'not_purchased' | 'already_reviewed';
 
 /**
  * Resolve review eligibility from facts already known to the caller.
