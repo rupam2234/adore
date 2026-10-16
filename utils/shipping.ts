@@ -665,6 +665,99 @@ export async function fetchShiprocketOrderStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Documents — shipping label and invoice
+//
+// Both are generated on demand from the admin order page rather than at booking
+// time: Shiprocket only has a label (and an invoice) once a courier/AWB is
+// assigned, which happens in their dashboard after our push. Both are
+// best-effort like the status read — an unbooked order or a Shiprocket outage
+// yields null, and the page renders nothing instead of an error.
+//
+// Shiprocket's label endpoint works on SHIPMENT ids while we store the ORDER
+// id, so the booking is fetched first to resolve the shipment. The invoice
+// endpoint takes ORDER ids directly. Response parsing accepts the historical
+// alternate key (`url`) so a doc drift degrades to null rather than a crash.
+// ---------------------------------------------------------------------------
+
+export type ShiprocketDocuments = {
+  /** PDF URL of the shipping label, or null when none can be generated. */
+  labelUrl: string | null;
+  /** Invoice URL, or null when none can be generated. */
+  invoiceUrl: string | null;
+};
+
+/**
+ * Generate the shipping label (PDF URL) for a booked order.
+ *
+ * Per Shiprocket's v1 API: GET /courier/generate/label?ids=<shipment_id> →
+ * `{ label_url, message }`. Never throws.
+ */
+export async function generateShiprocketLabel(
+  shiprocketOrderId: string
+): Promise<string | null> {
+  try {
+    const res = await shiprocketGet(
+      `/orders/show/${encodeURIComponent(shiprocketOrderId)}`
+    );
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as {
+      data?: Array<{ shipments?: Array<{ id?: number | string }> }>;
+    } | null;
+    const shipmentId = body?.data?.[0]?.shipments?.[0]?.id;
+    if (shipmentId == null) return null;
+
+    const label = await shiprocketGet(
+      `/courier/generate/label?ids=${encodeURIComponent(String(shipmentId))}`
+    );
+    if (!label.ok) return null;
+    const labelBody = (await label.json().catch(() => null)) as {
+      label_url?: string;
+      url?: string;
+    } | null;
+    return labelBody?.label_url ?? labelBody?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Generate the invoice for a booked order.
+ *
+ * Per Shiprocket's v1 API: GET /courier/generate/invoice?ids=<order_id> →
+ * `{ invoice_url, is_credit_note }`. Never throws.
+ */
+export async function generateShiprocketInvoice(
+  shiprocketOrderId: string
+): Promise<string | null> {
+  try {
+    const res = await shiprocketGet(
+      `/courier/generate/invoice?ids=${encodeURIComponent(shiprocketOrderId)}`
+    );
+    if (!res.ok) return null;
+    const body = (await res.json().catch(() => null)) as {
+      invoice_url?: string;
+      url?: string;
+    } | null;
+    return body?.invoice_url ?? body?.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Label + invoice for one admin page render, in parallel. Never throws.
+ */
+export async function fetchShiprocketDocuments(
+  shiprocketOrderId: string
+): Promise<ShiprocketDocuments> {
+  const [labelUrl, invoiceUrl] = await Promise.all([
+    generateShiprocketLabel(shiprocketOrderId),
+    generateShiprocketInvoice(shiprocketOrderId),
+  ]);
+  return { labelUrl, invoiceUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Reverse logistics — RMA and pickup scheduling
 //
 // A return is a second shipment in the opposite direction. Shiprocket models it

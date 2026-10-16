@@ -134,6 +134,13 @@ export const categories = pgTable('categories', {
   name: text('name').notNull(),
   description: text('description'),
   parentId: text('parent_id'),
+  /**
+   * Cloudinary public_id of this category's size-chart image, when one is set.
+   * Replace/delete act on this; the URL column is the delivered form.
+   */
+  sizeChartPublicId: text('size_chart_public_id'),
+  /** Delivery URL of the size-chart image (denormalised from the public_id). */
+  sizeChartUrl: text('size_chart_url'),
 });
 
 export const productCategories = pgTable('product_categories', {

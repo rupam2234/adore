@@ -713,3 +713,51 @@ const fetchCategories = unstable_cache(
 export async function getCategories(): Promise<CategoryRow[]> {
   return fetchCategories();
 }
+
+/**
+ * Resolve the size-chart image URL for a product from its categories.
+ *
+ * ONE chart per category, with inheritance, because garment charts follow the
+ * silhouette, not the marketing name: a product in "short-kurti" uses the
+ * short-kurti chart when the admin uploaded one, otherwise the "kurti" chart —
+ * so a single upload covers every sub-category until a more specific one exists.
+ *
+ * Resolution order (most specific wins, alphabetical as the tiebreaker):
+ *   1. Own chart of a linked child category
+ *   2. Own chart of a linked parent category
+ *   3. Parent's chart inherited through a linked child
+ *
+ * React-cached like getProductBySlug, so a render that asks twice pays once.
+ */
+export const getSizeChartForProduct = cache(
+  async (productId: string): Promise<string | null> => {
+    const rows = await rawQuery<{ url: string | null }>(sql`
+      WITH linked AS (
+        SELECT
+          c.slug,
+          c.parent_id,
+          c.size_chart_url AS own_chart,
+          p.size_chart_url AS parent_chart
+        FROM product_categories pc
+        JOIN categories c ON c.id = pc.category_id
+        LEFT JOIN categories p ON p.id = c.parent_id
+        WHERE pc.product_id = ${productId}
+      )
+      SELECT COALESCE(
+        (
+          SELECT own_chart FROM linked
+          WHERE own_chart IS NOT NULL
+          ORDER BY (parent_id IS NULL), slug
+          LIMIT 1
+        ),
+        (
+          SELECT parent_chart FROM linked
+          WHERE parent_chart IS NOT NULL
+          ORDER BY slug
+          LIMIT 1
+        )
+      ) AS url
+    `);
+    return rows[0]?.url ?? null;
+  }
+);

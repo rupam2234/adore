@@ -3,7 +3,10 @@ import { notFound } from 'next/navigation';
 import { formatPrice } from '@/utils';
 import { requireAdminPage } from '@/utils/admin-session';
 import { getLedgerOrder } from '@/utils/order-ledger';
-import { fetchShiprocketOrderStatus } from '@/utils/shipping';
+import {
+  fetchShiprocketDocuments,
+  fetchShiprocketOrderStatus,
+} from '@/utils/shipping';
 import CancelOrderPanel from './cancel-order-panel';
 
 export const metadata = {
@@ -53,11 +56,17 @@ export default async function AdminOrderDetailsPage({
   const order = await getLedgerOrder(id);
   if (!order) notFound();
 
-  // Live courier status when the order was booked. Best-effort — a Shiprocket
-  // outage renders the stored booking id with "status unavailable".
-  const courier = order.shiprocketOrderId
-    ? await fetchShiprocketOrderStatus(order.shiprocketOrderId)
-    : null;
+  // Live courier status + documents when the order was booked. Both best-effort:
+  // a Shiprocket outage renders the stored booking id with "status unavailable"
+  // and no download links, never a broken page. Documents are generated on the
+  // visit rather than at booking time — Shiprocket only has a label/invoice
+  // once a courier is assigned, which happens in their dashboard.
+  const [courier, documents] = order.shiprocketOrderId
+    ? await Promise.all([
+        fetchShiprocketOrderStatus(order.shiprocketOrderId),
+        fetchShiprocketDocuments(order.shiprocketOrderId),
+      ])
+    : [null, null];
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-10 sm:px-8">
@@ -92,6 +101,7 @@ export default async function AdminOrderDetailsPage({
       <section className="mt-8 rounded-2xl border border-[#2B2620]/10 bg-white p-6">
         <h2 className="font-admin font-semibold text-lg">Shipping</h2>
         {order.shiprocketOrderId ? (
+          <>
           <dl className="mt-4 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
             <div>
               <dt className="text-xs uppercase tracking-[0.15em] text-[#2B2620]/50">
@@ -122,6 +132,31 @@ export default async function AdminOrderDetailsPage({
               <dd className="mt-1 break-all">{courier?.awb || 'Not assigned'}</dd>
             </div>
           </dl>
+          {(documents?.labelUrl || documents?.invoiceUrl) && (
+            <div className="mt-4 flex flex-wrap gap-2 border-t border-[#2B2620]/10 pt-4">
+              {documents.labelUrl && (
+                <a
+                  href={documents.labelUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-[#2B2620]/20 px-3 py-1.5 text-sm text-[#2B2620] hover:bg-[#FAF8F3]"
+                >
+                  Shipping label ↗
+                </a>
+              )}
+              {documents.invoiceUrl && (
+                <a
+                  href={documents.invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-[#2B2620]/20 px-3 py-1.5 text-sm text-[#2B2620] hover:bg-[#FAF8F3]"
+                >
+                  Invoice ↗
+                </a>
+              )}
+            </div>
+          )}
+          </>
         ) : (
           <p className="mt-3 text-sm text-[#2B2620]/60">
             Not booked with a courier yet.
