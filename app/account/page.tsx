@@ -10,8 +10,8 @@ import ProfileForm from './profile-form';
 export default async function AccountOverviewPage() {
   const user = await requireAccountPage();
   const customer = await ensureCustomerForUserId(user.id);
-  const [orders, addresses] = await Promise.all([
-    listOrders(customer.id),
+  const [{ total: orderCount }, addresses] = await Promise.all([
+    listOrders(customer.id, 1),
     listAddresses(customer.id),
   ]);
   const defaultAddress = addresses.find(a => a.isDefault) ?? addresses[0];
@@ -23,9 +23,9 @@ export default async function AccountOverviewPage() {
           href="/account/orders"
           className="group rounded-2xl border border-[#2B2620]/10 bg-white p-5 transition-colors hover:border-[#5C6B4B]/50"
         >
-          <p className="font-roboto text-2xl font-medium">{orders.length}</p>
+          <p className="font-roboto text-2xl font-medium">{orderCount}</p>
           <p className="mt-1 text-sm text-[#2B2620]/60 group-hover:text-[#2B2620]">
-            {orders.length === 1 ? 'Order' : 'Orders'}
+            {orderCount === 1 ? 'Order' : 'Orders'}
           </p>
         </Link>
         <Link

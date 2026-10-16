@@ -141,6 +141,8 @@ export function sendEmailInBackground(
  * None of these throw; every one returns an EmailResult.
  */
 import {
+  adminNewOrder,
+  adminNewSignup,
   orderConfirmed,
   orderShipped,
   refundFailed,
@@ -340,6 +342,32 @@ export async function dispatchEmailJob(input: {
         idempotencyKey: dedupeKey,
       });
 
+    case 'admin_new_order':
+      return sendAdminNewOrder({
+        to,
+        name,
+        customerEmail: str(payload.customerEmail),
+        orderNumber,
+        orderId:
+          typeof payload.orderId === 'string' ? payload.orderId : undefined,
+        items: arr(payload.items).map(i => ({
+          name: str(i.name),
+          qty: num(i.qty, 1),
+          price: str(i.price),
+        })),
+        total: str(payload.total),
+        idempotencyKey: dedupeKey,
+      });
+
+    case 'admin_new_signup':
+      return sendAdminNewSignup({
+        to,
+        name,
+        customerEmail: str(payload.customerEmail),
+        phone: typeof payload.phone === 'string' ? payload.phone : undefined,
+        idempotencyKey: dedupeKey,
+      });
+
     default:
       // Permanent: retrying an unknown flow cannot ever succeed.
       console.error('[email] unknown flow:', input.flow, 'key:', dedupeKey);
@@ -484,5 +512,43 @@ export function sendContactFormEmail(args: {
     }).text,
     replyTo: args.customerEmail,
     tags: [{ name: 'flow', value: 'contact_form' }],
+  });
+}
+
+/* --- Admin notifications --------------------------------------------------- */
+
+/**
+ * Recipient for internal admin notifications.
+ *
+ * Defaults to the team inbox (REPLY_TO); set ADMIN_EMAIL to route these
+ * elsewhere without touching code. Resolved at enqueue time and stored on the
+ * job row, so a later change only affects future notifications.
+ */
+export function adminNotificationRecipient(): string {
+  return process.env.ADMIN_EMAIL ?? REPLY_TO;
+}
+
+/** New paid order — mirrors what the customer confirmation carries. */
+export function sendAdminNewOrder(
+  args: SendArgs & {
+    customerEmail: string;
+    orderNumber: string;
+    /** Order uuid — deep-links the CTA into the admin order page. */
+    orderId?: string;
+    items: OrderLine[];
+    total: string;
+  }
+): Promise<EmailResult> {
+  return deliver('admin_new_order', args.orderNumber, args.to, adminNewOrder, {
+    ...args,
+  });
+}
+
+/** New account — fires from the register route, best-effort like the welcome email. */
+export function sendAdminNewSignup(
+  args: SendArgs & { customerEmail: string; phone?: string }
+): Promise<EmailResult> {
+  return deliver('admin_new_signup', undefined, args.to, adminNewSignup, {
+    ...args,
   });
 }

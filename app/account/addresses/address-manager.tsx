@@ -2,6 +2,13 @@
 
 import { useState } from 'react';
 import type { CustomerAddress } from '@/utils/account';
+import {
+  clampPage,
+  offsetFor,
+  pageWindow,
+  PAGE_SIZE,
+  totalPagesFor,
+} from '@/utils/pagination';
 
 type FormState = {
   fullName: string;
@@ -33,11 +40,21 @@ export default function AddressManager({
   initialAddresses: CustomerAddress[];
 }) {
   const [addresses, setAddresses] = useState(initialAddresses);
+  const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<string | null>(null);
   const [adding, setAdding] = useState(initialAddresses.length === 0);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // The full list stays in memory (checkout needs it all); only the rendered
+  // grid is paged, so no API changes were needed.
+  const totalPages = totalPagesFor(addresses.length);
+  const safePage = clampPage(page, totalPages);
+  const visible = addresses.slice(
+    offsetFor(safePage),
+    offsetFor(safePage) + PAGE_SIZE
+  );
 
   function openAdd() {
     setForm(EMPTY_FORM);
@@ -149,7 +166,7 @@ export default function AddressManager({
       )}
 
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {addresses.map(address => (
+        {visible.map(address => (
           <AddressCard
             key={address.id}
             address={address}
@@ -162,6 +179,73 @@ export default function AddressManager({
           />
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <nav
+          aria-label="Address pagination"
+          className="mt-6 flex flex-wrap items-center justify-center gap-1.5"
+        >
+          {(() => {
+            const base =
+              'inline-flex h-9 min-w-9 items-center justify-center rounded-full border px-3 text-sm transition-colors';
+            const enabled = `${base} border-[#2B2620]/20 hover:border-[#2B2620]`;
+            const disabled = `${base} border-transparent text-[#2B2620]/30`;
+            return (
+              <>
+                {safePage > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setPage(safePage - 1)}
+                    className={`cursor-pointer ${enabled}`}
+                  >
+                    Previous
+                  </button>
+                ) : (
+                  <span className={disabled}>Previous</span>
+                )}
+                {pageWindow(safePage, totalPages).map((item, i) =>
+                  item === 'gap' ? (
+                    <span
+                      key={`gap-${i}`}
+                      className="px-1 text-sm text-[#2B2620]/40"
+                    >
+                      …
+                    </span>
+                  ) : item === safePage ? (
+                    <span
+                      key={item}
+                      aria-current="page"
+                      className={`${base} border-[#2B2620] bg-[#2B2620] text-[#FAF8F3]`}
+                    >
+                      {item}
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setPage(item)}
+                      className={`cursor-pointer ${enabled}`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+                {safePage < totalPages ? (
+                  <button
+                    type="button"
+                    onClick={() => setPage(safePage + 1)}
+                    className={`cursor-pointer ${enabled}`}
+                  >
+                    Next
+                  </button>
+                ) : (
+                  <span className={disabled}>Next</span>
+                )}
+              </>
+            );
+          })()}
+        </nav>
+      )}
 
       {adding && (
         <AddressForm

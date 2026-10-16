@@ -1,4 +1,13 @@
-import { formatPrice } from '@/utils';
+import {
+  clampPage,
+  formatPrice,
+  offsetFor,
+  pageHref,
+  parsePage,
+  PAGE_SIZE,
+  totalPagesFor,
+} from '@/utils';
+import { Pagination } from '@/components';
 import { listPromos } from '@/utils/admin-promos';
 import { requireAdminPage } from '@/utils/admin-session';
 import PromoForm, { PromoRowActions } from './promo-form';
@@ -8,7 +17,11 @@ export const metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AdminPromosPage() {
+export default async function AdminPromosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
   await requireAdminPage();
 
   let promos: Awaited<ReturnType<typeof listPromos>> = [];
@@ -18,6 +31,10 @@ export default async function AdminPromosPage() {
   } catch {
     error = 'Could not load promo codes. Check the database connection.';
   }
+
+  const totalPages = totalPagesFor(promos.length);
+  const page = clampPage(parsePage((await searchParams).page), totalPages);
+  const visible = promos.slice(offsetFor(page), offsetFor(page) + PAGE_SIZE);
 
   return (
     <section>
@@ -54,7 +71,7 @@ export default async function AdminPromosPage() {
                 </td>
               </tr>
             )}
-            {promos.map(promo => (
+            {visible.map(promo => (
               <tr key={promo.id} className="border-t border-[#2B2620]/10">
                 <td className="px-4 py-3">
                   <p className="font-medium uppercase">{promo.code}</p>
@@ -98,7 +115,19 @@ export default async function AdminPromosPage() {
             ))}
           </tbody>
         </table>
+        {promos.length > 0 && (
+          <p className="border-t border-[#2B2620]/10 px-4 py-3 text-xs text-[#2B2620]/50">
+            Showing {offsetFor(page) + 1}–
+            {Math.min(offsetFor(page) + PAGE_SIZE, promos.length)} of{' '}
+            {promos.length} codes
+          </p>
+        )}
       </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        makeHref={p => pageHref('/admin/promos', {}, p)}
+      />
     </section>
   );
 }

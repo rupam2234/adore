@@ -1,3 +1,12 @@
+import {
+  clampPage,
+  offsetFor,
+  pageHref,
+  parsePage,
+  PAGE_SIZE,
+  totalPagesFor,
+} from '@/utils';
+import { Pagination } from '@/components';
 import { requireAdminPage } from '@/utils/admin-session';
 import { listAdminReturns } from '@/utils/returns-ops';
 import { formatPrice } from '@/utils/product-format';
@@ -17,10 +26,20 @@ export const metadata = {
  * decision" and "riskiest" are different axes, and chronological order would
  * let ordinary returns bury the costliest one.
  */
-export default async function AdminReturnsPage() {
+export default async function AdminReturnsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string | string[] }>;
+}) {
   await requireAdminPage();
 
   const requests = await listAdminReturns({ limit: 200 });
+
+  // The queue stats above always cover the whole queue; only the rendered rows
+  // are paginated.
+  const totalPages = totalPagesFor(requests.length);
+  const page = clampPage(parsePage((await searchParams).page), totalPages);
+  const visible = requests.slice(offsetFor(page), offsetFor(page) + PAGE_SIZE);
 
   // Queue shape at a glance. Refunds "due" is the money-shaped one: each needs a
   // deliberate click before it moves.
@@ -120,13 +139,25 @@ export default async function AdminReturnsPage() {
               </tr>
             </thead>
             <tbody>
-              {requests.map(request => (
+              {visible.map(request => (
                 <ReturnRow key={request.id} request={request} />
               ))}
             </tbody>
           </table>
+          {requests.length > 0 && (
+            <p className="border-t border-[#2B2620]/10 px-4 py-3 text-xs text-[#2B2620]/50">
+              Showing {offsetFor(page) + 1}–
+              {Math.min(offsetFor(page) + PAGE_SIZE, requests.length)} of{' '}
+              {requests.length} in the queue
+            </p>
+          )}
         </div>
       )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        makeHref={p => pageHref('/admin/returns', {}, p)}
+      />
     </div>
   );
 }

@@ -5,16 +5,25 @@ import {
   FilterStripe,
   AdvancedFilters,
   ResultsBusy,
+  Pagination,
 } from '@/components';
 import {
   ALL_CATEGORIES,
   CATEGORY_TREE,
   categoryPageMetadata,
   getCategories,
-  getProductsForSection,
+  getShopProductPage,
+  getShopProductCount,
   getFilterFacets,
   parseShopFilters,
   preservedParams,
+  allFilterParams,
+  PAGE_SIZE,
+  parsePage,
+  totalPagesFor,
+  clampPage,
+  offsetFor,
+  pageHref,
 } from '@/utils';
 import Link from 'next/link';
 import type { Metadata } from 'next';
@@ -44,31 +53,52 @@ export default async function ShopCategoryPage({
   searchParams,
 }: PageProps) {
   const { slug } = await params;
-  const filters = parseShopFilters(await searchParams);
+  const search = await searchParams;
+  const filters = parseShopFilters(search);
   const keep = preservedParams(filters);
 
   // Validate against the static taxonomy (single source of truth).
   const category = ALL_CATEGORIES.find(c => c.slug === slug);
   if (!category) notFound();
 
+  const requestedPage = parsePage(search.page);
+  const listOptions = {
+    categorySlug: slug,
+    sort: filters.sort,
+    colors: filters.colors,
+    sizes: filters.sizes,
+    inStockOnly: filters.inStockOnly,
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+  };
+
   // Parent slugs (e.g. "kurti") include their children automatically. The
   // category tree for sub-navigation is fetched alongside them so it costs no
   // extra round trip; a missing `parent_id` column (migration not run) resolves
   // to null and we fall back to the static taxonomy below.
-  const [products, facets, categoryRows] = await Promise.all([
-    getProductsForSection({
-      categorySlug: slug,
-      sort: filters.sort,
-      colors: filters.colors,
-      sizes: filters.sizes,
-      inStockOnly: filters.inStockOnly,
-      minPrice: filters.minPrice,
-      maxPrice: filters.maxPrice,
-      limit: 24,
+  const [products, total, facets, categoryRows] = await Promise.all([
+    getShopProductPage({
+      ...listOptions,
+      limit: PAGE_SIZE,
+      offset: offsetFor(requestedPage),
     }),
+    getShopProductCount(listOptions),
     getFilterFacets(slug),
     getCategories().catch(() => null),
   ]);
+
+  const totalPages = totalPagesFor(total);
+  const page = clampPage(requestedPage, totalPages);
+  // A hand-edited ?page past the end re-fetches the clamped page rather than
+  // rendering an empty grid.
+  const visible =
+    page === requestedPage
+      ? products
+      : await getShopProductPage({
+          ...listOptions,
+          limit: PAGE_SIZE,
+          offset: offsetFor(page),
+        });
 
   // Siblings / children for sub-navigation (prefer live DB tree when present).
   let subNav: { slug: string; name: string }[] = [];
@@ -173,8 +203,8 @@ export default async function ShopCategoryPage({
             <div className="min-w-0 flex-1" aria-label="Product results">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
                 <ResultsBusy />
-                {products.length > 0 ? (
-                  products.map(product => (
+                {visible.length > 0 ? (
+                  visible.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))
                 ) : (
@@ -184,6 +214,13 @@ export default async function ShopCategoryPage({
                   </p>
                 )}
               </div>
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                makeHref={p =>
+                  pageHref(`/shop/${slug}`, allFilterParams(filters), p)
+                }
+              />
             </div>
           </div>
         </div>

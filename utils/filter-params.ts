@@ -58,3 +58,19 @@ export function preservedParams(f: {
     sort: f.sort !== 'featured' ? f.sort : undefined,
   };
 }
+
+/** Every active filter as URL params — for links (pagination) that must
+ *  reproduce the exact same result set on another page. */
+export function allFilterParams(
+  f: ParsedShopFilters
+): Record<string, string | undefined> {
+  return {
+    q: f.query || undefined,
+    sort: f.sort !== 'featured' ? f.sort : undefined,
+    colors: f.colors.length ? f.colors.join(',') : undefined,
+    sizes: f.sizes.length ? f.sizes.join(',') : undefined,
+    stock: f.inStockOnly ? '1' : undefined,
+    min: f.minPrice != null ? String(f.minPrice) : undefined,
+    max: f.maxPrice != null ? String(f.maxPrice) : undefined,
+  };
+}

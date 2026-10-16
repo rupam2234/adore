@@ -1,6 +1,8 @@
 import { requireAccountPage } from '@/utils/account-session';
 import { ensureCustomerForUserId, listOrders } from '@/utils/account';
 import { formatPrice } from '@/utils/product-format';
+import { offsetFor, pageHref, parsePage, totalPagesFor } from '@/utils';
+import { Pagination } from '@/components';
 import Link from 'next/link';
 import CopyableOrderNumber from '@/components/account/copyable-order-number';
 
@@ -19,12 +21,22 @@ const STATUS_STYLES: Record<string, string> = {
   REFUNDED: 'bg-neutral-200 text-neutral-600',
 };
 
-export default async function AccountOrdersPage() {
+type PageProps = { searchParams: Promise<{ page?: string | string[] }> };
+
+export default async function AccountOrdersPage({ searchParams }: PageProps) {
   const user = await requireAccountPage();
   const customer = await ensureCustomerForUserId(user.id);
-  const orders = await listOrders(customer.id);
+  const params = await searchParams;
+  let page = parsePage(params.page);
+  let { orders, total } = await listOrders(customer.id, page);
+  const totalPages = totalPagesFor(total);
+  // A hand-edited ?page past the end re-fetches the clamped page.
+  if (page > totalPages) {
+    page = totalPages;
+    ({ orders, total } = await listOrders(customer.id, page));
+  }
 
-  if (orders.length === 0) {
+  if (total === 0) {
     return (
       <section className="rounded-2xl border border-dashed border-[#2B2620]/20 bg-white px-6 py-16 text-center">
         <h2 className="font-serif text-xl">No orders yet</h2>
@@ -44,7 +56,15 @@ export default async function AccountOrdersPage() {
 
   return (
     <section className="space-y-4">
-      <h2 className="font-serif text-xl">Orders</h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="font-serif text-xl">Orders</h2>
+        {orders.length > 0 && (
+          <p className="text-xs text-[#2B2620]/50">
+            Showing {offsetFor(page) + 1}–{offsetFor(page) + orders.length} of{' '}
+            {total}
+          </p>
+        )}
+      </div>
       {orders.map(order => (
         <article
           key={order.id}
@@ -138,6 +158,11 @@ export default async function AccountOrdersPage() {
           </div>
         </article>
       ))}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        makeHref={p => pageHref('/account/orders', {}, p)}
+      />
     </section>
   );
 }

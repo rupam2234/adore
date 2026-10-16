@@ -5,13 +5,22 @@ import {
   FilterStripe,
   AdvancedFilters,
   ResultsBusy,
+  Pagination,
 } from '@/components';
 import {
   CATEGORY_TREE,
-  getProductsForSection,
+  getShopProductPage,
+  getShopProductCount,
   getFilterFacets,
   parseShopFilters,
   preservedParams,
+  allFilterParams,
+  PAGE_SIZE,
+  parsePage,
+  totalPagesFor,
+  clampPage,
+  offsetFor,
+  pageHref,
 } from '@/utils';
 import type { Metadata } from 'next';
 
@@ -27,22 +36,43 @@ type PageProps = {
 };
 
 export default async function ShopAllPage({ searchParams }: PageProps) {
-  const filters = parseShopFilters(await searchParams);
+  const params = await searchParams;
+  const filters = parseShopFilters(params);
   const keep = preservedParams(filters);
 
-  const [products, facets] = await Promise.all([
-    getProductsForSection({
-      search: filters.query || undefined,
-      sort: filters.sort,
-      colors: filters.colors,
-      sizes: filters.sizes,
-      inStockOnly: filters.inStockOnly,
-      minPrice: filters.minPrice,
-      maxPrice: filters.maxPrice,
-      limit: 48,
+  const requestedPage = parsePage(params.page);
+  const listOptions = {
+    search: filters.query || undefined,
+    sort: filters.sort,
+    colors: filters.colors,
+    sizes: filters.sizes,
+    inStockOnly: filters.inStockOnly,
+    minPrice: filters.minPrice,
+    maxPrice: filters.maxPrice,
+  };
+
+  const [products, total, facets] = await Promise.all([
+    getShopProductPage({
+      ...listOptions,
+      limit: PAGE_SIZE,
+      offset: offsetFor(requestedPage),
     }),
+    getShopProductCount(listOptions),
     getFilterFacets(),
   ]);
+
+  const totalPages = totalPagesFor(total);
+  const page = clampPage(requestedPage, totalPages);
+  // A hand-edited ?page past the end re-fetches the clamped page rather than
+  // rendering an empty grid.
+  const visible =
+    page === requestedPage
+      ? products
+      : await getShopProductPage({
+          ...listOptions,
+          limit: PAGE_SIZE,
+          offset: offsetFor(page),
+        });
 
   return (
     <div className="flex min-h-screen flex-col bg-[#FAF8F3] font-sans text-[#2B2620]">
@@ -54,7 +84,7 @@ export default async function ShopAllPage({ searchParams }: PageProps) {
           </h1>
           <p className="mt-2 max-w-md text-sm text-[#2B2620]/60">
             {filters.query
-              ? `${products.length} ${products.length === 1 ? 'match' : 'matches'} in the full collection.`
+              ? `${total} ${total === 1 ? 'match' : 'matches'} in the full collection.`
               : 'Browse the full collection.'}
           </p>
         </div>
@@ -86,8 +116,8 @@ export default async function ShopAllPage({ searchParams }: PageProps) {
             <div className="min-w-0 flex-1" aria-label="Product results">
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4">
                 <ResultsBusy />
-                {products.length > 0 ? (
-                  products.map(product => (
+                {visible.length > 0 ? (
+                  visible.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))
                 ) : (
@@ -98,6 +128,11 @@ export default async function ShopAllPage({ searchParams }: PageProps) {
                   </p>
                 )}
               </div>
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                makeHref={p => pageHref('/shop', allFilterParams(filters), p)}
+              />
             </div>
           </div>
         </div>

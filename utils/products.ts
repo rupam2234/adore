@@ -89,6 +89,8 @@ type QueryOptions = {
   maxPrice?: number;
   /** Max products to return (default 8). */
   limit?: number;
+  /** Rows to skip — (page − 1) × PAGE_SIZE for paginated listings. */
+  offset?: number;
 };
 
 /**
@@ -107,6 +109,7 @@ export function expandCategorySlugs(slug: string): string[] {
  */
 export const SHOP_FACETS_TAG = 'shop-facets';
 export const SHOP_CATEGORIES_TAG = 'shop-categories';
+export const SHOP_LISTINGS_TAG = 'shop-listings';
 
 /**
  * Backstop TTL for those caches, matching app/shop/layout.tsx's ISR window: if a
@@ -203,21 +206,21 @@ function mapProductRow(row: ProductRow): ProductCardData {
  * - Price comes from the cheapest active variant.
  * - Image delivery URLs are generated from the Cloudinary public_id.
  */
-export async function getProductsForSection(
-  options: QueryOptions = {}
-): Promise<ProductCardData[]> {
+/**
+ * WHERE fragments shared by the listing and counting queries, so the two can
+ * never disagree about what matches. Unset filters collapse to TRUE.
+ */
+function productFilterSql(options: QueryOptions) {
   const {
     categorySlug,
     includeChildren = true,
     featuredOnly = false,
     search,
-    sort = 'featured',
     colors,
     sizes,
     inStockOnly = false,
     minPrice,
     maxPrice,
-    limit = 8,
   } = options;
   // Filter fragment: EXISTS over matched categories (parameterized IN list),
   // or plain TRUE when no category filter is given.
@@ -259,6 +262,32 @@ export async function getProductsForSection(
         : maxPrice != null
           ? sql`min_active.price <= ${maxPrice}`
           : sql`TRUE`;
+  const featuredFilter = sql`(${featuredOnly} = FALSE OR p.is_featured)`;
+
+  return {
+    categoryFilter,
+    searchFilter,
+    colorFilter,
+    sizeFilter,
+    stockFilter,
+    priceFilter,
+    featuredFilter,
+  };
+}
+
+export async function getProductsForSection(
+  options: QueryOptions = {}
+): Promise<ProductCardData[]> {
+  const { sort = 'featured', limit = 8, offset = 0 } = options;
+  const {
+    categoryFilter,
+    searchFilter,
+    colorFilter,
+    sizeFilter,
+    stockFilter,
+    priceFilter,
+    featuredFilter,
+  } = productFilterSql(options);
 
   const rows = await rawQuery<ProductRow>(sql`
     SELECT
@@ -354,12 +383,79 @@ export async function getProductsForSection(
       AND ${sizeFilter}
       AND ${stockFilter}
       AND ${priceFilter}
-      AND (${featuredOnly} = FALSE OR p.is_featured)
+      AND ${featuredFilter}
     ORDER BY ${sql.raw(SORT_CLAUSES[sort])}
-    LIMIT ${limit}
+    LIMIT ${limit} OFFSET ${offset}
   `);
 
   return rows.map(mapProductRow);
+}
+
+/**
+ * Count of products matching the same filters as getProductsForSection —
+ * the total behind a paginated listing, sharing its WHERE via productFilterSql.
+ */
+export async function countProductsForSection(
+  options: QueryOptions = {}
+): Promise<number> {
+  const {
+    categoryFilter,
+    searchFilter,
+    colorFilter,
+    sizeFilter,
+    stockFilter,
+    priceFilter,
+    featuredFilter,
+  } = productFilterSql(options);
+  const rows = await rawQuery<{ total: number }>(sql`
+    SELECT COUNT(*)::int AS total
+    FROM products p
+    JOIN LATERAL (
+      SELECT v.price
+      FROM product_variants v
+      WHERE v.product_id = p.id AND v.is_active
+      ORDER BY v.price ASC
+      LIMIT 1
+    ) min_active ON TRUE
+    WHERE p.status = 'ACTIVE'
+      AND ${categoryFilter}
+      AND ${searchFilter}
+      AND ${colorFilter}
+      AND ${sizeFilter}
+      AND ${stockFilter}
+      AND ${priceFilter}
+      AND ${featuredFilter}
+  `);
+  return Number(rows[0]?.total ?? 0);
+}
+
+/** Cached shop listing reads — they depend only on the URL filters, never the
+ *  session, so admin writes expire SHOP_LISTINGS_TAG and the TTL matches the
+ *  facets' backstop. Keyed by the full options object (filters + page). */
+const fetchShopProductPage = unstable_cache(
+  async (options: QueryOptions) => getProductsForSection(options),
+  ['shop-product-page'],
+  { tags: [SHOP_LISTINGS_TAG], revalidate: SHOP_CACHE_SECONDS }
+);
+
+const fetchShopProductCount = unstable_cache(
+  async (options: QueryOptions) => countProductsForSection(options),
+  ['shop-product-count'],
+  { tags: [SHOP_LISTINGS_TAG], revalidate: SHOP_CACHE_SECONDS }
+);
+
+/** One cached page of shop products for /shop and /shop/[slug]. */
+export async function getShopProductPage(
+  options: QueryOptions
+): Promise<ProductCardData[]> {
+  return fetchShopProductPage(options);
+}
+
+/** Cached total behind a shop listing, for the pagination controls. */
+export async function getShopProductCount(
+  options: QueryOptions
+): Promise<number> {
+  return fetchShopProductCount(options);
 }
 
 /**

@@ -13,3 +13,4 @@ export { ResultsBusy } from './shop/results-busy';
 export { Stars, StarInput } from './shop/stars';
 export { ReviewForm } from './shop/review-form';
 export { ReviewListItem } from './shop/review-list';
+export { default as Pagination } from './pagination';
