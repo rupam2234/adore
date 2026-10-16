@@ -5,6 +5,7 @@ import {
   completeWebhookEvent,
   failWebhookEvent,
   handleOrderDelivered,
+  handleOrderShipped,
   syncReturnFromCourier,
 } from '@/utils/returns-ops';
 import { rawQuery, sql } from '@/utils/db';
@@ -160,9 +161,42 @@ export async function POST(request: Request) {
         break;
       }
 
-      // --- Return leg: the customer's parcel is moving back to us.
-      case 'IN_TRANSIT':
+      // --- Forward leg: the parcel is on its way to the customer. The SAME
+      //     statuses fire for return shipments, so route by the order
+      //     reference, exactly like CANCELLED below: a forward shipment echoes
+      //     our order number as `order_id`, while a return shipment carries the
+      //     RMA id. An order that resolves is marked SHIPPED once and gets its
+      //     tracking email enqueued once; anything else falls through to the
+      //     return-leg sync, which no-ops when the shipment matches no return.
+      case 'OUT_FOR_PICKUP':
       case 'PICKED_UP':
+      case 'IN_TRANSIT':
+      case 'OUT_FOR_DELIVERY':
+      case 'SHIPPED': {
+        const dispatchOrderNumber = String(
+          payload.order_id ?? payload.order_number ?? ''
+        );
+        if (dispatchOrderNumber && !/^RMA/i.test(dispatchOrderNumber)) {
+          const dispatch = await handleOrderShipped({
+            orderNumber: dispatchOrderNumber,
+            awb: typeof payload.awb === 'string' ? payload.awb : undefined,
+            courierName:
+              typeof payload.courier_name === 'string'
+                ? payload.courier_name
+                : undefined,
+          });
+          if (dispatch.known) break;
+        }
+
+        // --- Return leg: the customer's parcel is moving back to us.
+        await syncReturnsForReturnShipment(
+          String(payload.shipment_id ?? ''),
+          trackingFrom(payload.shipment_status, payload.awb)
+        );
+        break;
+      }
+
+      // Return-only transit status (the RMA id in `order_id` is unambiguous).
       case 'RMA_IN_TRANSIT': {
         await syncReturnsForReturnShipment(
           String(payload.shipment_id ?? ''),
@@ -216,8 +250,8 @@ export async function POST(request: Request) {
       }
 
       default:
-        // Every other courier event (OUT_FOR_DELIVERY, forward-leg IN_TRANSIT,
-        // courier-assigned, …) is not our concern here.
+        // Every other courier event (courier-assigned, undelivered scans, …)
+        // is not our concern here.
         break;
     }
 

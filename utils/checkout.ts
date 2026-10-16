@@ -39,6 +39,9 @@ export {
 } from './checkout-format';
 export type { CheckoutAddress, CheckoutTotals } from './checkout-format';
 import { checkPinServiceability, createShiprocketOrder } from './shipping';
+import { enqueueAndNotify } from './email-queue';
+import { buildDedupeKey } from './email-lifecycle';
+import { formatPrice } from './product-format';
 import {
   reserveCartItems,
   releaseOrderReservations,
@@ -727,6 +730,79 @@ export async function pushToShiprocket(
 }
 
 /**
+ * Queue the order-confirmation email through the durable outbox (see
+ * utils/schema.ts for why email is never sent inline from a request).
+ *
+ * Enqueueing is one INSERT whose dedupe key (`order_confirmed/<order-number>`)
+ * makes a retried verification a no-op at the UNIQUE index — a double callback
+ * can never produce a second email. A lost queue message is recovered by the
+ * daily backstop cron, because the row is the ledger.
+ *
+ * Never throws: `enqueueAndNotify` swallows its own errors, and the try/catch
+ * guards the lookup queries. A missing email is the acceptable trade against
+ * failing (or blocking) the response to a payment that already succeeded.
+ */
+async function queueOrderConfirmedEmail(order: {
+  id: string;
+  orderNumber: string;
+  customerId: string;
+  totalAmount: string;
+  currency: string;
+}): Promise<void> {
+  try {
+    const [customerRows, items] = await Promise.all([
+      db
+        .select({
+          email: customers.email,
+          firstName: customers.firstName,
+          lastName: customers.lastName,
+        })
+        .from(customers)
+        .where(eq(customers.id, order.customerId))
+        .limit(1),
+      db
+        .select({
+          productName: orderItems.productName,
+          quantity: orderItems.quantity,
+          totalPrice: orderItems.totalPrice,
+        })
+        .from(orderItems)
+        .where(eq(orderItems.orderId, order.id)),
+    ]);
+    const customer = customerRows[0];
+    if (!customer?.email) {
+      console.warn(
+        `[checkout] no customer email for ${order.orderNumber}; confirmation email skipped`
+      );
+      return;
+    }
+
+    await enqueueAndNotify({
+      flow: 'order_confirmed',
+      to: customer.email,
+      dedupeKey: buildDedupeKey('order_confirmed', order.orderNumber),
+      payload: {
+        customerName:
+          [customer.firstName, customer.lastName].filter(Boolean).join(' ') ||
+          'there',
+        orderNumber: order.orderNumber,
+        items: items.map(i => ({
+          name: i.productName,
+          qty: i.quantity,
+          price: formatPrice(i.totalPrice, order.currency),
+        })),
+        total: formatPrice(order.totalAmount, order.currency),
+      },
+    });
+  } catch (err) {
+    console.error(
+      `[checkout] confirmation email enqueue failed for ${order.orderNumber}:`,
+      err
+    );
+  }
+}
+
+/**
  * Verify a Razorpay Checkout success payload and turn the PENDING order into a
  * confirmed, fulfilled one. Safe to call twice with the same payment (retries,
  * double callbacks) — the PENDING→CONFIRMED transition is a single conditional
@@ -805,6 +881,11 @@ export async function verifyAndConfirmPayment(
 
   await decrementStock(order.id);
   await releaseCart();
+
+  // Queue the order-confirmation email now that the order is committed. It is
+  // enqueued BEFORE the Shiprocket push so a slow courier API can never delay
+  // it, and the outbox guarantees it goes out even if this process dies here.
+  await queueOrderConfirmedEmail(order);
 
   let shiprocketOrderId: string | null = null;
   let shiprocketError: string | null = null;

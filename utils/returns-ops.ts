@@ -16,6 +16,7 @@ import {
   createReturnOrder,
   scheduleReversePickup,
   fetchReturnTracking,
+  fetchShiprocketOrderStatus,
   ShiprocketReturnError,
   type RmaAddress,
   type ReturnTrackingStatus,
@@ -1978,6 +1979,149 @@ export async function handleOrderDelivered(input: {
   }
 
   return { updated: true, orderId: rows[0].id };
+}
+
+/**
+ * A forward-order parcel is on its way — the courier has picked it up or it is
+ * moving. Fired from the courier webhook (`app/api/track`) for dispatch
+ * statuses; the SAME statuses also fire for return shipments, which the route
+ * filters out before calling here.
+ *
+ * Two properties make this safe to call on every event:
+ *
+ *  1. The status transition is one guarded UPDATE — CONFIRMED/PROCESSING →
+ *     SHIPPED. Replays and later scans (in transit, out for delivery) match no
+ *     rows and change nothing, and a stale or out-of-order event can never drag
+ *     a delivered or cancelled order backwards into "shipped".
+ *  2. The email enqueues only when THIS call caused the transition, keyed
+ *     `order_shipped/<order-number>`. Together with the dedupe key that means
+ *     exactly one shipping notice per order, at the moment it first moves —
+ *     even if the first event we receive is already a late one.
+ *
+ * Returns whether the order number resolved to one of ours (`known`) so the
+ * webhook can route ambiguous statuses between the forward and return legs.
+ */
+export async function handleOrderShipped(input: {
+  orderNumber: string;
+  awb?: string;
+  courierName?: string;
+}): Promise<{ known: boolean; updated: boolean }> {
+  const rows = await rawQuery<{ id: string }>(sql`
+    UPDATE orders
+    SET status = 'SHIPPED', updated_at = now()
+    WHERE order_number = ${input.orderNumber}
+      AND status IN ('CONFIRMED','PROCESSING')
+    RETURNING id
+  `);
+
+  const orderId =
+    rows[0]?.id ??
+    (
+      await rawQuery<{ id: string }>(sql`
+        SELECT id FROM orders WHERE order_number = ${input.orderNumber} LIMIT 1
+      `)
+    )[0]?.id ??
+    null;
+
+  if (!orderId) return { known: false, updated: false };
+
+  if (rows[0]) {
+    await notifyOrderShipped({
+      orderId,
+      orderNumber: input.orderNumber,
+      awb: input.awb,
+      courierName: input.courierName,
+    });
+  }
+
+  return { known: true, updated: Boolean(rows[0]) };
+}
+
+/**
+ * Enqueue the shipping-notice email for an order that just became SHIPPED.
+ *
+ * The email's whole value is the tracking link, so when the webhook payload did
+ * not carry an AWB we ask Shiprocket once for it (and the courier name). That
+ * call happens at most once per order — the caller only gets here on the
+ * transition — so the extra round-trip cannot amplify.
+ *
+ * Never throws: an enqueue failure is logged, and the missing email is the
+ * acceptable trade against the courier retrying a webhook that "failed".
+ */
+async function notifyOrderShipped(input: {
+  orderId: string;
+  orderNumber: string;
+  awb?: string;
+  courierName?: string;
+}): Promise<void> {
+  try {
+    const rows = await rawQuery<{
+      email: string;
+      first_name: string | null;
+      last_name: string | null;
+      shiprocket_order_id: string | null;
+    }>(sql`
+      SELECT c.email, c.first_name, c.last_name, o.shiprocket_order_id
+      FROM orders o
+      JOIN customers c ON c.id = o.customer_id
+      WHERE o.id = ${input.orderId}
+      LIMIT 1
+    `);
+    const row = rows[0];
+    if (!row?.email) {
+      console.warn(
+        `[returns-ops] no customer email for ${input.orderNumber}; shipping email skipped`
+      );
+      return;
+    }
+
+    let awb = input.awb ?? null;
+    let courierName = input.courierName ?? null;
+    if ((!awb || !courierName) && row.shiprocket_order_id) {
+      const status = await fetchShiprocketOrderStatus(
+        row.shiprocket_order_id
+      ).catch(() => null);
+      awb = awb ?? status?.awb ?? null;
+      courierName = courierName ?? status?.courierName ?? null;
+    }
+
+    const items = await rawQuery<{
+      product_name: string;
+      quantity: number;
+    }>(sql`
+      SELECT product_name, quantity
+      FROM order_items
+      WHERE order_id = ${input.orderId}
+    `);
+
+    await enqueueAndNotify({
+      flow: 'order_shipped',
+      to: row.email,
+      // Keyed on the ORDER number: one shipping notice per order, ever.
+      dedupeKey: buildDedupeKey('order_shipped', input.orderNumber),
+      payload: {
+        customerName:
+          [row.first_name, row.last_name].filter(Boolean).join(' ') || 'there',
+        orderNumber: input.orderNumber,
+        // Shiprocket's public tracking page: no login, works for any AWB.
+        // Absent when the AWB is unknown — the template then falls back to a
+        // "View your order" button rather than shipping a dead link.
+        trackingUrl: awb
+          ? `https://shiprocket.co/tracking/${encodeURIComponent(awb)}`
+          : undefined,
+        courierName: courierName ?? undefined,
+        items: items.map(i => ({
+          name: i.product_name,
+          qty: Number(i.quantity),
+        })),
+      },
+    });
+  } catch (err) {
+    console.error(
+      `[returns-ops] shipping email enqueue failed for ${input.orderNumber}:`,
+      err
+    );
+  }
 }
 
 /**

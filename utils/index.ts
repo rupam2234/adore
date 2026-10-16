@@ -24,6 +24,7 @@ export { cloudinary, getPublicUrl } from './cloudinary';
 export {
   getProductsForSection,
   getProductBySlug,
+  getSizeChartForProduct,
   getRelatedProducts,
   getActiveProductSlugs,
   getCategories,
