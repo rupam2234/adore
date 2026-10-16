@@ -8,6 +8,7 @@ import {
   orderItems,
 } from './db';
 import { finalizeReservations } from './reservations';
+import { PAGE_SIZE, offsetFor } from './pagination';
 
 export type CustomerAddress = {
   id: string;
@@ -411,27 +412,32 @@ export type ItemAvailability = {
   inStock: boolean;
 };
 
-export async function listOrders(customerId: string): Promise<OrderSummary[]> {
-  const rows = await rawQuery<{
-    id: string;
-    order_number: string;
-    status: string;
-    subtotal: string;
-    discount_amount: string;
-    shipping_amount: string;
-    tax_amount: string;
-    total_amount: string;
-    currency: string;
-    created_at: string;
-    shipping_address_snapshot: Record<string, string> | null;
-    items: Array<{
-      product_name: string;
-      sku: string;
-      quantity: number;
-      unit_price: string;
-      total_price: string;
-    }>;
-  }>(sql`
+/** One page of a customer's orders, newest first, plus the unpaginated total. */
+export async function listOrders(
+  customerId: string,
+  page: number
+): Promise<{ orders: OrderSummary[]; total: number }> {
+  const [rows, countRows] = await Promise.all([
+    rawQuery<{
+      id: string;
+      order_number: string;
+      status: string;
+      subtotal: string;
+      discount_amount: string;
+      shipping_amount: string;
+      tax_amount: string;
+      total_amount: string;
+      currency: string;
+      created_at: string;
+      shipping_address_snapshot: Record<string, string> | null;
+      items: Array<{
+        product_name: string;
+        sku: string;
+        quantity: number;
+        unit_price: string;
+        total_price: string;
+      }>;
+    }>(sql`
     SELECT
       o.id,
       o.order_number,
@@ -464,27 +470,37 @@ export async function listOrders(customerId: string): Promise<OrderSummary[]> {
     FROM orders o
     WHERE o.customer_id = ${customerId}
     ORDER BY o.created_at DESC
-  `);
-  return rows.map(row => ({
-    id: row.id,
-    orderNumber: row.order_number,
-    status: row.status,
-    subtotal: row.subtotal,
-    discountAmount: row.discount_amount,
-    shippingAmount: row.shipping_amount,
-    taxAmount: row.tax_amount,
-    totalAmount: row.total_amount,
-    currency: row.currency,
-    createdAt: new Date(row.created_at).toISOString(),
-    items: (row.items ?? []).map(item => ({
-      productName: item.product_name,
-      sku: item.sku,
-      quantity: item.quantity,
-      unitPrice: item.unit_price,
-      totalPrice: item.total_price,
+    LIMIT ${PAGE_SIZE} OFFSET ${offsetFor(page)}
+  `),
+    rawQuery<{ total: number }>(sql`
+      SELECT COUNT(*)::int AS total
+      FROM orders
+      WHERE customer_id = ${customerId}
+    `),
+  ]);
+  return {
+    total: Number(countRows[0]?.total ?? 0),
+    orders: rows.map(row => ({
+      id: row.id,
+      orderNumber: row.order_number,
+      status: row.status,
+      subtotal: row.subtotal,
+      discountAmount: row.discount_amount,
+      shippingAmount: row.shipping_amount,
+      taxAmount: row.tax_amount,
+      totalAmount: row.total_amount,
+      currency: row.currency,
+      createdAt: new Date(row.created_at).toISOString(),
+      items: (row.items ?? []).map(item => ({
+        productName: item.product_name,
+        sku: item.sku,
+        quantity: item.quantity,
+        unitPrice: item.unit_price,
+        totalPrice: item.total_price,
+      })),
+      shippingAddress: row.shipping_address_snapshot,
     })),
-    shippingAddress: row.shipping_address_snapshot,
-  }));
+  };
 }
 
 /**

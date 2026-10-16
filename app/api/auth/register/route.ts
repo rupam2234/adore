@@ -22,6 +22,8 @@ import { rateLimit } from '@/utils/rate-limit';
 import { normalisePhone } from '@/utils/phone';
 import { issueWelcomeCode } from '@/utils/welcome-promo';
 import { PhoneAlreadyRegisteredError } from '@/utils/account';
+import { adminNotificationRecipient } from '@/utils/email';
+import { buildDedupeKey } from '@/utils/email-lifecycle';
 import { enqueueAndNotify } from '@/utils/email-queue';
 import {
   WELCOME_DISCOUNT_PERCENT,
@@ -213,6 +215,26 @@ export async function POST(request: NextRequest) {
       });
     } catch (err) {
       console.error('Welcome email enqueue failed (signup continues):', err);
+    }
+
+    // Admin notification: same outbox, `admin_new_signup/<user-id>` dedupe key,
+    // best-effort — a failed notification must never cost the signup itself.
+    try {
+      await enqueueAndNotify({
+        flow: 'admin_new_signup',
+        to: adminNotificationRecipient(),
+        dedupeKey: buildDedupeKey('admin_new_signup', user.id),
+        payload: {
+          customerName: user.name,
+          customerEmail: user.email,
+          phone,
+        },
+      });
+    } catch (err) {
+      console.error(
+        'Admin signup notification enqueue failed (signup continues):',
+        err
+      );
     }
 
     const response = NextResponse.json({ user }, { status: 201 });

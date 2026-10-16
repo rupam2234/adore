@@ -23,6 +23,9 @@ export {
 export { cloudinary, getPublicUrl } from './cloudinary';
 export {
   getProductsForSection,
+  countProductsForSection,
+  getShopProductPage,
+  getShopProductCount,
   getProductBySlug,
   getSizeChartForProduct,
   getRelatedProducts,
@@ -68,8 +71,20 @@ export {
 } from './review-format';
 export type { ReviewEligibility } from './review-format';
 export { slugify } from './admin-schema';
-export { parseShopFilters, preservedParams } from './filter-params';
+export {
+  parseShopFilters,
+  preservedParams,
+  allFilterParams,
+} from './filter-params';
 export type { ParsedShopFilters } from './filter-params';
+export {
+  PAGE_SIZE,
+  parsePage,
+  totalPagesFor,
+  clampPage,
+  offsetFor,
+  pageHref,
+} from './pagination';
 export type {
   ProductPayload,
   ProductStatus,

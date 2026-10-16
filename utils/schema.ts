@@ -676,7 +676,9 @@ export type EmailFlow =
   | 'return_rejected'
   | 'refund_processed'
   | 'refund_failed'
-  | 'welcome_email';
+  | 'welcome_email'
+  | 'admin_new_order'
+  | 'admin_new_signup';
 
 /**
  * Webhook replay guard.

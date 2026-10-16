@@ -20,7 +20,11 @@ import {
   products,
 } from './db';
 import { getPublicUrl } from './cloudinary.ts';
-import { SHOP_CATEGORIES_TAG, SHOP_FACETS_TAG } from './products';
+import {
+  SHOP_CATEGORIES_TAG,
+  SHOP_FACETS_TAG,
+  SHOP_LISTINGS_TAG,
+} from './products';
 import {
   buildSku,
   slugify,
@@ -88,6 +92,7 @@ function revalidateStorefront(slug: string): void {
     // immediate-expiry form there.
     revalidateTag(SHOP_FACETS_TAG, { expire: 0 });
     revalidateTag(SHOP_CATEGORIES_TAG, { expire: 0 });
+    revalidateTag(SHOP_LISTINGS_TAG, { expire: 0 });
   } catch {
     // Cache revalidation is best-effort.
   }
