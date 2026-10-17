@@ -282,6 +282,10 @@ export async function dispatchEmailJob(input: {
           typeof payload.courierName === 'string'
             ? payload.courierName
             : undefined,
+        invoiceUrl:
+          typeof payload.invoiceUrl === 'string'
+            ? payload.invoiceUrl
+            : undefined,
         items: arr(payload.items).map(i => ({
           name: str(i.name),
           qty: num(i.qty, 1),
@@ -400,6 +404,7 @@ export function sendOrderShipped(
     orderNumber: string;
     trackingUrl?: string;
     courierName?: string;
+    invoiceUrl?: string;
     items?: OrderLine[];
   }
 ): Promise<EmailResult> {

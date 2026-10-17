@@ -698,6 +698,7 @@ export function orderShipped(input: {
   orderNumber: string;
   trackingUrl?: string;
   courierName?: string;
+  invoiceUrl?: string;
   /**
    * What's in the parcel. Optional so this email still renders if the caller
    * cannot supply items — a shipping notice with no list beats a 500.
@@ -709,6 +710,12 @@ export function orderShipped(input: {
     ? callout(
         'Track your parcel',
         `<a href="${esc(input.trackingUrl)}" style="color:${BRAND.olive};">${esc(input.trackingUrl)}</a>`
+      )
+    : '';
+  const invoice = input.invoiceUrl
+    ? callout(
+        'Invoice',
+        `<a href="${esc(input.invoiceUrl)}" style="color:${BRAND.olive};">Invoice</a>`
       )
     : '';
 
@@ -727,6 +734,7 @@ export function orderShipped(input: {
       p(`Your parcel has left our warehouse${esc(courier)}.`) +
       callout('Order number', esc(input.orderNumber)) +
       tracking +
+      invoice +
       items +
       p(
         `Tracking can take up to 24 hours to show movement after the courier scans it. Please allow for that before checking again.`
