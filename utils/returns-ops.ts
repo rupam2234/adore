@@ -17,6 +17,7 @@ import {
   scheduleReversePickup,
   fetchReturnTracking,
   fetchShiprocketOrderStatus,
+  fetchShiprocketDocuments,
   ShiprocketReturnError,
   type RmaAddress,
   type ReturnTrackingStatus,
@@ -2048,7 +2049,7 @@ export async function handleOrderShipped(input: {
  * Never throws: an enqueue failure is logged, and the missing email is the
  * acceptable trade against the courier retrying a webhook that "failed".
  */
-async function notifyOrderShipped(input: {
+export async function notifyOrderShipped(input: {
   orderId: string;
   orderNumber: string;
   awb?: string;
@@ -2085,6 +2086,15 @@ async function notifyOrderShipped(input: {
       courierName = courierName ?? status?.courierName ?? null;
     }
 
+    // Fetch invoice (and label) if we have a Shiprocket order ID
+    let invoiceUrl: string | null = null;
+    if (row.shiprocket_order_id) {
+      const { invoiceUrl: fetchedInvoiceUrl } = await fetchShiprocketDocuments(
+        row.shiprocket_order_id
+      ).catch(() => ({ invoiceUrl: null }));
+      invoiceUrl = fetchedInvoiceUrl;
+    }
+
     const items = await rawQuery<{
       product_name: string;
       quantity: number;
@@ -2110,6 +2120,7 @@ async function notifyOrderShipped(input: {
           ? `https://shiprocket.co/tracking/${encodeURIComponent(awb)}`
           : undefined,
         courierName: courierName ?? undefined,
+        invoiceUrl: invoiceUrl ?? undefined,
         items: items.map(i => ({
           name: i.product_name,
           qty: Number(i.quantity),

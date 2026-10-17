@@ -41,7 +41,7 @@ const STEPS = [
     body: 'Open the order in your Adore account, pick the item and tell us why. Takes about a minute.',
   },
   {
-    title: 'We approve &amp; book pickup',
+    title: 'We approve & book pickup',
     body: 'We check eligibility, then schedule a reverse pickup from your address, usually within 24 hours.',
   },
   {
@@ -187,10 +187,9 @@ export default function ReturnsPage() {
           </li>
         </ul>
         <p>
-          For hygiene reasons we cannot accept innerwear and swimwear whose
-          hygiene strip or seal has been removed. Items marked as final sale on
-          the product page are not returnable or exchangeable &mdash; this is
-          always shown clearly on the product page before you buy.
+          Items marked as final sale on the product page are not returnable or
+          exchangeable &mdash; this is always shown clearly on the product page
+          before you buy.
         </p>
       </Section>
 

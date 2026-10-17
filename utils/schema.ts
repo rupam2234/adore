@@ -706,3 +706,22 @@ export const webhookEvents = pgTable(
   },
   t => [index('idx_webhook_events_pending').on(t.provider, t.receivedAt)]
 );
+
+/**
+ * Newsletter subscribers (footer signup form).
+ *
+ * Emails are stored lowercased; the UNIQUE constraint makes a double signup a
+ * harmless no-op (`ON CONFLICT DO NOTHING`) rather than a duplicate row.
+ * `unsubscribedAt` is nullable on purpose: it is only ever set when the
+ * subscriber opts out, so "null" and "subscribed" mean the same thing today and
+ * a future double-opt-in flow can add its own column without migrating history.
+ */
+export const newsletterSubscribers = pgTable('newsletter_subscribers', {
+  id: text('id').primaryKey().$defaultFn(randomId),
+  email: text('email').notNull().unique(),
+  source: text('source').notNull().default('footer'),
+  unsubscribedAt: timestamp('unsubscribed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CATEGORY_TREE } from '@/utils/categories';
+import NewsletterSignup from './newsletter-signup';
 
 const FOOTER_COLUMNS = [
   {
@@ -52,7 +53,6 @@ export default function Footer() {
             <h4 className="font-serif text-xl tracking-tight transition-colors hover:text-[#E7DFCB]">
               Find us at
             </h4>
-            {/* <p className="mt-3 max-w-xs text-sm leading-relaxed text-[#FAF8F3]/60"></p> */}
             <div className="mt-3 flex gap-5">
               {SOCIAL_LINKS.map(({ label, href }) => (
                 <a
@@ -65,6 +65,10 @@ export default function Footer() {
                   {label}
                 </a>
               ))}
+            </div>
+            {/* Newsletter signup (client component — footer is server-rendered). */}
+            <div className="mt-6">
+              <NewsletterSignup />
             </div>
           </div>
 

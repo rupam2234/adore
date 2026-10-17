@@ -579,9 +579,14 @@ export async function createShiprocketOrder(
  * shipment has not been dispatched — once a shipment has an AWB and is moving,
  * Shiprocket rejects cancellation and the caller surfaces a clear error.
  *
- * Shiprocket answers 200 with `status: "cancelled"` on success and can answer
- * 200 with an error in `message` (same shape as order creation), so both paths
- * are checked.
+ * RESPONSE SHAPES (verified against the live API): Shiprocket can answer
+ *   - {"status": "cancelled"}                       — no message
+ *   - {"status": 200, "message": "Order cancelled successfully"}
+ *   - {"status": 200, "message": "Order cannot be cancelled …"}
+ * The numeric-200-with-success-message shape is why success is detected from
+ * BOTH the status value and the message text: reading "any message = error"
+ * turned a successful cancellation into a thrown error, leaving our DB
+ * CONFIRMED while Shiprocket had already cancelled it.
  */
 export async function cancelShiprocketOrder(
   shiprocketOrderId: string
@@ -598,16 +603,31 @@ export async function cancelShiprocketOrder(
   }
 
   const body = (await res.json().catch(() => null)) as {
-    status?: string;
+    status?: string | number;
     message?: string;
   } | null;
 
+  const message = (body?.message ?? '').trim();
+  const status = body?.status;
+
+  // Success: either shape of an accepted cancellation.
+  const statusSaysSuccess =
+    status === 'cancelled' || status === 200 || status === '200';
+  const messageSaysSuccess = /cancel+ed?\s+successfully/i.test(message);
+
+  if (statusSaysSuccess || messageSaysSuccess) return;
+
   // 200-with-error (e.g. shipment already dispatched) — surface, never swallow.
-  if (body?.message && body?.status !== 'cancelled') {
+  if (message) {
     throw new ShiprocketOrderError(
-      `Shiprocket cancellation rejected: ${body.message}`
+      `Shiprocket cancellation rejected: ${message}`
     );
   }
+  // 200 with neither a success signal nor an error message: treat as a failure
+  // rather than silently assuming success — the caller can retry safely.
+  throw new ShiprocketOrderError(
+    'Shiprocket cancellation response was unrecognised.'
+  );
 }
 
 export type ShiprocketOrderStatus = {
