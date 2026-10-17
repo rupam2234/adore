@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Playfair_Display, Roboto } from 'next/font/google';
-import { Analytics } from "@vercel/analytics/next";
+import { Analytics } from '@vercel/analytics/next';
 import { CartProvider, CartDrawer } from '@/components';
 import './globals.css';
 
@@ -24,10 +24,13 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Adore | Wear Love',
+    default: 'Adore | Wear What You Love',
     template: '%s | Adore',
   },
   description: 'Clothes that become more yours with every wear',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
