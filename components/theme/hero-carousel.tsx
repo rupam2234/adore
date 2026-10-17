@@ -108,7 +108,7 @@ export default function HeroCarousel({
         aria-roledescription="carousel"
         aria-label="Featured collections"
         data-hero=""
-        className="relative h-[75vh] min-h-105 w-full overflow-hidden bg-[#E7DFCB] sm:h-[80vh] lg:h-[calc(100vh-5.5rem)]"
+        className="hidden sm:block relative h-[75vh] min-h-105 w-full overflow-hidden bg-[#E7DFCB] sm:h-[80vh] lg:h-[calc(100vh-5.5rem)]"
         // No hover-pause: the hero fills the viewport from `lg` up, so the
         // cursor is almost always inside it and pausing on hover meant
         // autoplay effectively never ran on desktop. Keyboard focus still
