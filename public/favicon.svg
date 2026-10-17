@@ -1,0 +1,24 @@
+<svg
+  width="512"
+  height="512"
+  viewBox="0 0 512 512"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!-- Background circle – brand‑dark tone -->
+  <circle cx="256" cy="256" r="256" fill="#2B2620" />
+
+  <!-- Letters “AD” (center‑aligned) – light mellow tone -->
+  <text
+    x="50%"
+    y="55%"
+    dominant-baseline="middle"
+    text-anchor="middle"
+    font-family="Playfair Display, serif"
+    font-weight="700"
+    font-size="260"
+    fill="#FAF8F3"
+  >
+    AD
+  </text>
+</svg>
