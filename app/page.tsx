@@ -5,6 +5,7 @@ import {
   ProductCard,
   SearchBar,
   HeroCarousel,
+  NewsletterSignup,
 } from '@/components';
 import {
   CATEGORY_TREE,
@@ -255,19 +256,9 @@ export default async function Home() {
             </p>
           </div>
 
-          <div className="flex w-full max-w-sm gap-2 sm:w-auto">
-            <input
-              type="email"
-              aria-label="Email address"
-              placeholder="Your email"
-              className="w-full rounded-full border border-[#FAF8F3]/30 bg-transparent px-5 py-3 text-sm placeholder:text-[#FAF8F3]/50 focus:border-[#FAF8F3] focus:outline-none"
-            />
-            <button
-              type="button"
-              className="rounded-full bg-[#FAF8F3] px-6 py-3 text-sm text-[#2B2620] transition-colors hover:bg-[#DDBBA4]"
-            >
-              Sign up
-            </button>
+          <div className="w-full max-w-sm sm:w-auto">
+            {/* Reuses the (single) newsletter signup — footer no longer has one. */}
+            <NewsletterSignup />
           </div>
         </div>
       </section>
