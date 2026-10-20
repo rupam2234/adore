@@ -11,12 +11,12 @@ import {
 } from '@/utils/hero-slides';
 
 const HERO_CRITICAL_CSS = `
-[data-hero]{position:relative;width:100%;height:75vh;min-height:26.25rem;overflow:hidden;background:#E7DFCB}
-@media (min-width:40rem){[data-hero]{height:80vh}}
-@media (min-width:64rem){[data-hero]{height:calc(100vh - 5.5rem)}}
-[data-hero-slide]{position:absolute;inset:0;opacity:0}
-[data-hero-active]{opacity:1}
-`;
+      [data-hero]{position:relative;width:100%;height:60vh;min-height:21rem;overflow:hidden;background:#E7DFCB}
+      @media (min-width:40rem){[data-hero]{height:80vh}}
+      @media (min-width:64rem){[data-hero]{height:calc(100vh - 5.5rem)}}
+      [data-hero-slide]{position:absolute;inset:0;opacity:0}
+      [data-hero-active]{opacity:1}
+    `;
 
 export default function HeroCarousel({
   slides = HERO_SLIDES,
@@ -108,7 +108,7 @@ export default function HeroCarousel({
         aria-roledescription="carousel"
         aria-label="Featured collections"
         data-hero=""
-        className="hidden sm:block relative h-[75vh] min-h-105 w-full overflow-hidden bg-[#E7DFCB] sm:h-[80vh] lg:h-[calc(100vh-5.5rem)]"
+        className="block relative h-[60vh] min-h-84 w-full overflow-hidden bg-[#E7DFCB] sm:h-[80vh] lg:h-[calc(100vh-5.5rem)]"
         // No hover-pause: the hero fills the viewport from `lg` up, so the
         // cursor is almost always inside it and pausing on hover meant
         // autoplay effectively never ran on desktop. Keyboard focus still

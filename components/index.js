@@ -14,3 +14,4 @@ export { Stars, StarInput } from './shop/stars';
 export { ReviewForm } from './shop/review-form';
 export { ReviewListItem } from './shop/review-list';
 export { default as Pagination } from './pagination';
+export { default as NewsletterSignup } from './theme/newsletter-signup';

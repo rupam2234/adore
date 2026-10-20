@@ -32,7 +32,9 @@ export default function NewsletterSignup() {
 
       if (res.ok) {
         setStatus('done');
-        setMessage("You're on the list. Watch your inbox.");
+        setMessage(
+          "You're already on the list. Watch your inbox for our next drop."
+        );
         setEmail('');
       } else {
         setStatus('error');
