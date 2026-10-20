@@ -9,6 +9,7 @@ import {
   recordDispute,
   resolveDispute,
 } from '@/utils/returns-ops';
+import { verifyAndConfirmPayment } from '@/utils/checkout';
 
 /**
  * POST /api/webhooks/razorpay — refund confirmations and disputes.
@@ -186,12 +187,37 @@ export async function POST(request: Request) {
       case 'payment.dispute.action_required':
       case 'refund.created':
       case 'refund.speed_changed':
-      case 'payment.captured':
       case 'payment.authorized':
       case 'order.paid':
         // Acknowledged and ignored. The first two are progress notifications on a
         // dispute; the rest belong to checkout, which verifies synchronously.
         break;
+
+      // payment.captured fires when a payment moves to the captured state.
+      // This is our server-side fallback for when the client closes the browser
+      // before calling /api/checkout/verify. We reuse verifyAndConfirmPayment
+      // which is already idempotent (conditional UPDATE ... WHERE status='PENDING').
+      case 'payment.captured': {
+        const payment = entity('payment');
+        const razorpayOrderId = String(payment?.order_id ?? '');
+        const razorpayPaymentId = String(payment?.id ?? '');
+        // The webhook signature is in the x-razorpay-signature header.
+        const razorpaySignature = request.headers.get('x-razorpay-signature') ?? '';
+        if (razorpayOrderId && razorpayPaymentId && razorpaySignature) {
+          try {
+            await verifyAndConfirmPayment({
+              razorpayOrderId,
+              razorpayPaymentId,
+              razorpaySignature,
+            });
+          } catch (err) {
+            // Log but don't throw — webhook must 200 to stop Razorpay retries.
+            // verifyAndConfirmPayment is idempotent; a duplicate will be a no-op.
+            console.error('[razorpay-webhook] payment.captured handler failed:', err);
+          }
+        }
+        break;
+      }
 
       default:
         // Unknown event: recorded in webhook_events, then ignored. Razorpay adds

@@ -21,7 +21,7 @@ const FOOTER_COLUMNS = [
   {
     title: 'Company',
     links: [
-      { label: 'Our story', href: '/#how-we-make-it' },
+      { label: 'Our story', href: '/how-we-make-it' },
       { label: 'Sustainability', href: '/sustainability' },
       { label: 'Journal', href: '/journal' },
     ],

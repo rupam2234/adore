@@ -27,10 +27,28 @@ import { sql } from 'drizzle-orm';
 import type { ProductStatus } from './admin-schema';
 import type { FitFeedback } from './review-format';
 
+// Idempotency keys table for checkout deduplication
+export const idempotencyKeys = pgTable('idempotency_keys', {
+  key: text('key').primaryKey(),
+  orderId: text('order_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // Client-generated ids: the original SQL never supplied ids (the DB has its
-// own defaults), so Drizzle generates them app-side. A string param casts
-// cleanly whether the column is text or uuid.
+// own defaults), so Drizzle generates them app-side.
 const randomId = () => crypto.randomUUID();
+
+// Audit log for security-sensitive events (zero-total orders, etc.)
+export const auditLog = pgTable('audit_log', {
+  id: text('id').primaryKey().$defaultFn(randomId),
+  event: text('event').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const users = pgTable('users', {
   id: text('id').primaryKey().$defaultFn(randomId),
@@ -363,6 +381,8 @@ export const orders = pgTable('orders', {
   razorpayOrderId: text('razorpay_order_id'),
   razorpayPaymentId: text('razorpay_payment_id'),
   shiprocketOrderId: text('shiprocket_order_id'),
+  shippingIssue: boolean('shipping_issue').notNull().default(false),
+  shippingIssueReason: text('shipping_issue_reason'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

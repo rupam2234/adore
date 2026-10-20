@@ -298,3 +298,29 @@ export async function getAttachedPromo(
     discountValue: promo.discount_value,
   };
 }
+
+/**
+ * Check if a promo code is still valid (active, not expired, not fully redeemed).
+ * Used at payment verification time to prevent stale promo usage.
+ */
+export async function isPromoStillValid(code: string): Promise<boolean> {
+  const rows = await rawQuery<{
+    is_active: boolean;
+    expires_at: Date | null;
+    max_redemptions: number | null;
+    redemption_count: number;
+    starts_at: Date | null;
+  }>(sql`
+    SELECT is_active, expires_at, max_redemptions, redemption_count, starts_at
+    FROM promo_codes
+    WHERE code = ${code}
+    LIMIT 1
+  `);
+  const p = rows[0];
+  if (!p) return false;
+  if (!p.is_active) return false;
+  if (p.starts_at && new Date(p.starts_at) > new Date()) return false;
+  if (p.expires_at && new Date(p.expires_at) < new Date()) return false;
+  if (p.max_redemptions !== null && p.redemption_count >= p.max_redemptions) return false;
+  return true;
+}

@@ -21,7 +21,8 @@ import {
   clearCart,
   type CartLine,
 } from './cart';
-import { removePromo } from './promo';
+import { removePromo, getAttachedPromo, isPromoStillValid } from './promo';
+import { auditLog } from './db';
 import {
   createAddress,
   ensureCustomerForUserId,
@@ -550,6 +551,21 @@ async function handleZeroTotalCheckout(input: {
     }
 
     // Return session indicating no payment required — frontend will redirect
+    // Audit log for zero-total orders (security monitoring)
+    try {
+      await db.insert(auditLog).values({
+        event: 'zero_total_order',
+        data: {
+          orderNumber,
+          promoCode: promoCodeId,
+          userId: userId ?? null,
+          // Note: request IP not available here; could be passed from createCheckoutSession
+        },
+      });
+    } catch {
+      // Best-effort: don't fail checkout if audit log fails
+    }
+
     return {
       paymentRequired: false,
       orderNumber,
@@ -700,6 +716,32 @@ export async function pushToShiprocket(
     : [];
   const weightById = new Map(weightRows.map(w => [w.id, w.weightGrams]));
   const snap = order.shippingAddressSnapshot ?? {};
+
+  // Re-check PIN serviceability at push time — courier coverage may have changed
+  // since checkout started. If unserviceable, flag the order for admin triage
+  // instead of failing the payment.
+  const totalWeightKg = items.reduce(
+    (sum, item) => sum + (weightById.get(item.productId) ?? 400) * item.quantity,
+    0
+  ) / 1000;
+  const pinCheck = await checkPinServiceability(
+    (snap.postalCode ?? '') as string,
+    totalWeightKg
+  );
+  if (!pinCheck.serviceable) {
+    await db
+      .update(orders)
+      .set({
+        shippingIssue: true,
+        shippingIssueReason: 'PIN became unserviceable after checkout',
+        updatedAt: new Date(),
+      })
+      .where(eq(orders.id, orderId));
+    console.warn(
+      `[checkout] Order ${order.orderNumber} confirmed but PIN ${snap.postalCode} no longer serviceable`
+    );
+    return null;
+  }
   const customerName =
     snap.fullName ||
     [customer?.firstName, customer?.lastName].filter(Boolean).join(' ') ||
@@ -869,6 +911,22 @@ export async function verifyAndConfirmPayment(
       return getOrderConfirmation(order.orderNumber);
     }
     throw new CheckoutError('This order has already been paid for.', 409);
+  }
+
+  // Re-validate promo at payment verification time.
+  // Get cartId from stock_reservations (linked by order_id).
+  const cartRows = await rawQuery<{ cart_id: string }>(sql`
+    SELECT DISTINCT cart_id FROM stock_reservations WHERE order_id = ${order.id}
+  `);
+  const cartId = cartRows[0]?.cart_id;
+  if (cartId) {
+    const promo = await getAttachedPromo(cartId, order.customerId);
+    if (promo && !(await isPromoStillValid(promo.code))) {
+      throw new CheckoutError(
+        'Promo code expired or disabled. Please restart checkout.',
+        409
+      );
+    }
   }
 
   if (
