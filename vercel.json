@@ -8,14 +8,6 @@
     {
       "path": "/api/cron/drain-emails",
       "schedule": "30 4 * * *"
-    },
-    {
-      "path": "/api/cron/retry-shiprocket",
-      "schedule": "*/10 * * * *"
-    },
-    {
-      "path": "/api/cron/auto-process",
-      "schedule": "*/5 * * * *"
     }
   ],
   "functions": {
