@@ -481,6 +481,14 @@ export class CartError extends Error {
   }
 }
 
+/** Thrown when a PENDING order is cleaned up due to cart mutation during checkout. */
+export class PendingOrderCleanedUpError extends CartError {
+  constructor() {
+    super('Pending order was cleaned up due to cart change', 409);
+    this.name = 'PendingOrderCleanedUpError';
+  }
+}
+
 /**
  * Clean up any PENDING orders that were created from this cart.
  * Called after removeCartItem or clearCart — whenever the cart changes, any
@@ -514,7 +522,11 @@ async function cleanUpPendingOrder(cartId: string): Promise<void> {
     for (const o of orders) {
       await releaseOrderReservations(o.order_id);
     }
+
+    // Signal to any active checkout that their pending order is gone.
+    throw new PendingOrderCleanedUpError();
   } catch (err) {
+    if (err instanceof PendingOrderCleanedUpError) throw err;
     console.error('[cart] failed to clean up PENDING order:', err);
     // Don't throw — a cleanup failure shouldn't break cart operations.
   }

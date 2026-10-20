@@ -18,7 +18,7 @@ import { rawQuery, sql } from './db';
  *    sale (stock already decremented — nothing more to move).
  */
 
-export const RESERVATION_TTL_MINUTES = 10;
+export const RESERVATION_TTL_MINUTES = 15;
 const _FAILED_PAYMENT_TTL_MINUTES = 2;
 
 export type ReservationItem = {
@@ -194,6 +194,23 @@ export async function releaseOrderReservations(orderId: string): Promise<void> {
     `);
   } catch (err) {
     console.error('[reservations] release failed — stock returns at TTL:', err);
+  }
+}
+
+/**
+ * Extend a reservation's expiry (used by client heartbeat during checkout).
+ * Runs after payment starts to prevent reservation expiry while user is on
+ * the payment page. Never throws — best effort.
+ */
+export async function extendReservation(orderId: string): Promise<void> {
+  try {
+    await rawQuery(sql`
+      UPDATE stock_reservations
+      SET expires_at = now() + (${RESERVATION_TTL_MINUTES} * interval '1 minute')
+      WHERE order_id = ${orderId}
+    `);
+  } catch (err) {
+    console.error('[reservations] extend failed:', err);
   }
 }
 

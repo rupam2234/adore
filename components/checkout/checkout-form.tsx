@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useCart } from '@/components/cart/cart-provider';
 import { formatPrice } from '@/utils/product-format';
@@ -154,9 +155,14 @@ export default function CheckoutForm({
   // Guard against releasing the same reservation twice (e.g. payment.failed
   // followed by modal ondismiss firing in sequence).
   const releasedRef = useRef<Set<string>>(new Set());
+  // Store the razorpay order ID for heartbeat
+  const [razorpayOrderId, setRazorpayOrderId] = useState<string | null>(null);
+  // Heartbeat interval ref for cleanup
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const usingSaved = Boolean(member) && addressChoice !== 'new';
   const saved = addresses.find(a => a.id === addressChoice) ?? null;
+  const router = useRouter();
 
   const currency = cart.currency ?? 'INR';
   const totals = useMemo(
@@ -176,6 +182,17 @@ export default function CheckoutForm({
         sum + (item.weightGrams ?? DEFAULT_WEIGHT_GRAMS) * item.quantity,
       0
     ) / 1000;
+
+  // Generate idempotency key from cart + address hash
+  // This prevents duplicate checkout sessions from double-clicks
+  const addressForKey = usingSaved
+    ? `${addressChoice}`
+    : `${form.fullName}|${form.phone}|${form.addressLine1}|${form.addressLine2}|${form.city}|${form.state}|${form.postalCode}`;
+  const cartHash = cart.items
+    .map(i => `${i.variantId}:${i.quantity}`)
+    .sort()
+    .join(',');
+  const idempotencyKey = `${cartHash}-${addressForKey}`;
   const update = (key: keyof AddressForm, value: string) => {
     setForm(f => ({ ...f, [key]: value }));
     if (fieldErrors[key]) setFieldErrors(e => ({ ...e, [key]: undefined }));
@@ -355,7 +372,10 @@ export default function CheckoutForm({
     try {
       const res = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
         body: JSON.stringify(
           usingSaved
             ? { addressId: addressChoice }
@@ -379,6 +399,13 @@ export default function CheckoutForm({
         prefill?: { name: string; email: string; contact: string };
       };
 
+      // Handle cart mutation during checkout — pending order was cleaned up
+      if (session.error?.includes('cleaned up due to cart change')) {
+        setNotice('Your bag changed — please restart checkout.');
+        router.refresh(); // or redirect to /checkout
+        return;
+      }
+
       // Handle zero-total orders (100% discount) - redirect to success page directly
       if (session.paymentRequired === false) {
         window.location.href = '/checkout/success';
@@ -392,6 +419,8 @@ export default function CheckoutForm({
         setBusy(false);
         return;
       }
+
+      setRazorpayOrderId(session.razorpayOrderId);
 
       const ready = await loadRazorpayScript();
       if (!ready || !window.Razorpay) {
@@ -422,6 +451,7 @@ export default function CheckoutForm({
         },
         modal: {
           ondismiss: () => {
+            clearHeartbeat();
             setBusy(false);
             setNotice(
               'Payment cancelled. But don’t worry, your bag is still saved. Try again from your account order whenever you’re ready.'
@@ -433,11 +463,13 @@ export default function CheckoutForm({
           },
         },
         handler: (response: RazorpayHandlerResponse) => {
+          clearHeartbeat();
           void confirmPayment(response);
         },
       });
 
       checkout.on('payment.failed', (payload: unknown) => {
+        clearHeartbeat();
         const description = (payload as { error?: { description?: string } })
           ?.error?.description;
         setError(
@@ -451,6 +483,28 @@ export default function CheckoutForm({
       });
 
       checkout.open();
+
+      // Heartbeat: extend reservation every 4 minutes while Razorpay is open
+      // This prevents reservation expiry during long payment flows (bank redirects, OTP, etc.)
+      const interval = setInterval(async () => {
+        try {
+          await fetch('/api/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'extendReservation', orderId: session.razorpayOrderId }),
+          });
+        } catch {
+          // Silent — best effort; TTL still covers 15 min from last success
+        }
+      }, 4 * 60 * 1000);
+      heartbeatIntervalRef.current = interval;
+
+      const clearHeartbeat = () => {
+        if (heartbeatIntervalRef.current) {
+          clearInterval(heartbeatIntervalRef.current);
+          heartbeatIntervalRef.current = null;
+        }
+      };
     } catch {
       setError('Something went wrong. Please try again.');
       setBusy(false);
