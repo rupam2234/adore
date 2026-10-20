@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { CATEGORY_TREE } from '@/utils/categories';
-import NewsletterSignup from './newsletter-signup';
 
 const FOOTER_COLUMNS = [
   {
@@ -65,10 +64,6 @@ export default function Footer() {
                   {label}
                 </a>
               ))}
-            </div>
-            {/* Newsletter signup (client component — footer is server-rendered). */}
-            <div className="mt-6">
-              <NewsletterSignup />
             </div>
           </div>
 
