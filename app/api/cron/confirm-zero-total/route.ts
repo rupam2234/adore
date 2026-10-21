@@ -6,6 +6,9 @@ import { finalizeReservations } from '@/utils/reservations';
 import { queueOrderConfirmedEmail } from '@/utils/checkout';
 import { alertOnCronFailure } from '@/utils/alerts';
 
+// Cron workflows dispatch POST (preserved across redirects); alias to the GET handler.
+export const POST = GET;
+
 async function verifyCronAuth(request: Request): Promise<boolean> {
   const auth = request.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) return false;
