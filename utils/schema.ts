@@ -385,6 +385,8 @@ export const orders = pgTable('orders', {
   shippingIssueReason: text('shipping_issue_reason'),
   zeroTotal: boolean('zero_total').notNull().default(false),
   paymentVerified: boolean('payment_verified').notNull().default(false),
+  idempotencyKey: text('idempotency_key').unique(),
+  checkoutSessionId: text('checkout_session_id'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

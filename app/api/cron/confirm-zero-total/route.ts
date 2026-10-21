@@ -4,6 +4,7 @@ import { pushToShiprocket } from '@/utils/checkout';
 import { jwtVerify } from 'jose';
 import { finalizeReservations } from '@/utils/reservations';
 import { queueOrderConfirmedEmail } from '@/utils/checkout';
+import { alertOnCronFailure } from '@/utils/alerts';
 
 async function verifyCronAuth(request: Request): Promise<boolean> {
   const auth = request.headers.get('Authorization');
@@ -16,7 +17,7 @@ async function verifyCronAuth(request: Request): Promise<boolean> {
     await jwtVerify(token, key, { algorithms: ['HS256'] });
     return true;
   } catch {
-    return token === secret;
+    return false;
   }
 }
 
@@ -125,16 +126,22 @@ export async function GET(request: Request) {
   }
 
   const durationMs = Date.now() - started;
+  const status = results.some(r => r.ok) ? 'success' : 'none';
   await db.execute(sql`
     INSERT INTO cron_audit_log (run_id, endpoint, order_ids, status, duration_ms)
     VALUES (
       ${requestId},
       'confirm-zero-total',
       ${JSON.stringify(confirmedIds)}::jsonb,
-      ${results.some(r => r.ok) ? 'success' : 'none'},
+      ${status},
       ${durationMs}
     )
   `);
+
+  // Alert on failure
+  if (status !== 'success') {
+    await alertOnCronFailure('confirm-zero-total', status, { confirmed: results.length, results });
+  }
 
   return NextResponse.json({ confirmed: results.length, results });
 }

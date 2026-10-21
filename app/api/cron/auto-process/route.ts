@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, orders, sql } from '@/utils/db';
 import { jwtVerify } from 'jose';
+import { alertOnCronFailure } from '@/utils/alerts';
 
 async function verifyCronAuth(request: Request): Promise<boolean> {
   const auth = request.headers.get('Authorization');
@@ -8,14 +9,12 @@ async function verifyCronAuth(request: Request): Promise<boolean> {
   const token = auth.slice(7);
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
-  // First try JWT verification
   try {
     const key = new TextEncoder().encode(secret);
     await jwtVerify(token, key, { algorithms: ['HS256'] });
     return true;
   } catch {
-    // Fallback: static secret match
-    return token === secret;
+    return false;
   }
 }
 
@@ -87,11 +86,17 @@ export async function GET(request: Request) {
   }
 
   const durationMs = Date.now() - started;
+  const status = processed > 0 ? 'success' : 'none';
   // Audit log
   await db.execute(sql`
     INSERT INTO cron_audit_log (run_id, endpoint, order_ids, status, duration_ms)
-    VALUES (${requestId}, 'auto-process', ${JSON.stringify(processedIds)}::jsonb, ${processed > 0 ? 'success' : 'none'}, ${durationMs})
+    VALUES (${requestId}, 'auto-process', ${JSON.stringify(processedIds)}::jsonb, ${status}, ${durationMs})
   `);
+
+  // Alert on failure
+  if (status !== 'success') {
+    await alertOnCronFailure('auto-process', status, { processed, total: toProcess.length, processedIds });
+  }
 
   return NextResponse.json({ processed, total: toProcess.length });
 }

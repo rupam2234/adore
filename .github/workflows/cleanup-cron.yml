@@ -1,0 +1,32 @@
+name: Nightly Cron Cleanup
+
+on:
+  schedule:
+    # Runs every day at 03:15 UTC (adjust if you prefer another hour)
+    - cron: '15 3 * * *'
+  workflow_dispatch:   # allow manual runs
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run cleanup script
+        run: npx tsx scripts/cleanup-cron.ts

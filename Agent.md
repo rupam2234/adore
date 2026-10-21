@@ -5,12 +5,14 @@
 **Tone:** Natural, conversational, grounded. Write like a founder talking to a friend, not a marketing deck.
 
 **Avoid:**
+
 - Em dashes (—) — use commas instead
-- Overused "creative" words: *timeless, effortless, cherished, curated, elevated, sanctuary, journey, embrace, discover, unveil, essence, tapestry*
+- Overused "creative" words: _timeless, effortless, cherished, curated, elevated, sanctuary, journey, embrace, discover, unveil, essence, tapestry_
 - Abstract lists: "inspired by everyday life, changing seasons, cherished moments, vintage charm, and effortless elegance"
 - Phrases that sound like a brand manifesto: "more than just a clothing brand," "expressing yourself without words"
 
 **Prefer:**
+
 - Concrete details: "busy Tuesday," "limited runs," "shapes that don't fight your body"
 - Active voice: "We make," "We're not here to sell you more"
 - Specificity over abstraction: "fabric we love" vs "curated fabrics"
@@ -18,8 +20,8 @@
 
 **Example rewrite:**
 
-| Before | After |
-|--------|-------|
+| Before                                                                                                                                                                                                                  | After                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "Adore was created with an idea to make fashion feel personal, modest, meaningful, and timeless. Inspired by the beauty of everyday life, changing seasons, cherished moments, vintage charm, and effortless elegance." | "Adore started with a simple idea: clothes should feel like you. Not a version of you for a special occasion, just you. Comfortable, confident, and built to last." |
 
 ---
@@ -33,6 +35,7 @@
 5. **Cache shared reads to avoid DB hits** — public/shared query results get wrapped in `unstable_cache` with cache tags + a `revalidate` TTL (see utils/products.ts `SHOP_*` tags) so repeat views never re-run the query. Never cache per-user or admin-operations reads (account pages, ledger, returns queue, promos): there, freshness is the feature.
 6. Server actions preferred over API routes for mutations
 7. `unstable_cache` with tags for shared reads; never cache per-user/admin reads
+8. Always test for issues using npm run build after all changes
 
 ---
 

@@ -495,18 +495,35 @@ export class PendingOrderCleanedUpError extends CartError {
  * PENDING order created from it is no longer valid (its items no longer match
  * the cart), so it must be removed immediately to prevent orphaned/stale orders.
  * Stock is released back to the pool via releaseOrderReservations.
+ * 
+ * If checkoutSessionId is provided, only cleans up the PENDING order associated
+ * with that specific checkout session, preventing interference between tabs.
  */
-async function cleanUpPendingOrder(cartId: string): Promise<void> {
+async function cleanUpPendingOrder(cartId: string, checkoutSessionId?: string): Promise<void> {
   try {
     // Find PENDING orders that have reservations linked to this cart.
     // The cart_id is stored in stock_reservations, not orders directly.
-    const orders = await rawQuery<{ order_id: string }>(sql`
-      SELECT DISTINCT o.id AS order_id
-      FROM stock_reservations r
-      JOIN orders o ON o.id = r.order_id
-      WHERE r.cart_id = ${cartId}
-        AND o.status = 'PENDING'
-    `);
+    let orders;
+    if (checkoutSessionId) {
+      // Only clean up the order associated with this specific checkout session
+      orders = await rawQuery<{ order_id: string }>(sql`
+        SELECT DISTINCT o.id AS order_id
+        FROM stock_reservations r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.cart_id = ${cartId}
+          AND o.status = 'PENDING'
+          AND o.checkout_session_id = ${checkoutSessionId}
+      `);
+    } else {
+      // Fallback: clean up all PENDING orders for this cart (legacy behavior)
+      orders = await rawQuery<{ order_id: string }>(sql`
+        SELECT DISTINCT o.id AS order_id
+        FROM stock_reservations r
+        JOIN orders o ON o.id = r.order_id
+        WHERE r.cart_id = ${cartId}
+          AND o.status = 'PENDING'
+      `);
+    }
 
     if (orders.length === 0) {
       return; // No PENDING order for this cart.
