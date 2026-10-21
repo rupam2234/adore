@@ -6,6 +6,7 @@ import {
   SearchBar,
   HeroCarousel,
   NewsletterSignup,
+  PromoBanner,
 } from '@/components';
 import {
   CATEGORY_TREE,
@@ -144,6 +145,9 @@ export default async function Home() {
       </div>
 
       <HeroCarousel />
+
+      {/* Promo stripe, homepage placement: just below the hero. */}
+      <PromoBanner force />
 
       <section id="shop" className="w-full px-6 py-5 sm:py-15 sm:px-12">
         <div className="text-center">
