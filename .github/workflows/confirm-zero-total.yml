@@ -1,0 +1,35 @@
+name: Confirm Zero‑Total Orders
+
+on:
+  schedule:
+    # Runs every minute
+    - cron: '* * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: read
+
+jobs:
+  confirm-zero-total:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Generate short‑lived cron JWT
+        id: token
+        run: |
+          echo "CRON_TOKEN=$(node scripts/generate-cron-token.js)" >> $GITHUB_ENV
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      - name: Call confirm-zero-total endpoint
+        run: |
+          REQUEST_ID=$(uuidgen)
+          curl -f -X POST \
+            -H "Authorization: Bearer $CRON_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "X-Request-Id: $REQUEST_ID" \
+            "${{ secrets.APP_URL }}/api/cron/confirm-zero-total"
+        env:
+          APP_URL: ${{ secrets.APP_URL }}

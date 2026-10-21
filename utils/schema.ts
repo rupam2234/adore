@@ -383,6 +383,8 @@ export const orders = pgTable('orders', {
   shiprocketOrderId: text('shiprocket_order_id'),
   shippingIssue: boolean('shipping_issue').notNull().default(false),
   shippingIssueReason: text('shipping_issue_reason'),
+  zeroTotal: boolean('zero_total').notNull().default(false),
+  paymentVerified: boolean('payment_verified').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

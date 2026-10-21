@@ -453,13 +453,13 @@ async function handleZeroTotalCheckout(input: {
     ? await ensureCustomerForUserId(userId)
     : await ensureGuestCustomer(contactEmail, address);
 
-  // Create order as CONFIRMED directly (no PENDING state)
+  // Create order as PENDING (zero‑total) – will be confirmed by a server‑side step
   const inserted = await db
     .insert(orders)
     .values({
       customerId: customer.id,
       orderNumber,
-      status: 'CONFIRMED',
+      status: 'PENDING',
       subtotal: subtotal.toFixed(2),
       discountAmount: discount.toFixed(2),
       shippingAmount: shipping.toFixed(2),
@@ -470,6 +470,8 @@ async function handleZeroTotalCheckout(input: {
       shippingAddressSnapshot: addressSnapshot(address),
       promoCodeId,
       razorpayPaymentId: null,
+      zeroTotal: true,            // <-- requires `zero_total` column (see migration)
+      paymentVerified: false,     // <-- requires `payment_verified` column
       updatedAt: new Date(),
     })
     .returning({ id: orders.id });
@@ -489,7 +491,7 @@ async function handleZeroTotalCheckout(input: {
       }))
     );
 
-    // Reserve stock (same as paid orders)
+    // Reserve stock (same as paid orders) but do NOT finalize yet
     try {
       await reserveCartItems(
         orderId,
@@ -506,66 +508,32 @@ async function handleZeroTotalCheckout(input: {
       throw err;
     }
 
-    // Stock is now reserved; finalize it (decrement)
-    await finalizeReservations(orderId);
-
-    // Clear the cart
+    // Clear the cart (cosmetic)
     if (cartId) {
       try {
         await clearCart(cartId);
         await removePromo(cartId);
       } catch {
-        // Ignore — cart cleanup is cosmetic
+        // ignore
       }
     }
 
-    // Queue the order emails (customer receipt + admin notification) before
-    // the courier push, same ordering as the paid path.
-    await queueOrderConfirmedEmail({
-      id: orderId,
-      orderNumber,
-      customerId: customer.id,
-      totalAmount: '0',
-      currency,
-    });
-
-    // Push to Shiprocket (same as paid orders, best-effort)
-    let shiprocketOrderId: string | null = null;
-    try {
-      shiprocketOrderId = await pushToShiprocket(orderId);
-      if (shiprocketOrderId) {
-        await db
-          .update(orders)
-          .set({
-            shiprocketOrderId,
-            updatedAt: new Date(),
-          })
-          .where(eq(orders.id, orderId));
-      }
-    } catch (err) {
-      // Best-effort: log but don't fail the order
-      console.error(
-        `[checkout] Shiprocket push for zero-total order ${orderNumber} failed:`,
-        err instanceof Error ? err.message : err
-      );
-    }
-
-    // Return session indicating no payment required — frontend will redirect
-    // Audit log for zero-total orders (security monitoring)
+    // Audit log for zero‑total orders (security monitoring)
     try {
       await db.insert(auditLog).values({
-        event: 'zero_total_order',
+        event: 'zero_total_order_created',
         data: {
           orderNumber,
           promoCode: promoCodeId,
           userId: userId ?? null,
-          // Note: request IP not available here; could be passed from createCheckoutSession
         },
       });
     } catch {
-      // Best-effort: don't fail checkout if audit log fails
+      // best‑effort
     }
 
+    // Return session indicating no payment required — frontend will redirect
+    // The order stays PENDING until a server‑side confirmation step runs.
     return {
       paymentRequired: false,
       orderNumber,
@@ -683,6 +651,9 @@ async function releaseCart(): Promise<void> {
 export async function pushToShiprocket(
   orderId: string
 ): Promise<string | null> {
+  // Advisory lock to prevent concurrent pushes for the same order
+  await db.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${orderId}))`);
+
   const orderRows = await db
     .select()
     .from(orders)
@@ -690,6 +661,11 @@ export async function pushToShiprocket(
     .limit(1);
   const order = orderRows[0];
   if (!order) return null;
+
+  // Idempotency: if already pushed, return existing id
+  if (order.shiprocketOrderId) {
+    return order.shiprocketOrderId;
+  }
 
   const [customerRows, items] = await Promise.all([
     db
@@ -796,7 +772,7 @@ export async function pushToShiprocket(
  * guards the lookup queries. A missing email is the acceptable trade against
  * failing (or blocking) the response to a payment that already succeeded.
  */
-async function queueOrderConfirmedEmail(order: {
+export async function queueOrderConfirmedEmail(order: {
   id: string;
   orderNumber: string;
   customerId: string;

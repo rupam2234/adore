@@ -13,13 +13,23 @@ jobs:
   auto-process:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: false
     steps:
-      - name: Call auto-process endpoint
+      - name: Generate short‑lived cron JWT
+        id: token
         run: |
-          curl -X GET \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            -H "Content-Type: application/json" \
-            "${{ secrets.APP_URL }}/api/cron/auto-process"
+          echo "CRON_TOKEN=$(node scripts/generate-cron-token.js)" >> $GITHUB_ENV
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      - name: Call auto-process endpoint
+        run: |
+          REQUEST_ID=$(uuidgen)
+          curl -f -X POST \
+            -H "Authorization: Bearer $CRON_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "X-Request-Id: $REQUEST_ID" \
+            "${{ secrets.APP_URL }}/api/cron/auto-process"
+        env:
           APP_URL: ${{ secrets.APP_URL }}
