@@ -7,6 +7,7 @@ import SearchBar from './search-bar';
 import { useCart } from '@/components/cart/cart-provider';
 import { useAuthUser } from '@/components/auth/use-auth-user';
 import Image from 'next/image';
+import PromoBanner from './promo-banner';
 
 export default function Header() {
   const [megaOpen, setMegaOpen] = useState(false);
@@ -16,7 +17,8 @@ export default function Header() {
   const { user, loading } = useAuthUser();
 
   return (
-    <header
+    <>
+      <header
       className="sticky top-0 z-50 w-full border-b border-[#2B2620]/10 bg-[#FAF8F3]/90 backdrop-blur-md"
       onMouseLeave={() => setMegaOpen(false)}
     >
@@ -308,5 +310,7 @@ export default function Header() {
         </nav>
       )}
     </header>
+    <PromoBanner />
+    </>
   );
 }

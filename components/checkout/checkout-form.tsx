@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { useCart } from '@/components/cart/cart-provider';
 import { formatPrice } from '@/utils/product-format';
+import { v4 as uuidv4 } from 'uuid';
 import {
   computeCheckoutTotals,
   FREE_SHIPPING_THRESHOLD,
@@ -148,6 +149,15 @@ export default function CheckoutForm({
   const [addressChoice, setAddressChoice] = useState<string>(
     addresses[0]?.id ?? 'new'
   );
+  const idempotencyKey = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    let key = sessionStorage.getItem('checkout_idem_key');
+    if (!key) {
+      key = uuidv4();
+      sessionStorage.setItem('checkout_idem_key', key);
+    }
+    return key;
+  }, []);
   const [saveAddress, setSaveAddress] = useState(false);
   // The PIN was verified in the bag — lock it here (no re-entry) until the
   // customer taps "Change".
@@ -158,7 +168,9 @@ export default function CheckoutForm({
   // Store the razorpay order ID for heartbeat
   const [razorpayOrderId, setRazorpayOrderId] = useState<string | null>(null);
   // Heartbeat interval ref for cleanup
-  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
 
   const usingSaved = Boolean(member) && addressChoice !== 'new';
   const saved = addresses.find(a => a.id === addressChoice) ?? null;
@@ -192,7 +204,7 @@ export default function CheckoutForm({
     .map(i => `${i.variantId}:${i.quantity}`)
     .sort()
     .join(',');
-  const idempotencyKey = `${cartHash}-${addressForKey}`;
+  const formIdempotencyKey = `${cartHash}-${addressForKey}`;
   const update = (key: keyof AddressForm, value: string) => {
     setForm(f => ({ ...f, [key]: value }));
     if (fieldErrors[key]) setFieldErrors(e => ({ ...e, [key]: undefined }));
@@ -303,7 +315,11 @@ export default function CheckoutForm({
     try {
       await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': idempotencyKey,
+        },
+        credentials: 'include',
         body: JSON.stringify({ action: 'releaseReservation', orderId }),
       });
     } catch {
@@ -317,6 +333,7 @@ export default function CheckoutForm({
       const res = await fetch('/api/checkout/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(response),
       });
       const data = await res.json().catch(() => ({}));
@@ -376,6 +393,7 @@ export default function CheckoutForm({
           'Content-Type': 'application/json',
           'Idempotency-Key': idempotencyKey,
         },
+        credentials: 'include',
         body: JSON.stringify(
           usingSaved
             ? { addressId: addressChoice }
@@ -486,17 +504,26 @@ export default function CheckoutForm({
 
       // Heartbeat: extend reservation every 4 minutes while Razorpay is open
       // This prevents reservation expiry during long payment flows (bank redirects, OTP, etc.)
-      const interval = setInterval(async () => {
-        try {
-          await fetch('/api/checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'extendReservation', orderId: session.razorpayOrderId }),
-          });
-        } catch {
-          // Silent — best effort; TTL still covers 15 min from last success
-        }
-      }, 4 * 60 * 1000);
+      const interval = setInterval(
+        async () => {
+          try {
+            await fetch('/api/checkout', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'include',
+              body: JSON.stringify({
+                action: 'extendReservation',
+                orderId: session.razorpayOrderId,
+              }),
+            });
+          } catch {
+            // Silent — best effort; TTL still covers 15 min from last success
+          }
+        },
+        4 * 60 * 1000
+      );
       heartbeatIntervalRef.current = interval;
 
       const clearHeartbeat = () => {

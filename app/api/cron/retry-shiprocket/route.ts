@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server';
 import { db, sql } from '@/utils/db';
 import { pushToShiprocket } from '@/utils/checkout';
 import { jwtVerify } from 'jose';
+import { alertOnCronFailure } from '@/utils/alerts';
 
 /* -------------------------------------------------------------
-   1️⃣  JWT / static‑secret verification (unchanged)
+   1️⃣  JWT verification (no static fallback)
    ------------------------------------------------------------- */
+// Cron workflows dispatch POST (preserved across redirects); alias to the GET handler.
+export const POST = GET;
+
 async function verifyCronAuth(request: Request): Promise<boolean> {
   const auth = request.headers.get('Authorization');
   if (!auth?.startsWith('Bearer ')) return false;
@@ -17,7 +21,7 @@ async function verifyCronAuth(request: Request): Promise<boolean> {
     await jwtVerify(token, key, { algorithms: ['HS256'] });
     return true;
   } catch {
-    return token === secret;          // fallback for the transition period
+    return false;
   }
 }
 
@@ -140,16 +144,22 @@ export async function GET(request: Request) {
 
   /* ---- 2.6  Audit log ---- */
   const durationMs = Date.now() - started;
+  const status = results.some(r => r.ok) ? 'success' : 'none';
   await db.execute(sql`
     INSERT INTO cron_audit_log (run_id, endpoint, order_ids, status, duration_ms)
     VALUES (
       ${requestId},
       'retry-shiprocket',
       ${JSON.stringify(retriedIds)}::jsonb,
-      ${results.some(r => r.ok) ? 'success' : 'none'},
+      ${status},
       ${durationMs}
     )
   `);
+
+  // Alert on failure
+  if (status !== 'success') {
+    await alertOnCronFailure('retry-shiprocket', status, { retried: results.length, results });
+  }
 
   return NextResponse.json({ retried: results.length, results });
 }

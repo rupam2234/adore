@@ -98,6 +98,10 @@ export type CheckoutSessionInput = {
   email?: string;
   /** Logged-in only: also save the entered address to the account. */
   saveAddress?: boolean;
+  /** Optional idempotency key to prevent duplicate checkout sessions (e.g., double-click). */
+  idempotencyKey?: string;
+  /** Optional checkout session ID for cart mutation guard (prevents cross-tab interference). */
+  checkoutSessionId?: string;
 };
 
 function str(input: Record<string, unknown>, key: string): string {
@@ -195,6 +199,25 @@ export async function createCheckoutSession(
 ): Promise<CheckoutSession> {
   if (!razorpayConfigured()) {
     throw new CheckoutError('Payments are not configured.', 503);
+  }
+
+  // --- Idempotency: if a key is provided, return existing session ----------
+  if (input.idempotencyKey) {
+    const existing = await db
+      .select({ id: orders.id, orderNumber: orders.orderNumber, status: orders.status })
+      .from(orders)
+      .where(sql`${orders.idempotencyKey} = ${input.idempotencyKey}`)
+      .limit(1);
+    if (existing.length) {
+      const existingOrder = existing[0];
+      // Return a session that points to the existing order
+      return {
+        paymentRequired: existingOrder.status === 'PENDING',
+        orderNumber: existingOrder.orderNumber,
+        amount: 0,
+        currency: 'INR',
+      } as CheckoutSession;
+    }
   }
 
   // --- Cart (server-side truth; client totals are never trusted) ----------
@@ -351,6 +374,8 @@ export async function createCheckoutSession(
       shippingAddressId,
       shippingAddressSnapshot: addressSnapshot(address),
       promoCodeId: promoCodeId,
+      idempotencyKey: input.idempotencyKey ?? null,
+      checkoutSessionId: input.checkoutSessionId ?? null,
     })
     .returning({ id: orders.id });
   const orderId = inserted[0]!.id;
@@ -445,13 +470,33 @@ async function handleZeroTotalCheckout(input: {
   currency: string;
   shippingAddressId: string | null;
   promoCodeId: string | null;
+  idempotencyKey?: string;
+  checkoutSessionId?: string;
 }): Promise<CheckoutSession> {
-  const { cart, cartId, userId, address, contactEmail, subtotal, discount, shipping, currency, shippingAddressId, promoCodeId } = input;
+  const { cart, cartId, userId, address, contactEmail, subtotal, discount, shipping, currency, shippingAddressId, promoCodeId, idempotencyKey, checkoutSessionId } = input;
 
   const orderNumber = generateOrderNumber();
   const customer = userId
     ? await ensureCustomerForUserId(userId)
     : await ensureGuestCustomer(contactEmail, address);
+
+  // Idempotency check for zero-total orders
+  if (idempotencyKey) {
+    const existing = await db
+      .select({ id: orders.id, orderNumber: orders.orderNumber, status: orders.status })
+      .from(orders)
+      .where(sql`${orders.idempotencyKey} = ${idempotencyKey}`)
+      .limit(1);
+    if (existing.length) {
+      const existingOrder = existing[0];
+      return {
+        paymentRequired: false,
+        orderNumber: existingOrder.orderNumber,
+        amount: 0,
+        currency: 'INR',
+      };
+    }
+  }
 
   // Create order as PENDING (zero‑total) – will be confirmed by a server‑side step
   const inserted = await db
@@ -472,6 +517,8 @@ async function handleZeroTotalCheckout(input: {
       razorpayPaymentId: null,
       zeroTotal: true,            // <-- requires `zero_total` column (see migration)
       paymentVerified: false,     // <-- requires `payment_verified` column
+      idempotencyKey: idempotencyKey ?? null,
+      checkoutSessionId: checkoutSessionId ?? null,
       updatedAt: new Date(),
     })
     .returning({ id: orders.id });

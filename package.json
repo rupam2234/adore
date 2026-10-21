@@ -11,7 +11,9 @@
     "format": "prettier --write",
     "format:check": "prettier --check",
     "type-check": "tsc --noEmit",
-    "type-check:watch": "tsc --noEmit --watch"
+    "type-check:watch": "tsc --noEmit --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
@@ -25,7 +27,8 @@
     "lucide-react": "^1.47.0",
     "next": "16.3.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -34,6 +37,7 @@
     "@types/prettier": "^3.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^9.0.0",
     "dotenv": "^18.0.8",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
@@ -44,7 +48,8 @@
     "lint-staged": "^15.2.11",
     "prettier": "^3.4.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^2.0.0"
   },
   "allowScripts": {
     "unrs-resolver": false

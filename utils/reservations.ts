@@ -18,7 +18,7 @@ import { rawQuery, sql } from './db';
  *    sale (stock already decremented — nothing more to move).
  */
 
-export const RESERVATION_TTL_MINUTES = 15;
+export const RESERVATION_TTL_MINUTES = 20;
 const _FAILED_PAYMENT_TTL_MINUTES = 2;
 
 export type ReservationItem = {

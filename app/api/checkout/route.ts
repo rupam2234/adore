@@ -8,6 +8,7 @@ import {
   extendReservation,
 } from '@/utils/reservations';
 import { and, eq, isNull } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 
 /**
  * Step 1 of checkout: validate the address, verify the PIN is serviceable via
@@ -21,6 +22,9 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
+
+  // Generate checkout session ID for cart mutation guard
+  const checkoutSessionId = body.checkoutSessionId as string | undefined ?? randomUUID();
 
   // Idempotency key check — prevents duplicate checkout sessions from double-clicks
   const idemKey = request.headers.get('Idempotency-Key');
@@ -42,8 +46,17 @@ export async function POST(request: Request) {
           addressId: body.addressId as string | undefined,
           email: body.email as string | undefined,
           saveAddress: body.saveAddress === true,
+          checkoutSessionId,
         });
-        return NextResponse.json(session, { status: 201 });
+        const response = NextResponse.json(session, { status: 201 });
+        response.cookies.set('checkout_session_id', checkoutSessionId, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24, // 24 hours
+        });
+        return response;
       }
     }
   }
@@ -118,6 +131,8 @@ export async function POST(request: Request) {
         typeof body.addressId === 'string' ? body.addressId : undefined,
       email: typeof body.email === 'string' ? body.email : undefined,
       saveAddress: body.saveAddress === true,
+      idempotencyKey: idemKey ?? undefined,
+      checkoutSessionId,
     });
 
     const response = NextResponse.json(session, { status: 201 });
