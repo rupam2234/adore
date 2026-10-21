@@ -21,9 +21,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Generate short‑lived cron JWT
-        id: token
         run: |
-          echo "CRON_TOKEN=$(node scripts/generate-cron-token.js)" >> $GITHUB_ENV
+          TOKEN=$(node scripts/generate-cron-token.js)
+          if [ -z "$TOKEN" ]; then
+            echo "JWT generation failed"
+            exit 1
+          fi
+          echo "CRON_TOKEN=$TOKEN" >> $GITHUB_ENV
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
       - name: Call confirm-zero-total endpoint
