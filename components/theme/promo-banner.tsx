@@ -66,7 +66,7 @@ export default function PromoBanner({ force = false }: { force?: boolean }) {
       <div className="mx-auto flex max-w-7xl items-center justify-center gap-2 px-10 py-2.5 text-center text-xs sm:text-sm">
         <p className="leading-snug">
           <span className="font-semibold">
-            Create a free account for {WELCOME_DISCOUNT_PERCENT}% off your first
+            Create an account for {WELCOME_DISCOUNT_PERCENT}% off your first
             order
           </span>
           .{' '}
